@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MDC Inventory Mockup V5 (DC Only)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --nav-bg: #123f4f;
+      --nav-highlight: #f4e54d;
+      --tab-text: #52768a;
+      --line: #dbe4ec;
+      --line-strong: #c9d7e3;
+      --text: #273746;
+      --muted: #6d8295;
+      --link: #2e77c2;
+      --good: #2b8a3e;
+      --chip-bg: #e9f3ff;
+      --chip-fg: #2b5f9d;
+      --chip-line: #cfe1f8;
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body {
+      margin: 0;
+      background: #eef3f8;
+      color: var(--text);
+      font-family: "Open Sans", "Segoe UI", Arial, sans-serif;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .topbar {
+      height: 56px;
+      background: var(--nav-bg);
+      color: #d6e7ef;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 18px;
+      box-shadow: 0 1px 0 rgba(8, 31, 40, 0.75);
+    }
+
+    .topbar-left,
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+
+    .brand {
+      font-size: 22px;
+      font-weight: 700;
+      color: #ffffff;
+      margin-right: 8px;
+    }
+
+    .menu-item {
+      font-size: 12px;
+      color: #c4d6e0;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding-top: 2px;
+    }
+
+    .menu-item.active {
+      color: #ffffff;
+      font-weight: 600;
+    }
+
+    .menu-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 2px;
+      background: #6f95a8;
+    }
+
+    .menu-item.active .menu-dot { background: var(--nav-highlight); }
+
+    .shell {
+      width: 100%;
+      max-width: 1500px;
+      margin: 0 auto;
+      background: #ffffff;
+      min-height: calc(100vh - 56px);
+      border-left: 1px solid #d7e2eb;
+      border-right: 1px solid #d7e2eb;
+    }
+
+    .subnav {
+      border-bottom: 1px solid var(--line);
+      background: #fbfdff;
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      height: 42px;
+    }
+
+    .subnav a {
+      text-decoration: none;
+      color: var(--tab-text);
+      font-size: 13px;
+      padding: 10px 2px;
+      border-bottom: 3px solid transparent;
+    }
+
+    .subnav a.active {
+      color: #1d3445;
+      font-weight: 700;
+      border-bottom-color: #2f6db3;
+    }
+
+    .toolbar {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      background: linear-gradient(to bottom, #ffffff, #f8fbfe);
+    }
+
+    .left-controls,
+    .right-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .pill {
+      border: 1px solid var(--line-strong);
+      background: #fff;
+      padding: 6px 14px;
+      border-radius: 3px;
+      color: #4f6878;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .pill.active {
+      background: #2f6db3;
+      border-color: #2f6db3;
+      color: #fff;
+    }
+
+    .ghost {
+      border: 1px solid var(--line-strong);
+      background: #fff;
+      padding: 7px 10px;
+      border-radius: 3px;
+      color: #40596a;
+      min-width: 124px;
+      font-size: 12px;
+    }
+
+    .meta {
+      padding: 9px 14px;
+      font-size: 12px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--line);
+      background: #fcfeff;
+    }
+
+    .table-wrap {
+      padding: 0 10px 18px;
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 1200px;
+      table-layout: fixed;
+      font-size: 12.5px;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--line);
+      padding: 8px 9px;
+      text-align: left;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      background: #fff;
+    }
+
+    th {
+      background: #f2f7fb;
+      color: #4d6476;
+      font-weight: 700;
+      font-size: 12px;
+    }
+
+    .center { text-align: center; }
+
+    .part-link,
+    .value-link {
+      color: var(--link);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .qty-good { color: var(--good); font-weight: 700; }
+
+    .row-alt td { background: #fbfdff; }
+
+    .chip {
+      display: inline-block;
+      border: 1px solid var(--chip-line);
+      background: var(--chip-bg);
+      color: var(--chip-fg);
+      padding: 4px 7px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      margin-right: 4px;
+    }
+
+    .expand-row td {
+      background: #f8fbff;
+      padding: 0;
+    }
+
+    .serial-box { padding: 10px 12px; }
+
+    .serial-caption {
+      margin: 0 0 8px;
+      color: #5f7488;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .serial-table {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-collapse: collapse;
+      table-layout: fixed;
+      min-width: 980px;
+      background: #fff;
+      font-size: 12px;
+    }
+
+    .serial-table th,
+    .serial-table td {
+      border-bottom: 1px solid var(--line);
+      padding: 7px 8px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .serial-table th {
+      background: #eef4fb;
+      color: #4f677a;
+      font-size: 11px;
+      font-weight: 700;
+      text-align: left;
+    }
+
+    .serial-mono {
+      font-family: Consolas, Menlo, Monaco, "SF Mono", monospace;
+      font-weight: 700;
+      color: #1e3242;
+      font-size: 12px;
+    }
+
+    .badge {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 999px;
+      border: 1px solid #d1e8d8;
+      background: #eaf8ef;
+      color: #237a44;
+      text-transform: capitalize;
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="brand">MDC</div>
+      <div class="menu-item active"><span class="menu-dot"></span>Inventory</div>
+      <div class="menu-item"><span class="menu-dot"></span>Stock In</div>
+      <div class="menu-item"><span class="menu-dot"></span>Transfers</div>
+      <div class="menu-item"><span class="menu-dot"></span>Exports</div>
+      <div class="menu-item"><span class="menu-dot"></span>Analytics Upload</div>
+    </div>
+    <div class="topbar-right">
+      <div class="menu-item">DC Team</div>
+    </div>
+  </header>
+
+  <main class="shell">
+    <nav class="subnav">
+      <a href="#" class="active">DC On-Hand</a>
+      <a href="#">Transferred Out</a>
+    </nav>
+
+    <section class="toolbar">
+      <div class="left-controls">
+        <button class="pill active">Inventory Grid</button>
+        <button class="pill">Serials</button>
+      </div>
+      <div class="right-controls">
+        <button class="ghost">Today</button>
+        <button class="ghost">DC Warehouse</button>
+      </div>
+    </section>
+
+    <div class="meta">DC-only scope: stock in, transfer out, serial correction, exports, analytics upload</div>
+
+    <section class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:190px;">Part Number</th>
+            <th style="width:320px;">Description</th>
+            <th class="center" style="width:90px;">DC Stock</th>
+            <th class="center" style="width:90px;">Reserved</th>
+            <th class="center" style="width:130px;">Available at DC</th>
+            <th style="width:340px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="part-link">923-03861</span></td>
+            <td>Display Assembly - iPhone 14 Pro</td>
+            <td class="center"><span class="value-link">120</span></td>
+            <td class="center"><span class="value-link">16</span></td>
+            <td class="center"><span class="qty-good">104</span></td>
+            <td>
+              <span class="chip">Edit Serial</span>
+              <span class="chip">Transfer</span>
+              <span class="chip">Export Stocked-In</span>
+              <span class="chip">Export Transferred</span>
+            </td>
+          </tr>
+
+          <tr class="expand-row">
+            <td colspan="6">
+              <div class="serial-box">
+                <p class="serial-caption">Serial correction is inline on each serial row (no separate correction page)</p>
+                <table class="serial-table">
+                  <thead>
+                    <tr>
+                      <th style="width:190px;">Serial Number</th>
+                      <th style="width:120px;">Status</th>
+                      <th style="width:150px;">Reference #</th>
+                      <th style="width:170px;">On-Hand Date</th>
+                      <th style="width:110px;">Location</th>
+                      <th style="width:300px;">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td class="serial-mono">F2LWX2QC4J9N</td>
+                      <td><span class="badge">delivered</span></td>
+                      <td>SO-23914</td>
+                      <td>2026-05-08 13:45</td>
+                      <td>DC</td>
+                      <td>
+                        <span class="chip">Edit Serial</span>
+                        <span class="chip">Transfer</span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td class="serial-mono">F2LWX2QC4J9P</td>
+                      <td><span class="badge">shipped</span></td>
+                      <td>TR-10293</td>
+                      <td>2026-05-09 09:12</td>
+                      <td>DC</td>
+                      <td>
+                        <span class="chip">Edit Serial</span>
+                        <span class="chip">Transfer</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </td>
+          </tr>
+
+          <tr class="row-alt">
+            <td><span class="part-link">661-18041</span></td>
+            <td>Battery - iPad 10th Gen</td>
+            <td class="center"><span class="value-link">68</span></td>
+            <td class="center"><span class="value-link">0</span></td>
+            <td class="center"><span class="qty-good">68</span></td>
+            <td>
+              <span class="chip">Edit Serial</span>
+              <span class="chip">Transfer</span>
+              <span class="chip">Export Stocked-In</span>
+              <span class="chip">Export Transferred</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+</body>
+</html>
