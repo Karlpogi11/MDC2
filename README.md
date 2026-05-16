@@ -41,3 +41,21 @@ Reason:
 - P1: rate-limit import and analytics endpoints
 
 See `docs/implementation-blueprint.md` for full architecture and execution plan.
+
+## Live Documentation System
+- `docs/development-live-checklist.md`: single-file live checklist + compact playbook + inline templates
+
+## Phase 1 Implemented (UI + Data Baseline)
+- React + TypeScript + Vite app shell
+- Real inventory UI (filters, metrics, loading/empty/error states, responsive table)
+- Live checklist UI with gate progress, P0 blockers, and auto-save (no markdown editing)
+- Settings baseline screen with key operational controls
+- Supabase client wiring via env vars (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`)
+- Phase 1 DB hardening migration for indexes, constraints, `updated_at` triggers, and `inventory_snapshot` view
+
+## Run Locally
+1. Copy `.env.example` to `.env.local` and set Supabase values.
+2. Install deps: `npm install`
+3. Start app: `npm run dev`
+4. Typecheck: `npm run typecheck`
+5. Build: `npm run build`

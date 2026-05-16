@@ -119,7 +119,7 @@ Main inventory table columns:
 - Reserved/Committed
 - Available
 - Last stock-in date
-- Last transfer date
+- Last stock-out date
 
 UX details:
 - fast search with part no./serial tokens

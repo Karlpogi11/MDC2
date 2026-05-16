@@ -11,17 +11,16 @@ Provide a dense operational inventory screen that feels like a real warehouse co
   - warehouse/site selector
 - Data grid with fixed header and horizontal scroll
 
-## Table Columns (initial)
+## Table Columns
 - Checkbox
-- Name
+- Part name
 - Part number
 - Category
-- Average cost
-- Value in stock
 - In stock
-- Reserved
-- Safety stock
+- Committed
 - Available
+- Last stock-in date
+- Last stock-out date
 
 ## Interactions
 - Global quick search (part no / serial)
