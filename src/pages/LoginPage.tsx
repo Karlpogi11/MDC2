@@ -1,16 +1,21 @@
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Boxes, Lock } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
 export function LoginPage() {
-  const { signInWithUsername, signInWithGoogle } = useAuth();
+  const { signInWithUsername, signInWithGoogle, state } = useAuth();
   const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+
+  // Redirect once authenticated
+  useEffect(() => {
+    if (state.status === "authenticated") navigate("/", { replace: true });
+  }, [state.status, navigate]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -19,7 +24,7 @@ export function LoginPage() {
     const err = await signInWithUsername(username.trim(), password);
     setLoading(false);
     if (err) setError(err);
-    else navigate("/", { replace: true });
+    // navigation handled by useEffect above
   }
 
   async function handleGoogle() {
@@ -160,14 +165,14 @@ export function LoginPage() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || state.status === "loading"}
               style={{
-                width: "100%", background: loading ? "#6b8fc4" : "var(--blue)", color: "#fff",
+                width: "100%", background: (loading || state.status === "loading") ? "#6b8fc4" : "var(--blue)", color: "#fff",
                 border: "none", borderRadius: "var(--radius)", padding: "11px 0", fontSize: 14,
-                fontWeight: 600, cursor: loading ? "not-allowed" : "pointer", transition: "background 150ms",
+                fontWeight: 600, cursor: (loading || state.status === "loading") ? "not-allowed" : "pointer", transition: "background 150ms",
               }}
             >
-              {loading ? "Signing in…" : "Sign in"}
+              {loading || state.status === "loading" ? "Signing in…" : "Sign in"}
             </button>
           </form>
 

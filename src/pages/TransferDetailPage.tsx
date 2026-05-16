@@ -4,18 +4,21 @@ import { ArrowRight, Package, CheckCircle, Truck, Check, X, FileText } from "luc
 import { getSupabaseClient } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { AppLayout } from "@/components/AppLayout";
-import { useBranding } from "@/lib/useBranding";
+import { toCapitalized } from "@/lib/format";
 
 type TransferStatus = "draft" | "packed" | "in_transit" | "received" | "cancelled";
 
 type TransferDetail = {
   id: string;
   transfer_no: string;
+  invoice_ref: string | null;
   status: TransferStatus;
   created_at: string;
   packed_at: string | null;
-  source_site: { site_name: string } | null;
-  destination_site: { site_name: string; site_code: string; invoice_prefix: string | null; address: string | null } | null;
+  courier: string | null;
+  awb: string | null;
+  source_site: { site_name: string; invoice_prefix: string | null; address: string | null; is_dc: boolean } | null;
+  destination_site: { site_name: string; site_code: string; address: string | null } | null;
   requested_by_profile: { full_name: string | null; username: string | null } | null;
   packed_by_profile: { full_name: string | null; username: string | null } | null;
   items: {
@@ -56,7 +59,6 @@ export function TransferDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { state: authState } = useAuth();
-  const { logoUrl, brandName } = useBranding();
   const actorId = authState.status === "authenticated" ? authState.user.id : null;
   const role = authState.status === "authenticated" ? authState.profile.role : null;
   const canAdvance = role === "system_admin" || role === "dc_admin" || role === "dc_operator";
@@ -69,51 +71,57 @@ export function TransferDetailPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [generatingPDF, setGeneratingPDF] = useState(false);
 
+  // Tracking modal (shown before Mark as In Transit)
+  const [showTrackingModal, setShowTrackingModal] = useState(false);
+  const [trackingCourier, setTrackingCourier] = useState("");
+  const [trackingAwb, setTrackingAwb] = useState("");
+
+  // Partial receipt: track which items are confirmed received
+  const [receivedItems, setReceivedItems] = useState<Set<string>>(new Set());
+
   async function generatePDF() {
     if (!transfer) return;
     setGeneratingPDF(true);
+    setActionError(null);
     try {
-      // Lazy-load pdf-lib — keeps it out of the main bundle
+      const client = getSupabaseClient();
+
+      // Always regenerate fresh — ensures latest layout/data is used
       const { generatePackingListPDF } = await import("@/lib/packingList");
-      const pdfBytes = await generatePackingListPDF({
+      const doc = await generatePackingListPDF({
         transferNo: transfer.transfer_no,
-        invoicePrefix: transfer.destination_site?.invoice_prefix ?? null,
+        invoiceRef: transfer.invoice_ref ?? transfer.transfer_no,
         createdAt: transfer.created_at,
         packedAt: transfer.packed_at,
         sourceSite: transfer.source_site?.site_name ?? "DC",
+        sourceAddress: transfer.source_site?.address ?? null,
+        sourceIsDC: transfer.source_site?.is_dc ?? true,
         destinationSite: transfer.destination_site?.site_name ?? "—",
         destinationAddress: transfer.destination_site?.address ?? null,
         requestedBy: transfer.requested_by_profile?.full_name ?? transfer.requested_by_profile?.username ?? "—",
-        brandName,
-        logoUrl,
+        courier: transfer.courier ?? null,
+        awb: transfer.awb ?? null,
         items: transfer.items.map((item) => ({
           serialNumber: item.serial?.serial_number ?? null,
           partNumber: item.part?.part_number ?? "—",
           partName: item.part?.part_name ?? "—",
-          category: item.part?.category ?? null,
           qty: item.qty,
         })),
       });
 
-      // Upload to storage
-      const client = getSupabaseClient();
-      const fileName = `${transfer.transfer_no}-${Date.now()}.pdf`;
+      // Upload to storage and save reference
       if (client) {
-        await client.storage.from("packing-lists").upload(fileName, pdfBytes, { contentType: "application/pdf", upsert: true });
-        // Save reference
-        await client.from("packing_lists").upsert({
-          transfer_id: transfer.id,
-          file_path: fileName,
-          generated_by: actorId,
-        }, { onConflict: "transfer_id" });
+        const fileName = `${transfer.transfer_no}.pdf`;
+        const pdfBlob = doc.output("blob") as Blob;
+        await client.storage.from("packing-lists").upload(fileName, pdfBlob, { contentType: "application/pdf", upsert: true });
+        await client.from("packing_lists").upsert(
+          { transfer_id: transfer.id, file_path: fileName, generated_by: actorId },
+          { onConflict: "transfer_id" }
+        );
       }
 
-      // Also trigger browser download
-      const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = `${transfer.transfer_no}-packing-list.pdf`; a.click();
-      URL.revokeObjectURL(url);
+      // Download
+      doc.save(`${transfer.transfer_no}-packing-list.pdf`);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "PDF generation failed.");
     }
@@ -127,9 +135,9 @@ export function TransferDetailPage() {
     const { data, error: err } = await client
       .from("transfers")
       .select(`
-        id, transfer_no, status, created_at, packed_at,
-        source_site:sites!source_site_id(site_name),
-        destination_site:sites!destination_site_id(site_name, site_code, invoice_prefix, address),
+        id, transfer_no, invoice_ref, status, created_at, packed_at, courier, awb,
+        source_site:sites!source_site_id(site_name, invoice_prefix, address, is_dc),
+        destination_site:sites!destination_site_id(site_name, site_code, address),
         requested_by_profile:profiles!requested_by(full_name, username),
         packed_by_profile:profiles!packed_by(full_name, username),
         items:transfer_items(
@@ -162,7 +170,20 @@ export function TransferDetailPage() {
 
   useEffect(() => { void load(); }, [id]);
 
-  async function advanceStatus() {
+  // Realtime: reload when this transfer changes (e.g. received from ReceivePage)
+  useEffect(() => {
+    const client = getSupabaseClient();
+    if (!client || !id) return;
+    const channel = client
+      .channel(`transfer-detail-${id}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "transfers", filter: `id=eq.${id}` }, () => {
+        void load();
+      })
+      .subscribe();
+    return () => { void client.removeChannel(channel); };
+  }, [id]);
+
+  async function advanceStatus(courier?: string, awb?: string) {
     if (!transfer || !actorId) return;
     const next = NEXT_STATUS[transfer.status];
     if (!next) return;
@@ -170,10 +191,37 @@ export function TransferDetailPage() {
     const client = getSupabaseClient()!;
     const update: Record<string, unknown> = { status: next };
     if (next === "packed") { update.packed_by = actorId; update.packed_at = new Date().toISOString(); }
+    if (next === "in_transit") {
+      if (courier?.trim()) update.courier = courier.trim();
+      if (awb?.trim()) update.awb = awb.trim();
+    }
     const { error: err } = await client.from("transfers").update(update).eq("id", transfer.id);
-    if (err) setActionError(err.message);
-    else await load();
+    if (err) { setActionError(err.message); setAdvancing(false); return; }
+
+    // When dispatched (in_transit), send email to destination site
+    if (next === "in_transit") {
+      const client2 = getSupabaseClient();
+      if (client2) {
+        void client2.functions.invoke("send-transfer-email", { body: { transfer_id: transfer.id } });
+      }
+    }
+    if (next === "received") {
+      const serialIds = transfer.items.map((i) => i.serial?.serial_number).filter(Boolean) as string[];
+      if (serialIds.length > 0) {
+        await client.from("serial_numbers")
+          .update({ status: "transferred", current_site_id: transfer.destination_site ? await getDestSiteId(client, transfer.destination_site.site_code) : undefined })
+          .in("serial_number", serialIds);
+      }
+    }
+
+    await load();
     setAdvancing(false);
+  }
+
+  async function getDestSiteId(client: ReturnType<typeof getSupabaseClient>, siteCode: string): Promise<string | undefined> {
+    if (!client) return undefined;
+    const { data } = await client.from("sites").select("id").eq("site_code", siteCode).maybeSingle();
+    return data?.id;
   }
 
   async function cancelTransfer() {
@@ -205,8 +253,8 @@ export function TransferDetailPage() {
   return (
     <AppLayout>
       <main style={{ maxWidth: 900, margin: "0 auto", padding: "28px 24px" }}>
-        {/* Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+        {/* Header + actions in one row */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, marginBottom: 20 }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
               <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#1a2a3a", fontFamily: "monospace" }}>
@@ -222,31 +270,70 @@ export function TransferDetailPage() {
             </p>
           </div>
 
-          {/* Action buttons */}
           {canAdvance && (
-            <div style={{ display: "flex", gap: 8 }}>
-              {nextStatus && (
-                <button type="button" onClick={() => void advanceStatus()} disabled={advancing}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: advancing ? "not-allowed" : "pointer", opacity: advancing ? 0.7 : 1 }}>
-                  <ArrowRight size={14} /> {advancing ? "Updating…" : NEXT_LABEL[transfer.status]}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+              {/* Secondary */}
+              {(transfer.status === "draft" || transfer.status === "packed") && (
+                <button type="button" onClick={() => void cancelTransfer()} disabled={cancelling}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", color: "#b91c1c", border: "1px solid #fecaca", borderRadius: "var(--radius)", padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                  <X size={14} /> Cancel
                 </button>
               )}
               {["packed", "in_transit", "received"].includes(transfer.status) && (
                 <button type="button" onClick={() => void generatePDF()} disabled={generatingPDF}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", color: "var(--blue)", border: "1px solid var(--blue)", borderRadius: "var(--radius)", padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: generatingPDF ? "not-allowed" : "pointer", opacity: generatingPDF ? 0.7 : 1 }}>
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", color: "var(--blue)", border: "1px solid var(--blue)", borderRadius: "var(--radius)", padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: generatingPDF ? "not-allowed" : "pointer", opacity: generatingPDF ? 0.7 : 1 }}>
                   <FileText size={14} /> {generatingPDF ? "Generating…" : "Packing List PDF"}
                 </button>
               )}
-              {(transfer.status === "draft" || transfer.status === "packed") && (
-                <button type="button" onClick={() => void cancelTransfer()} disabled={cancelling}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", color: "#b91c1c", border: "1px solid #fecaca", borderRadius: "var(--radius)", padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                  <X size={14} /> Cancel
+              {transfer.status === "in_transit" && (
+                <a href={`/transfers/${transfer.id}/receive`} target="_blank" rel="noopener noreferrer"
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "7px 14px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
+                  Receive
+                </a>
+              )}
+              {/* Primary */}
+              {nextStatus && nextStatus !== "received" && (
+                <button type="button"
+                  onClick={() => {
+                    if (NEXT_STATUS[transfer.status] === "in_transit") {
+                      setTrackingCourier(""); setTrackingAwb(""); setShowTrackingModal(true);
+                    } else {
+                      void advanceStatus();
+                    }
+                  }}
+                  disabled={advancing}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "7px 18px", fontSize: 13, fontWeight: 600, cursor: advancing ? "not-allowed" : "pointer", opacity: advancing ? 0.7 : 1 }}>
+                  <ArrowRight size={14} /> {advancing ? "Updating…" : NEXT_LABEL[transfer.status]}
+                </button>
+              )}
+              {transfer.status === "in_transit" && (
+                <button type="button"
+                  onClick={() => void (async () => {
+                    if (receivedItems.size === 0) { setActionError("Check at least one item as received."); return; }
+                    setAdvancing(true); setActionError(null);
+                    const client = getSupabaseClient()!;
+                    const { error: err } = await client.from("transfers").update({ status: "received" }).eq("id", transfer.id);
+                    if (err) { setActionError(err.message); setAdvancing(false); return; }
+                    const receivedSerials = transfer.items
+                      .filter((i) => receivedItems.has(i.id) && i.serial?.serial_number)
+                      .map((i) => i.serial!.serial_number);
+                    if (receivedSerials.length > 0) {
+                      const destId = transfer.destination_site ? await getDestSiteId(client, transfer.destination_site.site_code) : undefined;
+                      await client.from("serial_numbers")
+                        .update({ status: "transferred", ...(destId ? { current_site_id: destId } : {}) })
+                        .in("serial_number", receivedSerials);
+                    }
+                    await load();
+                    setAdvancing(false);
+                  })()}
+                  disabled={advancing || receivedItems.size === 0}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, background: receivedItems.size > 0 ? "#15803d" : "#d1d5db", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "7px 18px", fontSize: 13, fontWeight: 600, cursor: receivedItems.size > 0 ? "pointer" : "not-allowed" }}>
+                  <CheckCircle size={14} /> Confirm receipt ({receivedItems.size}/{transfer.items.length})
                 </button>
               )}
             </div>
           )}
         </div>
-
         {actionError && (
           <div role="alert" style={{ marginBottom: 16, padding: "10px 14px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "var(--radius)", color: "#b91c1c", fontSize: 13 }}>
             {actionError}
@@ -302,6 +389,7 @@ export function TransferDetailPage() {
                 </colgroup>
                 <thead>
                   <tr>
+                    {transfer.status === "in_transit" && <th style={{ width: 40 }}></th>}
                     <th>Serial / Part</th>
                     <th>Description</th>
                     <th>Category</th>
@@ -310,18 +398,30 @@ export function TransferDetailPage() {
                 </thead>
                 <tbody>
                   {transfer.items.length === 0 && (
-                    <tr><td colSpan={4} className="empty-row">No items.</td></tr>
+                    <tr><td colSpan={transfer.status === "in_transit" ? 5 : 4} className="empty-row">No items.</td></tr>
                   )}
                   {transfer.items.map((item) => (
-                    <tr key={item.id}>
+                    <tr key={item.id} style={{ background: receivedItems.has(item.id) ? "#f0fdf4" : undefined }}>
+                      {transfer.status === "in_transit" && (
+                        <td style={{ padding: "10px 12px" }}>
+                          <input type="checkbox" checked={receivedItems.has(item.id)}
+                            onChange={() => setReceivedItems((prev) => {
+                              const next = new Set(prev);
+                              next.has(item.id) ? next.delete(item.id) : next.add(item.id);
+                              return next;
+                            })}
+                            style={{ width: 16, height: 16, cursor: "pointer" }}
+                          />
+                        </td>
+                      )}
                       <td style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--blue)", overflow: "hidden", textOverflow: "ellipsis" }}>
                         {item.serial?.serial_number ?? item.part?.part_number ?? "—"}
                       </td>
                       <td title={item.part?.part_name ?? ""} style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
                         {item.part?.part_name ?? "—"}
                       </td>
-                      <td style={{ overflow: "hidden", textOverflow: "ellipsis", color: "#6b7a8d" }}>
-                        {item.part?.category ?? "—"}
+                      <td className="capitalize" style={{ overflow: "hidden", textOverflow: "ellipsis", color: "#6b7a8d" }}>
+                        {toCapitalized(item.part?.category) || "—"}
                       </td>
                       <td className="num">{item.qty}</td>
                     </tr>
@@ -339,14 +439,19 @@ export function TransferDetailPage() {
               {transfer.packed_at && <InfoRow label="Packed" value={formatDate(transfer.packed_at)} />}
               <InfoRow label="Requested by" value={transfer.requested_by_profile?.full_name ?? transfer.requested_by_profile?.username ?? "—"} />
               {transfer.packed_by_profile && <InfoRow label="Packed by" value={transfer.packed_by_profile.full_name ?? transfer.packed_by_profile.username ?? "—"} />}
+              {transfer.invoice_ref && (
+                <InfoRow label="Invoice ref" value={transfer.invoice_ref} mono />
+              )}
+              {transfer.source_site?.invoice_prefix && !transfer.invoice_ref && (
+                <InfoRow label="Invoice prefix" value={transfer.source_site.invoice_prefix} mono />
+              )}
+              {transfer.courier && <InfoRow label="Courier" value={transfer.courier} />}
+              {transfer.awb && <InfoRow label="Tracking #" value={transfer.awb} mono />}
             </InfoCard>
 
             <InfoCard title="Destination">
               <InfoRow label="Site" value={transfer.destination_site?.site_name ?? "—"} />
               <InfoRow label="Code" value={transfer.destination_site?.site_code ?? "—"} mono />
-              {transfer.destination_site?.invoice_prefix && (
-                <InfoRow label="Invoice prefix" value={transfer.destination_site.invoice_prefix} mono />
-              )}
               {transfer.destination_site?.address && (
                 <InfoRow label="Address" value={transfer.destination_site.address} />
               )}
@@ -354,6 +459,55 @@ export function TransferDetailPage() {
           </div>
         </div>
       </main>
+
+      {/* Tracking number modal */}
+      {showTrackingModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div style={{ background: "#fff", borderRadius: "var(--radius)", width: "100%", maxWidth: 420, padding: 24, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
+            <h2 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700, color: "#1a2a3a" }}>Mark as In Transit</h2>
+            <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7a8d" }}>Enter tracking details before dispatching.</p>
+
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#666", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 5 }}>Courier</label>
+              <input
+                value={trackingCourier}
+                onChange={(e) => setTrackingCourier(e.target.value)}
+                placeholder="e.g. LBC, J&T, Lalamove"
+                style={{ width: "100%", border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "8px 10px", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+              />
+            </div>
+
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#666", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 5 }}>
+                Tracking Number (AWB) <span style={{ color: "#b91c1c" }}>*</span>
+              </label>
+              <input
+                value={trackingAwb}
+                onChange={(e) => setTrackingAwb(e.target.value)}
+                placeholder="e.g. 1234567890"
+                autoFocus
+                style={{ width: "100%", border: `1px solid ${trackingAwb.trim() ? "#d1d5db" : "#fca5a5"}`, borderRadius: "var(--radius)", padding: "8px 10px", fontSize: 13, fontFamily: "monospace", outline: "none", boxSizing: "border-box" }}
+              />
+              {!trackingAwb.trim() && <p style={{ margin: "4px 0 0", fontSize: 11, color: "#b91c1c" }}>Tracking number is required.</p>}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button type="button" onClick={() => setShowTrackingModal(false)}
+                style={{ border: "1px solid #d1d5db", background: "#fff", borderRadius: "var(--radius)", padding: "7px 16px", fontSize: 13, fontWeight: 600, color: "#374151", cursor: "pointer" }}>
+                Cancel
+              </button>
+              <button type="button"
+                disabled={!trackingAwb.trim() || advancing}
+                onClick={() => { setShowTrackingModal(false); void advanceStatus(trackingCourier, trackingAwb); }}
+                style={{ background: trackingAwb.trim() ? "var(--blue)" : "#d1d5db", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "7px 18px", fontSize: 13, fontWeight: 600, cursor: trackingAwb.trim() ? "pointer" : "not-allowed" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <ArrowRight size={14} /> Dispatch
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 }

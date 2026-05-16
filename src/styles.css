@@ -47,7 +47,9 @@ table {
 }
 
 .global-nav {
-  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 100;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -901,3 +903,6 @@ th {
 @media (max-width: 640px) {
   .login-panel { display: none !important; }
 }
+
+/* Normalize category display */
+.capitalize { text-transform: capitalize; }

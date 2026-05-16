@@ -4,13 +4,16 @@ import { AppLayout } from "@/components/AppLayout";
 import { SerialDrawer } from "@/components/SerialDrawer";
 import {
   ArrowDown, ArrowUp, ArrowUpDown,
-  Bell, CalendarDays, CheckSquare, ChevronDown, CircleHelp, ClipboardCheck,
+  CalendarDays, CheckSquare, ChevronDown,
   Download, MapPin, Printer,
 } from "lucide-react";
 import { demoInventoryRows } from "../data/demoInventory";
 import { fetchInventoryRows } from "../services/inventory";
 import type { InventoryRow, InventorySource } from "../types";
 import { getSupabaseClient } from "@/lib/supabase";
+import { useRealtimeTable } from "@/lib/useRealtimeTable";
+import { useFeatureFlag } from "@/lib/useFeatureFlag";
+import { toCapitalized } from "@/lib/format";
 
 type SerialRow = {
   id: string;
@@ -255,6 +258,9 @@ export function InventoryPage(): ReactElement {
   const { state: authState } = useAuth();
   const isSystemAdmin = authState.status === "authenticated" && authState.profile.role === "system_admin";
 
+  const realtimeEnabled = useFeatureFlag("enable_realtime");
+  const realtimeStatus = useRealtimeTable("serial_numbers", () => void loadInventory(), realtimeEnabled);
+
   const [drawerPart, setDrawerPart] = useState<{ id: string; name: string; number: string } | null>(null);
   const closeDrawer = useCallback(() => setDrawerPart(null), []);
   const [sortState, setSortState] = useState<SortState>({
@@ -459,9 +465,6 @@ export function InventoryPage(): ReactElement {
             {item}
           </button>
         ))}
-        <button className="sub-tab" type="button" onClick={() => setActiveTab("Stocktakes")}>
-          Stocktakes
-        </button>
       </nav>
 
       {activeTab === "Serial numbers" && (
@@ -579,10 +582,6 @@ export function InventoryPage(): ReactElement {
               style={{ border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "7px 12px", fontSize: 13, width: 300, outline: "none" }}
             />
             <strong style={{ fontSize: 13, color: "#6b7a8d" }}>{sortedRows.length} items</strong>
-            <button className="stocktake-btn" type="button" onClick={() => runBulkAction("Stocktake")}>
-              <ClipboardCheck className="inline-icon" aria-hidden="true" />
-              Stocktake
-            </button>
           </div>
           <div className="action-right">
             <button className="icon-btn blue" type="button" aria-label="Export inventory" onClick={() => runBulkAction("Export")}>
@@ -594,6 +593,13 @@ export function InventoryPage(): ReactElement {
             <button className="icon-btn" type="button" aria-label="Refresh inventory" onClick={() => void loadInventory()}>
               <ArrowUpDown aria-hidden="true" />
             </button>
+            {realtimeEnabled && (
+              <span title={realtimeStatus === "live" ? "Live" : "Connecting…"} style={{
+                width: 8, height: 8, borderRadius: "50%", flexShrink: 0, alignSelf: "center",
+                background: realtimeStatus === "live" ? "#16a34a" : "#9ca3af",
+                animation: realtimeStatus === "live" ? "dot-pulse 2s ease-in-out infinite" : "none",
+              }} />
+            )}
           </div>
         </section>
 
@@ -606,7 +612,6 @@ export function InventoryPage(): ReactElement {
             <div className="bulk-actions">
               <button type="button" className="bulk-btn" onClick={() => runBulkAction("Transfer")}>Transfer selected</button>
               <button type="button" className="bulk-btn" onClick={() => runBulkAction("Export")}>Export selected</button>
-              <button type="button" className="bulk-btn" onClick={() => runBulkAction("Stocktake")}>Stocktake selected</button>
               <button type="button" className="bulk-btn ghost" onClick={clearSelection}>Clear selection</button>
             </div>
           </section>
@@ -703,7 +708,7 @@ export function InventoryPage(): ReactElement {
                           </button>
                         </td>
                         <td>{row.partNumber}</td>
-                        <td>{row.category}</td>
+                        <td className="capitalize">{toCapitalized(row.category)}</td>
                         <td className="num">
                           <button
                             type="button"
@@ -768,15 +773,11 @@ export function InventoryPage(): ReactElement {
         </main>
       )}
 
-      {activeTab === "Stocktakes" && (
-        <main className="inventory-shell">
-          <div style={{ padding: "48px 0", textAlign: "center", color: "#9ca3af" }}>
-            <ClipboardCheck size={40} style={{ marginBottom: 12, opacity: 0.3 }} />
-            <p style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>Stocktakes — Coming soon</p>
-            <p style={{ margin: "6px 0 0", fontSize: 13 }}>Physical count reconciliation will be available in a future update.</p>
-          </div>
-        </main>
-      )}
     </AppLayout>
   );
 }
+
+// keep at module level so it's injected once
+const _style = document.createElement("style");
+_style.textContent = `@keyframes dot-pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }`;
+document.head.appendChild(_style);

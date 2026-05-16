@@ -1,168 +1,314 @@
-import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
-
-type PackingListData = {
+export type PackingListData = {
   transferNo: string;
-  invoicePrefix: string | null;
+  /** Pre-built invoice ref from DB (e.g. DC-20260517-A001). Falls back to transferNo. */
+  invoiceRef: string;
   createdAt: string;
   packedAt: string | null;
   sourceSite: string;
+  sourceAddress?: string | null;
+  /** When true, hides the From block — DC address is already in the sender header */
+  sourceIsDC?: boolean;
   destinationSite: string;
   destinationAddress: string | null;
   requestedBy: string;
-  brandName?: string | null;
-  logoUrl?: string | null;
+  verifiedBy?: string | null;
+  notes?: string | null;
+  boxCount?: number | null;
+  courier?: string | null;
+  awb?: string | null;
   items: {
     serialNumber: string | null;
     partNumber: string;
     partName: string;
-    category: string | null;
     qty: number;
   }[];
 };
 
-function fmt(iso: string | null) {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "2-digit" });
+function asString(v: unknown, fallback = ""): string {
+  const s = String(v ?? "").trim();
+  return s || fallback;
 }
 
-export async function generatePackingListPDF(data: PackingListData): Promise<Uint8Array> {
-  const doc = await PDFDocument.create();
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+function formatPackingDate(iso: string | null): string {
+  const text = asString(iso);
+  if (!text) return new Date().toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric" });
+  const d = new Date(text);
+  return Number.isNaN(d.getTime())
+    ? new Date().toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric" })
+    : d.toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric" });
+}
 
-  const page = doc.addPage([595, 842]); // A4
-  const { width, height } = page.getSize();
-  const margin = 48;
-  let y = height - margin;
+function normalizePositiveInt(v: unknown, fallback = 1): number {
+  const n = Math.floor(Number(v));
+  return n > 0 ? n : fallback;
+}
 
-  const black = rgb(0, 0, 0);
-  const navy  = rgb(0.07, 0.16, 0.29);
-  const gray  = rgb(0.42, 0.42, 0.42);
-  const light = rgb(0.94, 0.94, 0.94);
-  const white = rgb(1, 1, 1);
+type PdfImageAsset = { dataUrl: string; format: "PNG" | "JPEG" };
 
-  // ── Header bar ──────────────────────────────────────────────────────────────
-  page.drawRectangle({ x: 0, y: height - 72, width, height: 72, color: navy });
-
-  const displayName = data.brandName ?? "MDC";
-
-  // Embed logo if provided, otherwise draw text
-  if (data.logoUrl) {
+async function fetchLogoBase64(): Promise<PdfImageAsset | null> {
+  try {
+    const url = `${import.meta.env.BASE_URL ?? "/"}packinglistlogo.png`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    const rawDataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error("read failed"));
+      reader.readAsDataURL(blob);
+    });
+    if (typeof document === "undefined") return { dataUrl: rawDataUrl, format: "PNG" };
     try {
-      const res = await fetch(data.logoUrl);
-      const buf = await res.arrayBuffer();
-      const contentType = res.headers.get("content-type") ?? "";
-      const img = contentType.includes("png")
-        ? await doc.embedPng(buf)
-        : await doc.embedJpg(buf);
-      const { width: iw, height: ih } = img.scale(1);
-      const scale = Math.min(120 / iw, 40 / ih);
-      page.drawImage(img, { x: margin, y: height - 60, width: iw * scale, height: ih * scale });
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const el = new Image();
+        el.onload = () => resolve(el);
+        el.onerror = () => reject(new Error("load failed"));
+        el.src = rawDataUrl;
+      });
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, img.naturalWidth || img.width || 1);
+      canvas.height = Math.max(1, img.naturalHeight || img.height || 1);
+      const ctx = canvas.getContext("2d")!;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+      return { dataUrl: canvas.toDataURL("image/png"), format: "PNG" };
     } catch {
-      page.drawText(displayName, { x: margin, y: height - 44, size: 22, font: bold, color: rgb(0.85, 0.95, 0.17) });
+      return { dataUrl: rawDataUrl, format: "PNG" };
     }
-  } else {
-    page.drawText(displayName, { x: margin, y: height - 44, size: 22, font: bold, color: rgb(0.85, 0.95, 0.17) });
-    page.drawText("Distribution Center", { x: margin, y: height - 60, size: 10, font, color: rgb(0.62, 0.71, 0.73) });
+  } catch {
+    return null;
+  }
+}
+
+function buildMetaLines(data: PackingListData): [string, string][] {
+  const displayDate = data.packedAt || data.createdAt || new Date().toISOString();
+  const lines: [string, string][] = [
+    ["INVOICE REF:", asString(data.invoiceRef, "—")],
+    ["SHIPMENT DATE:", formatPackingDate(displayDate)],
+    ["BOX/S #:", String(normalizePositiveInt(data.boxCount, 1))],
+  ];
+  if (asString(data.courier)) lines.push(["CARRIER:", asString(data.courier)]);
+  if (asString(data.awb)) lines.push(["TRACKING NUMBER:", asString(data.awb)]);
+  return lines;
+}
+
+function getTotalUnits(data: PackingListData): number {
+  return data.items.reduce((sum, item) => {
+    const qty = normalizePositiveInt(item.qty, 1);
+    return sum + qty;
+  }, 0);
+}
+
+export async function generatePackingListPDF(data: PackingListData): Promise<any> {
+  const { default: jsPDF } = await import("jspdf");
+  const { default: autoTable } = await import("jspdf-autotable");
+
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 14;
+  const logo = await fetchLogoBase64();
+
+  const totalUnits = getTotalUnits(data);
+  const metaLines = buildMetaLines(data);
+  const sourceLabel = asString(data.sourceSite, "DC Warehouse");
+  const shipToLabel = asString(data.destinationSite, "DC Warehouse");
+  let y = 38;
+
+  // ── Title ──────────────────────────────────────────────────────────────────
+  doc.setFontSize(13);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(0, 0, 0);
+  doc.text("Packing List", pageWidth / 2, 14, { align: "center" });
+
+  // ── Logo ───────────────────────────────────────────────────────────────────
+  if (logo) {
+    try {
+      doc.addImage(logo.dataUrl, logo.format, margin, y, 22, 22, undefined, "FAST");
+    } catch { /* skip */ }
   }
 
-  page.drawText("PACKING LIST", { x: width - margin - 90, y: height - 44, size: 14, font: bold, color: white });
+  // ── Sender block ───────────────────────────────────────────────────────────
+  const senderX = margin + 28;
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold");
+  doc.text("MOBILECARE SERVICES PHILS. INC.", senderX, y + 5);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.text("Business and Distribution Center", senderX, y + 11);
+  doc.text("2/L Northeast Square, #47", senderX, y + 16);
+  doc.text("Connecticut St. Northeast Greenhills", senderX, y + 21);
+  doc.text("San Juan City, Metro Manila", senderX, y + 26);
 
-  y = height - 90;
-
-  // ── Document number ─────────────────────────────────────────────────────────
-  const docNo = data.invoicePrefix
-    ? `${data.invoicePrefix}-${data.transferNo}`
-    : data.transferNo;
-
-  page.drawText(docNo, { x: margin, y, size: 16, font: bold, color: navy });
-  page.drawText(`Date: ${fmt(data.packedAt ?? data.createdAt)}`, { x: width - margin - 140, y, size: 10, font, color: gray });
-  y -= 24;
-
-  // ── From / To ───────────────────────────────────────────────────────────────
-  const col2 = width / 2 + 10;
-
-  page.drawText("FROM", { x: margin, y, size: 8, font: bold, color: gray });
-  page.drawText("TO", { x: col2, y, size: 8, font: bold, color: gray });
-  y -= 14;
-
-  page.drawText(data.sourceSite, { x: margin, y, size: 11, font: bold, color: black });
-  page.drawText(data.destinationSite, { x: col2, y, size: 11, font: bold, color: black });
-  y -= 14;
-
-  if (data.destinationAddress) {
-    // Wrap address at 40 chars
-    const words = data.destinationAddress.split(" ");
-    let line = "";
-    for (const word of words) {
-      if ((line + word).length > 40) {
-        page.drawText(line.trim(), { x: col2, y, size: 9, font, color: gray });
-        y -= 12; line = word + " ";
-      } else { line += word + " "; }
-    }
-    if (line.trim()) { page.drawText(line.trim(), { x: col2, y, size: 9, font, color: gray }); }
-  }
-
-  page.drawText(`Prepared by: ${data.requestedBy}`, { x: margin, y: y - 2, size: 9, font, color: gray });
-  y -= 28;
-
-  // ── Divider ─────────────────────────────────────────────────────────────────
-  page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 1, color: light });
-  y -= 16;
-
-  // ── Table header ────────────────────────────────────────────────────────────
-  const cols = { serial: margin, part: margin + 130, name: margin + 230, qty: width - margin - 30 };
-
-  page.drawRectangle({ x: margin, y: y - 4, width: width - margin * 2, height: 18, color: navy });
-  page.drawText("#",             { x: margin + 4,    y: y + 1, size: 8, font: bold, color: white });
-  page.drawText("Serial",        { x: cols.serial + 14, y: y + 1, size: 8, font: bold, color: white });
-  page.drawText("Part Number",   { x: cols.part,     y: y + 1, size: 8, font: bold, color: white });
-  page.drawText("Description",   { x: cols.name,     y: y + 1, size: 8, font: bold, color: white });
-  page.drawText("Qty",           { x: cols.qty,      y: y + 1, size: 8, font: bold, color: white });
-  y -= 20;
-
-  // ── Table rows ───────────────────────────────────────────────────────────────
-  let currentPage = page;
-  let currentY = y;
-
-  data.items.forEach((item, i) => {
-    // Add new page if needed
-    if (currentY < 80) {
-      currentPage = doc.addPage([595, 842]);
-      currentY = 842 - margin;
-      // Repeat header on new page
-      currentPage.drawRectangle({ x: margin, y: currentY - 4, width: width - margin * 2, height: 18, color: navy });
-      currentPage.drawText("#",           { x: margin + 4,    y: currentY + 1, size: 8, font: bold, color: white });
-      currentPage.drawText("Serial",      { x: cols.serial + 14, y: currentY + 1, size: 8, font: bold, color: white });
-      currentPage.drawText("Part Number", { x: cols.part,     y: currentY + 1, size: 8, font: bold, color: white });
-      currentPage.drawText("Description", { x: cols.name,     y: currentY + 1, size: 8, font: bold, color: white });
-      currentPage.drawText("Qty",         { x: cols.qty,      y: currentY + 1, size: 8, font: bold, color: white });
-      currentY -= 20;
-    }
-
-    const rowBg = i % 2 === 0 ? white : rgb(0.97, 0.97, 0.97);
-    currentPage.drawRectangle({ x: margin, y: currentY - 4, width: width - margin * 2, height: 16, color: rowBg });
-
-    const truncate = (s: string, max: number) => s.length > max ? s.slice(0, max) + "…" : s;
-
-    currentPage.drawText(String(i + 1),                          { x: margin + 4,    y: currentY, size: 8, font, color: gray });
-    currentPage.drawText(truncate(item.serialNumber ?? "—", 18), { x: cols.serial + 14, y: currentY, size: 8, font, color: black });
-    currentPage.drawText(truncate(item.partNumber, 14),          { x: cols.part,     y: currentY, size: 8, font, color: black });
-    currentPage.drawText(truncate(item.partName, 28),            { x: cols.name,     y: currentY, size: 8, font, color: black });
-    currentPage.drawText(String(item.qty),                       { x: cols.qty,      y: currentY, size: 8, font, color: black });
-    currentY -= 16;
+  // ── Meta block (right side) ────────────────────────────────────────────────
+  const metaBlockX = pageWidth / 2 + 5;
+  const metaLabelW = 38;
+  const metaValX = metaBlockX + metaLabelW + 2;
+  const metaMaxValW = pageWidth - margin - metaValX - 2;
+  doc.setFontSize(7.5);
+  metaLines.forEach(([label, value], lineIndex) => {
+    const rowY = y + 5 + lineIndex * 5.5;
+    doc.setFont("helvetica", "bold");
+    doc.text(label, metaBlockX + metaLabelW, rowY, { align: "right" });
+    doc.setFont("helvetica", "normal");
+    const metaValue = asString(value, "—");
+    const wrapped = doc.splitTextToSize(metaValue, metaMaxValW);
+    doc.text(wrapped[0] ?? metaValue, metaValX, rowY);
   });
 
-  y = currentY;
+  // ── Advance y past header ──────────────────────────────────────────────────
+  const senderBottom = y + 30; // sender text ends at y+26, add 4mm gap before divider
+  const metaBottom = y + 5 + (metaLines.length - 1) * 5.5 + 7;
+  y = Math.max(senderBottom, metaBottom);
 
-  // ── Footer ───────────────────────────────────────────────────────────────────
-  y -= 12;
-  currentPage.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 0.5, color: light });
-  y -= 14;
-  currentPage.drawText(`Total items: ${data.items.length}`, { x: margin, y, size: 9, font: bold, color: black });
-  currentPage.drawText("Authorized signature: ___________________________", { x: col2 - 20, y, size: 9, font, color: gray });
-  y -= 30;
-  currentPage.drawText("This document is system-generated. All actions are audited.", { x: margin, y, size: 7, font, color: rgb(0.7, 0.7, 0.7) });
+  // ── Divider ────────────────────────────────────────────────────────────────
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.3);
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 5;
 
-  return doc.save();
+  // ── Address blocks ─────────────────────────────────────────────────────────
+  const renderAddressBlock = (label: string, name: string, address?: string | null) => {
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.text(label, margin, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(name, margin + 18, y);
+    if (address?.trim()) {
+      doc.setFontSize(8);
+      const wrapped = doc.splitTextToSize(address.trim(), pageWidth - margin - (margin + 18) - 5);
+      doc.text(wrapped, margin + 18, y + 5);
+      y += wrapped.length * 5; // 5mm per line (was 4.5 — too tight)
+    }
+    y += 9; // gap after each address block
+  };
+
+  y += 3;
+  if (!data.sourceIsDC) {
+    renderAddressBlock("From", sourceLabel, data.sourceAddress);
+  }
+  renderAddressBlock("Ship To", shipToLabel, data.destinationAddress);
+  y += 2; // extra gap before divider
+
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.3);
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 5;
+
+  // ── Table rows ─────────────────────────────────────────────────────────────
+  const tableRows: (string | number)[][] = [];
+  let rowNum = 0;
+  for (const item of data.items) {
+    const partNumber = asString(item.partNumber, "Unknown");
+    const description = asString(item.partName);
+    if (item.serialNumber) {
+      rowNum += 1;
+      tableRows.push([rowNum, partNumber, description, item.serialNumber, 1]);
+    } else {
+      for (let i = 0; i < normalizePositiveInt(item.qty, 1); i++) {
+        rowNum += 1;
+        tableRows.push([rowNum, partNumber, description, "—", 1]);
+      }
+    }
+  }
+  if (tableRows.length === 0) {
+    tableRows.push([1, "—", "No line items available", "—", 1]);
+  }
+
+  autoTable(doc, {
+    startY: y,
+    head: [["#", "PART NUMBER", "DESCRIPTION", "SERIAL NUMBER", "BOX #"]],
+    body: tableRows,
+    theme: "grid",
+    headStyles: {
+      fillColor: [107, 114, 128],
+      textColor: 255,
+      fontSize: 8.5,
+      fontStyle: "bold",
+      halign: "center",
+      font: "helvetica",
+    },
+    bodyStyles: {
+      fontSize: 8,
+      halign: "center",
+      cellPadding: 2.5,
+      font: "helvetica",
+    },
+    alternateRowStyles: { fillColor: [249, 250, 251] },
+    margin: { left: margin, right: margin },
+    columnStyles: {
+      0: { cellWidth: 10 },
+      1: { cellWidth: 32, font: "courier" },
+      2: { cellWidth: "auto", halign: "center" },
+      3: { cellWidth: 38, font: "courier" },
+      4: { cellWidth: 14 },
+    },
+  });
+
+  const finalY = (doc as any).lastAutoTable?.finalY || y + 20;
+  let footerY = finalY + 5;
+
+  // ── Divider ────────────────────────────────────────────────────────────────
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.3);
+  doc.line(margin, footerY, pageWidth - margin, footerY);
+  footerY += 5;
+
+  // ── Remarks + Totals ───────────────────────────────────────────────────────
+  const remarksBoxH = 16;
+  doc.setDrawColor(220);
+  doc.rect(margin, footerY, pageWidth - margin * 2, remarksBoxH);
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "bold");
+  doc.text("Remarks", margin + 2, footerY + 5);
+  doc.setFont("helvetica", "normal");
+  doc.text(asString(data.notes, "SERIAL TRANSFER"), margin + 6, footerY + 11);
+
+  const totalBoxWidth = 28;
+  const totalLabelX = pageWidth - margin - totalBoxWidth * 2;
+  const totalValueX = pageWidth - margin - totalBoxWidth;
+
+  doc.setFillColor(180, 180, 180);
+  doc.rect(totalLabelX, footerY, totalBoxWidth, remarksBoxH / 2, "F");
+  doc.rect(totalValueX, footerY, totalBoxWidth, remarksBoxH / 2, "S");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.5);
+  doc.text("TOTAL QTY", totalLabelX + totalBoxWidth / 2, footerY + 4.5, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.text(String(totalUnits), totalValueX + totalBoxWidth / 2, footerY + 4.5, { align: "center" });
+
+  doc.setFillColor(180, 180, 180);
+  doc.rect(totalLabelX, footerY + remarksBoxH / 2, totalBoxWidth, remarksBoxH / 2, "F");
+  doc.rect(totalValueX, footerY + remarksBoxH / 2, totalBoxWidth, remarksBoxH / 2, "S");
+  doc.setFont("helvetica", "bold");
+  doc.text("TOTAL BOXES", totalLabelX + totalBoxWidth / 2, footerY + remarksBoxH / 2 + 4.5, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.text(String(normalizePositiveInt(data.boxCount, 1)), totalValueX + totalBoxWidth / 2, footerY + remarksBoxH / 2 + 4.5, { align: "center" });
+
+  y = footerY + remarksBoxH + 6;
+
+  // ── Divider ────────────────────────────────────────────────────────────────
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.3);
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 5;
+
+  // ── Signatures ─────────────────────────────────────────────────────────────
+  const half = (pageWidth - margin * 2) / 2;
+  doc.setFontSize(8.5);
+  doc.setFont("helvetica", "bold");
+  doc.text("Prepared and Counted by:", margin, y);
+  doc.setFont("helvetica", "normal");
+  doc.text(asString(data.requestedBy, "____________________"), margin + 52, y);
+  doc.setFont("helvetica", "bold");
+  doc.text("Verified by:", margin + half, y);
+  doc.setFont("helvetica", "normal");
+  doc.text(asString(data.verifiedBy, "____________________"), margin + half + 24, y);
+  y += 10;
+  doc.setFont("helvetica", "bold");
+  doc.text("Receiving Branch Signature:", margin, y);
+  doc.setFont("helvetica", "normal");
+  doc.text("____________________", margin + 50, y);
+
+  return doc;
 }

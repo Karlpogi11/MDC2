@@ -1,21 +1,24 @@
 import { type ReactNode } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
-  BarChart3, Bell, Boxes, CircleHelp, ClipboardCheck,
+  BarChart3, Boxes, CircleHelp, ClipboardCheck, ClipboardList,
   FileDown, PackagePlus, Settings, ShieldCheck, type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useBranding } from "@/lib/useBranding";
+import { NotificationBell } from "@/components/NotificationBell";
+import { useOnlineStatus } from "@/lib/useOnlineStatus";
 
 type Module = { label: string; icon: LucideIcon; path: string };
 
 const MODULES: Module[] = [
-  { label: "Inventory",   icon: Boxes,         path: "/" },
-  { label: "Stock-in",    icon: PackagePlus,   path: "/stock-in" },
-  { label: "Transfers",   icon: ShieldCheck,   path: "/transfers" },
-  { label: "Corrections", icon: ClipboardCheck, path: "/corrections" },
-  { label: "Exports",     icon: FileDown,      path: "/exports" },
-  { label: "Analytics",   icon: BarChart3,     path: "/analytics" },
+  { label: "Inventory",      icon: Boxes,         path: "/" },
+  { label: "Stock-in",       icon: PackagePlus,   path: "/stock-in" },
+  { label: "Transfers",      icon: ShieldCheck,   path: "/transfers" },
+  { label: "Corrections",    icon: ClipboardCheck, path: "/corrections" },
+  { label: "Physical Count", icon: ClipboardList, path: "/physical-count" },
+  { label: "Exports",        icon: FileDown,      path: "/exports" },
+  { label: "Analytics",      icon: BarChart3,     path: "/analytics" },
 ];
 
 type Props = {
@@ -105,6 +108,7 @@ export function AppLayout({ children, activeModule }: Props) {
       : "User";
 
   const activePath = activeModule ?? location.pathname;
+  const onlineStatus = useOnlineStatus();
 
   return (
     <div className="katana-app">
@@ -132,9 +136,7 @@ export function AppLayout({ children, activeModule }: Props) {
         </div>
 
         <div className="nav-right">
-          <button className="icon-btn" type="button" aria-label="Notifications">
-            <Bell aria-hidden="true" />
-          </button>
+          <NotificationBell />
           <button className="icon-btn" type="button" aria-label="Help">
             <CircleHelp aria-hidden="true" />
           </button>
@@ -163,6 +165,19 @@ export function AppLayout({ children, activeModule }: Props) {
       </header>
 
       <Breadcrumb />
+
+      {onlineStatus === "offline" && (
+        <div role="alert" style={{ background: "#fef2f2", borderBottom: "1px solid #fecaca", padding: "7px 28px", fontSize: 13, color: "#b91c1c", display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#ef4444", flexShrink: 0 }} />
+          No connection. Changes may not save.
+        </div>
+      )}
+      {onlineStatus === "restored" && (
+        <div role="status" style={{ background: "#f0fdf4", borderBottom: "1px solid #bbf7d0", padding: "7px 28px", fontSize: 13, color: "#15803d", display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#16a34a", flexShrink: 0 }} />
+          Connection restored.
+        </div>
+      )}
 
       {children}
     </div>

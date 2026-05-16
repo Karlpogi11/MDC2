@@ -20,6 +20,7 @@ type Profile = {
 
 type AuthState =
   | { status: "loading" }
+  | { status: "connecting" }   // loading timed out — DB unreachable
   | { status: "unauthenticated" }
   | { status: "authenticated"; user: User; session: Session; profile: Profile };
 
@@ -39,17 +40,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const client = getSupabaseClient();
     if (!client) { setState({ status: "unauthenticated" }); return; }
 
+    // If loading takes >8s, DB is likely unreachable — show connecting overlay
+    const timeout = setTimeout(() => {
+      setState((prev) => prev.status === "loading" ? { status: "connecting" } : prev);
+    }, 3000);
+
     client.auth.getSession().then(({ data: { session } }) => {
+      clearTimeout(timeout);
       if (session) void loadProfile(session);
       else setState({ status: "unauthenticated" });
     });
 
     const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
+      clearTimeout(timeout);
       if (session) void loadProfile(session);
       else setState({ status: "unauthenticated" });
     });
 
-    return () => subscription.unsubscribe();
+    return () => { clearTimeout(timeout); subscription.unsubscribe(); };
   }, []);
 
   async function loadProfile(session: Session) {
@@ -102,11 +110,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: email, error: lookupError } = await client
       .rpc("get_email_for_username", { p_username: username });
 
-    if (lookupError) return lookupError.message;
+    if (lookupError) {
+      const msg = lookupError.message.toLowerCase();
+      if (msg.includes("fetch") || msg.includes("network") || msg.includes("failed")) {
+        return "No connection. Check your internet and try again.";
+      }
+      return lookupError.message;
+    }
     if (!email) return "Invalid username or password.";
 
     const { error } = await client.auth.signInWithPassword({ email, password });
-    return error ? "Invalid username or password." : null;
+    if (error) {
+      const msg = error.message.toLowerCase();
+      if (msg.includes("fetch") || msg.includes("network") || msg.includes("failed")) {
+        return "No connection. Check your internet and try again.";
+      }
+      return "Invalid username or password.";
+    }
+    return null;
   }
 
   async function signInWithGoogle(): Promise<string | null> {

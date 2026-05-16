@@ -95,6 +95,8 @@ export function AnalyticsPage() {
   const { state: authState } = useAuth();
   const actorId = authState.status === "authenticated" ? authState.user.id : null;
 
+  const [activeTab, setActiveTab] = useState<"upload" | "trend" | "abc" | "velocity">("upload");
+
   const [sourceType, setSourceType] = useState<"fixably" | "gsx">("fixably");
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ added: number; skipped: number; errors: string[] } | null>(null);
@@ -108,6 +110,12 @@ export function AnalyticsPage() {
   const [trendSite, setTrendSite] = useState("");
   const [trendRows, setTrendRows] = useState<TrendRow[]>([]);
   const [trendLoading, setTrendLoading] = useState(false);
+
+  // ABC / velocity
+  const [abcRows, setAbcRows] = useState<(TrendRow & { tier: "A" | "B" | "C" })[]>([]);
+  const [abcLoading, setAbcLoading] = useState(false);
+  const [velocityRows, setVelocityRows] = useState<(TrendRow & { days_since_last: number | null; category: "fast" | "slow" | "dead" })[]>([]);
+  const [velocityLoading, setVelocityLoading] = useState(false);
 
   async function loadUploads() {
     const client = getSupabaseClient();
@@ -223,6 +231,65 @@ export function AnalyticsPage() {
     setTrendLoading(false);
   }
 
+  async function loadABC() {
+    setAbcLoading(true);
+    const client = getSupabaseClient();
+    if (!client) { setAbcLoading(false); return; }
+
+    // Try materialized view first, fall back to analytics_rows
+    const { data, error } = await client
+      .from("analytics_summary")
+      .select("part_number, part_name, total_qty, last_used")
+      .order("total_qty", { ascending: false })
+      .limit(500);
+
+    const rows: TrendRow[] = (error ? [] : data ?? []).map((r: any) => ({
+      part_number: r.part_number, part_name: r.part_name, site_code: null,
+      total_qty: r.total_qty, last_used: r.last_used,
+    }));
+
+    // ABC classification: A = top 80% of volume, B = next 15%, C = bottom 5%
+    const total = rows.reduce((s, r) => s + r.total_qty, 0);
+    let cumulative = 0;
+    const classified = rows.map((r) => {
+      cumulative += r.total_qty;
+      const pct = total > 0 ? cumulative / total : 0;
+      const tier: "A" | "B" | "C" = pct <= 0.8 ? "A" : pct <= 0.95 ? "B" : "C";
+      return { ...r, tier };
+    });
+
+    setAbcRows(classified);
+    setAbcLoading(false);
+  }
+
+  async function loadVelocity() {
+    setVelocityLoading(true);
+    const client = getSupabaseClient();
+    if (!client) { setVelocityLoading(false); return; }
+
+    const { data, error } = await client
+      .from("analytics_summary")
+      .select("part_number, part_name, total_qty, last_used")
+      .order("last_used", { ascending: false, nullsFirst: false })
+      .limit(500);
+
+    const now = Date.now();
+    const rows = (error ? [] : data ?? []).map((r: any) => {
+      const daysSince = r.last_used
+        ? Math.floor((now - new Date(r.last_used).getTime()) / 86400000)
+        : null;
+      const category: "fast" | "slow" | "dead" =
+        daysSince === null ? "dead"
+        : daysSince <= 30 ? "fast"
+        : daysSince <= 90 ? "slow"
+        : "dead";
+      return { part_number: r.part_number, part_name: r.part_name, site_code: null, total_qty: r.total_qty, last_used: r.last_used, days_since_last: daysSince, category };
+    });
+
+    setVelocityRows(rows);
+    setVelocityLoading(false);
+  }
+
   const inputStyle: React.CSSProperties = {
     border: "1px solid #d0d0d0", borderRadius: "var(--radius)", padding: "8px 10px",
     fontSize: 13, outline: "none", fontFamily: "inherit", background: "#fff",
@@ -231,11 +298,35 @@ export function AnalyticsPage() {
   return (
     <AppLayout>
       <main style={{ maxWidth: 960, margin: "0 auto", padding: "28px 24px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 24 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
           <BarChart3 size={20} color="var(--blue)" />
           <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#1a2a3a" }}>Analytics</h1>
         </div>
 
+        {/* Tab bar */}
+        <div style={{ display: "flex", gap: 2, borderBottom: "2px solid #e5e7eb", marginBottom: 24 }}>
+          {([
+            { key: "upload",   label: "Upload" },
+            { key: "trend",    label: "Usage Trend" },
+            { key: "abc",      label: "ABC Analysis" },
+            { key: "velocity", label: "Stock Velocity" },
+          ] as const).map((t) => (
+            <button key={t.key} type="button"
+              onClick={() => {
+                setActiveTab(t.key);
+                if (t.key === "abc" && abcRows.length === 0) void loadABC();
+                if (t.key === "velocity" && velocityRows.length === 0) void loadVelocity();
+              }}
+              style={{ border: "none", background: "transparent", padding: "10px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer",
+                color: activeTab === t.key ? "var(--blue)" : "#6b7a8d",
+                borderBottom: activeTab === t.key ? "2px solid var(--blue)" : "2px solid transparent", marginBottom: -2 }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Upload tab */}
+        {activeTab === "upload" && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
           {/* Upload panel */}
           <div style={{ background: "#fff", border: "1px solid #d0d0d0", borderRadius: "var(--radius)", overflow: "hidden" }}>
@@ -304,8 +395,10 @@ export function AnalyticsPage() {
             </div>
           </div>
         </div>
+        )} {/* end upload tab */}
 
-        {/* Trend analysis */}
+        {/* Trend tab */}
+        {activeTab === "trend" && (
         <div style={{ background: "#fff", border: "1px solid #d0d0d0", borderRadius: "var(--radius)", overflow: "hidden" }}>
           <div style={{ padding: "14px 20px", borderBottom: "1px solid #e5e5e5", background: "#f7f7f7" }}>
             <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#2d2d2d" }}>Part usage trend</h2>
@@ -368,6 +461,84 @@ export function AnalyticsPage() {
             </table>
           </div>
         </div>
+        )} {/* end trend tab */}
+
+        {/* ABC Analysis tab */}
+        {activeTab === "abc" && (
+          <div style={{ background: "#fff", border: "1px solid #d0d0d0", borderRadius: "var(--radius)", overflow: "hidden" }}>
+            <div style={{ padding: "14px 20px", borderBottom: "1px solid #e5e5e5", background: "#f7f7f7", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#2d2d2d" }}>ABC Analysis</h2>
+                <p style={{ margin: "2px 0 0", fontSize: 12, color: "#6b7a8d" }}>A = top 80% of usage volume · B = next 15% · C = bottom 5%</p>
+              </div>
+              <button type="button" onClick={() => void loadABC()} disabled={abcLoading}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                {abcLoading ? "Loading…" : "Refresh"}
+              </button>
+            </div>
+            <div className="table-scroll">
+              <table style={{ tableLayout: "fixed", minWidth: 560 }}>
+                <colgroup><col style={{ width: 50 }} /><col style={{ width: 130 }} /><col style={{ width: "auto" }} /><col style={{ width: 80 }} /><col style={{ width: 120 }} /></colgroup>
+                <thead><tr><th>Tier</th><th>Part #</th><th>Description</th><th className="num">Total used</th><th>Last used</th></tr></thead>
+                <tbody>
+                  {abcLoading && <tr><td colSpan={5} className="empty-row">Analyzing…</td></tr>}
+                  {!abcLoading && abcRows.length === 0 && <tr><td colSpan={5} className="empty-row">No data. Upload analytics files first.</td></tr>}
+                  {abcRows.map((r, i) => (
+                    <tr key={i}>
+                      <td><span style={{ fontSize: 12, fontWeight: 800, padding: "2px 8px", borderRadius: 6,
+                        background: r.tier === "A" ? "#dcfce7" : r.tier === "B" ? "#dbeafe" : "#f3f4f6",
+                        color: r.tier === "A" ? "#15803d" : r.tier === "B" ? "#1d4ed8" : "#6b7a8d" }}>{r.tier}</span></td>
+                      <td style={{ fontFamily: "monospace", fontSize: 12, color: "var(--blue)" }}>{r.part_number}</td>
+                      <td style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{r.part_name ?? "—"}</td>
+                      <td className="num" style={{ fontWeight: 700 }}>{r.total_qty}</td>
+                      <td style={{ color: "#6b7a8d" }}>{r.last_used ? formatDate(r.last_used) : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Stock Velocity tab */}
+        {activeTab === "velocity" && (
+          <div style={{ background: "#fff", border: "1px solid #d0d0d0", borderRadius: "var(--radius)", overflow: "hidden" }}>
+            <div style={{ padding: "14px 20px", borderBottom: "1px solid #e5e5e5", background: "#f7f7f7", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#2d2d2d" }}>Stock Velocity</h2>
+                <p style={{ margin: "2px 0 0", fontSize: 12, color: "#6b7a8d" }}>Fast = used ≤30 days · Slow = 31–90 days · Dead = 90+ days or never</p>
+              </div>
+              <button type="button" onClick={() => void loadVelocity()} disabled={velocityLoading}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                {velocityLoading ? "Loading…" : "Refresh"}
+              </button>
+            </div>
+            <div className="table-scroll">
+              <table style={{ tableLayout: "fixed", minWidth: 560 }}>
+                <colgroup><col style={{ width: 80 }} /><col style={{ width: 130 }} /><col style={{ width: "auto" }} /><col style={{ width: 80 }} /><col style={{ width: 100 }} /></colgroup>
+                <thead><tr><th>Category</th><th>Part #</th><th>Description</th><th className="num">Total used</th><th className="num">Days since</th></tr></thead>
+                <tbody>
+                  {velocityLoading && <tr><td colSpan={5} className="empty-row">Analyzing…</td></tr>}
+                  {!velocityLoading && velocityRows.length === 0 && <tr><td colSpan={5} className="empty-row">No data. Upload analytics files first.</td></tr>}
+                  {velocityRows.map((r, i) => (
+                    <tr key={i}>
+                      <td><span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6,
+                        background: r.category === "fast" ? "#dcfce7" : r.category === "slow" ? "#fef9c3" : "#fee2e2",
+                        color: r.category === "fast" ? "#15803d" : r.category === "slow" ? "#a16207" : "#b91c1c" }}>
+                        {r.category}
+                      </span></td>
+                      <td style={{ fontFamily: "monospace", fontSize: 12, color: "var(--blue)" }}>{r.part_number}</td>
+                      <td style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{r.part_name ?? "—"}</td>
+                      <td className="num" style={{ fontWeight: 700 }}>{r.total_qty}</td>
+                      <td className="num" style={{ color: "#6b7a8d" }}>{r.days_since_last ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
       </main>
     </AppLayout>
   );

@@ -1,5 +1,5 @@
 import { useState, useEffect, type FormEvent } from "react";
-import { ClipboardCheck, Search, AlertTriangle, Check } from "lucide-react";
+import { ClipboardCheck, Search, AlertTriangle, Check, Clock } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { AppLayout } from "@/components/AppLayout";
@@ -43,6 +43,52 @@ export function CorrectionsPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
 
+  // Pending approvals
+  const [pending, setPending] = useState<any[]>([]);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
+
+  async function loadPending() {
+    const client = getSupabaseClient();
+    if (!client) return;
+    const { data } = await client
+      .from("workflow_requests")
+      .select("id,payload,requested_at,requester:profiles!requested_by(full_name,username)")
+      .eq("type", "serial_correction")
+      .eq("status", "pending")
+      .order("requested_at", { ascending: false });
+    setPending((data ?? []).map((r: any) => ({ ...r, requester: Array.isArray(r.requester) ? r.requester[0] : r.requester })));
+  }
+
+  async function handleApprove(req: any) {
+    if (!actorId) return;
+    setApprovingId(req.id);
+    const client = getSupabaseClient();
+    if (!client) { setApprovingId(null); return; }
+    const p = req.payload;
+    // Execute the correction
+    const { error } = await client.rpc("apply_serial_correction", {
+      p_old_serial_id: p.old_serial_id,
+      p_new_serial_number: p.new_serial_number,
+      p_reason: p.reason,
+      p_actor_id: actorId,
+      p_transfer_id: p.transfer_id ?? null,
+    });
+    if (!error) {
+      await client.from("workflow_requests").update({ status: "approved", reviewed_by: actorId, reviewed_at: new Date().toISOString() }).eq("id", req.id);
+      await loadPending();
+      void loadHistory();
+    }
+    setApprovingId(null);
+  }
+
+  async function handleReject(id: string) {
+    if (!actorId) return;
+    const client = getSupabaseClient();
+    if (!client) return;
+    await client.from("workflow_requests").update({ status: "rejected", reviewed_by: actorId, reviewed_at: new Date().toISOString() }).eq("id", id);
+    await loadPending();
+  }
+
   // History
   const [history, setHistory] = useState<CorrectionRow[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -67,7 +113,7 @@ export function CorrectionsPage() {
     setHistoryLoading(false);
   }
 
-  useEffect(() => { void loadHistory(); }, []);
+  useEffect(() => { void loadHistory(); void loadPending(); }, []);
 
   async function handleLookup(e: FormEvent) {
     e.preventDefault();
@@ -111,20 +157,27 @@ export function CorrectionsPage() {
     const client = getSupabaseClient();
     if (!client) { setSubmitting(false); return; }
 
-    const { data, error } = await client.rpc("apply_serial_correction", {
-      p_old_serial_id: found.id,
-      p_new_serial_number: newSerial.trim(),
-      p_reason: reason.trim(),
-      p_actor_id: actorId,
-      p_transfer_id: found.transfer?.id ?? null,
+    // Submit to workflow_requests for 4-eyes approval
+    const { error } = await client.from("workflow_requests").insert({
+      type: "serial_correction",
+      entity_type: "serial_numbers",
+      entity_id: found.id,
+      requested_by: actorId,
+      payload: {
+        old_serial_id: found.id,
+        old_serial_number: found.serial_number,
+        new_serial_number: newSerial.trim(),
+        reason: reason.trim(),
+        transfer_id: found.transfer?.id ?? null,
+      },
     });
 
     if (error) {
       setSubmitError(error.message);
     } else {
-      setSubmitSuccess(`Corrected: ${found.serial_number} → ${newSerial.trim()}`);
+      setSubmitSuccess(`Correction submitted for approval: ${found.serial_number} → ${newSerial.trim()}`);
       setFound(null); setLookupSerial(""); setNewSerial(""); setReason("");
-      void loadHistory();
+      void loadPending();
     }
     setSubmitting(false);
   }
@@ -235,7 +288,7 @@ export function CorrectionsPage() {
 
                   <button type="submit" disabled={submitting}
                     style={{ display: "inline-flex", alignItems: "center", gap: 6, background: submitting ? "#6b8fc4" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: submitting ? "not-allowed" : "pointer" }}>
-                    <ClipboardCheck size={14} /> {submitting ? "Saving…" : "Apply correction"}
+                    <ClipboardCheck size={14} /> {submitting ? "Submitting…" : "Submit for approval"}
                   </button>
                 </form>
               )}
@@ -248,6 +301,38 @@ export function CorrectionsPage() {
             </div>
           </div>
         </div>
+
+        {/* Pending approvals */}
+        {pending.length > 0 && (
+          <div className="table-card" style={{ marginBottom: 20 }}>
+            <div style={{ padding: "10px 14px", borderBottom: "1px solid #d0d0d0", display: "flex", alignItems: "center", gap: 8 }}>
+              <Clock size={14} color="#a16207" />
+              <span style={{ fontSize: 13, fontWeight: 600, color: "#444" }}>Pending approvals</span>
+              <span style={{ fontSize: 11, fontWeight: 700, background: "#fef9c3", color: "#a16207", padding: "1px 7px", borderRadius: 10 }}>{pending.length}</span>
+            </div>
+            <div>
+              {pending.map((req) => (
+                <div key={req.id} style={{ padding: "12px 14px", borderBottom: "1px solid #f3f4f6", display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ flex: 1, fontSize: 13 }}>
+                    <code style={{ color: "#b91c1c" }}>{req.payload.old_serial_number}</code>
+                    <span style={{ color: "#9ca3af", margin: "0 6px" }}>→</span>
+                    <code style={{ color: "#15803d" }}>{req.payload.new_serial_number}</code>
+                    <span style={{ marginLeft: 10, fontSize: 12, color: "#6b7a8d" }}>{req.payload.reason}</span>
+                  </div>
+                  <span style={{ fontSize: 11, color: "#9ca3af" }}>by {req.requester?.full_name ?? req.requester?.username ?? "—"}</span>
+                  <button type="button" onClick={() => void handleApprove(req)} disabled={approvingId === req.id}
+                    style={{ fontSize: 12, fontWeight: 600, padding: "4px 12px", borderRadius: 6, border: "none", background: "#dcfce7", color: "#15803d", cursor: "pointer" }}>
+                    {approvingId === req.id ? "…" : "Approve"}
+                  </button>
+                  <button type="button" onClick={() => void handleReject(req.id)}
+                    style={{ fontSize: 12, fontWeight: 600, padding: "4px 12px", borderRadius: 6, border: "none", background: "#fee2e2", color: "#b91c1c", cursor: "pointer" }}>
+                    Reject
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Correction history */}
         <div className="table-card">

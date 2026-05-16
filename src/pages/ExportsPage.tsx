@@ -124,7 +124,7 @@ export function ExportsPage() {
       if (trTo && t.created_at > trTo + "T23:59:59") return false;
       if (trSite) {
         const dest = Array.isArray(t.destination) ? t.destination[0] : t.destination;
-        if (dest?.id !== trSite) return false;
+        if (dest?.site_code !== trSite && dest?.id !== trSite) return false;
       }
       return true;
     });

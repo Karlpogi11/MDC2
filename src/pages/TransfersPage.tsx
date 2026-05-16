@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Plus, FileText } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase";
 import { AppLayout } from "@/components/AppLayout";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 type TransferStatus = "draft" | "packed" | "in_transit" | "received" | "cancelled";
 
@@ -61,49 +62,86 @@ function formatDate(iso: string) {
 
 export function TransfersPage() {
   const navigate = useNavigate();
-  const [transfers, setTransfers] = useState<Transfer[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<TransferStatus | "all">("all");
 
-  useEffect(() => {
-    fetchTransfers()
-      .then((rows) => { setTransfers(rows); setLoading(false); })
-      .catch((err) => { setFetchError(err instanceof Error ? err.message : "Failed to load transfers."); setLoading(false); });
-  }, []);
+  const { data: transfers = [], isLoading: loading, error } = useQuery({
+    queryKey: ["transfers"],
+    queryFn: fetchTransfers,
+  });
 
+  // Realtime: invalidate on any transfer insert/update
+  useEffect(() => {
+    const client = getSupabaseClient();
+    if (!client) return;
+    const channel = client
+      .channel("transfers-list")
+      .on("postgres_changes", { event: "*", schema: "public", table: "transfers" }, () => {
+        void queryClient.invalidateQueries({ queryKey: ["transfers"] });
+      })
+      .subscribe();
+    return () => { void client.removeChannel(channel); };
+  }, [queryClient]);
+
+  // Optimistic status update mutation
+  const updateStatus = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: TransferStatus }) => {
+      const client = getSupabaseClient();
+      if (!client) throw new Error("Not configured");
+      const { error } = await client.from("transfers").update({ status }).eq("id", id);
+      if (error) throw new Error(error.message);
+    },
+    onMutate: async ({ id, status }) => {
+      await queryClient.cancelQueries({ queryKey: ["transfers"] });
+      const previous = queryClient.getQueryData<Transfer[]>(["transfers"]);
+      queryClient.setQueryData<Transfer[]>(["transfers"], (old = []) =>
+        old.map((t) => t.id === id ? { ...t, status } : t)
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(["transfers"], ctx.previous);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["transfers"] }),
+  });
+
+  const fetchError = error instanceof Error ? error.message : null;
   const filtered = statusFilter === "all" ? transfers : transfers.filter((t) => t.status === statusFilter);
 
   return (
     <AppLayout>
       <main style={{ maxWidth: 960, margin: "0 auto", padding: "32px 24px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#1a2a3a" }}>
             Transfers {!loading && <span style={{ fontSize: 14, fontWeight: 400, color: "#6b7a8d" }}>({filtered.length})</span>}
           </h1>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button
+            type="button"
+            onClick={() => navigate("/transfers/new")}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+          >
+            <Plus size={15} /> New transfer
+          </button>
+        </div>
+
+        {/* Status filter tabs */}
+        <div style={{ display: "flex", gap: 4, marginBottom: 16, borderBottom: "1px solid #e5e7eb", paddingBottom: 0 }}>
+          {(["all", "draft", "packed", "in_transit", "received", "cancelled"] as const).map((s) => (
             <button
+              key={s}
               type="button"
-              onClick={() => navigate("/transfers/new")}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+              onClick={() => setStatusFilter(s)}
+              style={{
+                border: "none", borderBottom: `2px solid ${statusFilter === s ? "var(--blue)" : "transparent"}`,
+                borderRadius: 0, padding: "8px 14px", fontSize: 13, fontWeight: statusFilter === s ? 600 : 400,
+                cursor: "pointer", background: "transparent",
+                color: statusFilter === s ? "var(--blue)" : "#6b7a8d",
+                marginBottom: -1,
+              }}
             >
-              <Plus size={15} /> New transfer
+              {s === "all" ? "All" : STATUS_STYLE[s].label}
             </button>
-            {(["all", "draft", "packed", "in_transit", "received", "cancelled"] as const).map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => setStatusFilter(s)}
-                style={{
-                  border: "none", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                  background: statusFilter === s ? "var(--blue)" : "transparent",
-                  color: statusFilter === s ? "#fff" : "#6b7a8d",
-                }}
-              >
-                {s === "all" ? "All" : STATUS_STYLE[s].label}
-              </button>
             ))}
-          </div>
         </div>
 
         <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: "var(--radius)", overflow: "hidden" }}>

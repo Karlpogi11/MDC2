@@ -12,6 +12,7 @@ type Site = {
   is_active: boolean;
   invoice_prefix: string | null;
   address: string | null;
+  contact_emails: string[];
 };
 
 const SITES_TEMPLATE = "site_code,site_name,is_dc,invoice_prefix,address\nDC-MNL,Main Distribution Center,true,,123 DC Street Manila\nPODIUM,Podium Site,false,PODSSR#,\"Podium Mall, Ortigas Center\"\nBGC-01,BGC Service Center,false,BGCSSR#,\"BGC High Street, Taguig\"";
@@ -72,6 +73,7 @@ export function SitesTab() {
   const [editPrefix, setEditPrefix] = useState("");
   const [editAddress, setEditAddress] = useState("");
   const [editIsDC, setEditIsDC] = useState(false);
+  const [editEmails, setEditEmails] = useState("");  // comma-separated
   const [editSaving, setEditSaving] = useState(false);
 
   async function load() {
@@ -120,15 +122,18 @@ export function SitesTab() {
     setEditId(site.id); setEditName(site.site_name);
     setEditPrefix(site.invoice_prefix ?? ""); setEditAddress(site.address ?? "");
     setEditIsDC(site.is_dc);
+    setEditEmails((site.contact_emails ?? []).join(", "));
   }
 
   async function handleSaveEdit(id: string) {
     setEditSaving(true);
     const client = getSupabaseClient();
     if (!client) { setEditSaving(false); return; }
+    const emails = editEmails.split(/[,\n]/).map((e) => e.trim().toLowerCase()).filter(Boolean);
     await client.from("sites").update({
       site_name: editName.trim(), invoice_prefix: editPrefix.trim() || null,
       address: editAddress.trim() || null, is_dc: editIsDC,
+      contact_emails: emails,
     }).eq("id", id);
     setEditSaving(false); setEditId(null); void load();
   }
@@ -200,12 +205,13 @@ export function SitesTab() {
           <table style={{ tableLayout: "fixed", minWidth: 960 }}>
             <colgroup>
               <col style={{ width: 110 }} />
-              <col style={{ width: 200 }} />
+              <col style={{ width: 180 }} />
               <col style={{ width: 120 }} />
-              <col style={{ width: 220 }} />
-              <col style={{ width: 100 }} />
+              <col style={{ width: 180 }} />
+              <col style={{ width: 200 }} />
               <col style={{ width: 80 }} />
-              <col style={{ width: 150 }} />
+              <col style={{ width: 70 }} />
+              <col style={{ width: 140 }} />
             </colgroup>
             <thead>
               <tr>
@@ -213,14 +219,15 @@ export function SitesTab() {
                 <th>Name</th>
                 <th>Invoice Prefix</th>
                 <th>Address</th>
+                <th>Contact Emails</th>
                 <th>Type</th>
                 <th>Status</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {loading && <tr><td colSpan={7} className="empty-row">Loading…</td></tr>}
-              {!loading && sites.length === 0 && <tr><td colSpan={7} className="empty-row">No sites yet.</td></tr>}
+              {loading && <tr><td colSpan={8} className="empty-row">Loading…</td></tr>}
+              {!loading && sites.length === 0 && <tr><td colSpan={8} className="empty-row">No sites yet.</td></tr>}
               {sites.map((site) => {
                 const isEditing = editId === site.id;
                 return (
@@ -244,6 +251,18 @@ export function SitesTab() {
                       {isEditing
                         ? <input value={editAddress} onChange={(e) => setEditAddress(e.target.value)} placeholder="Full address" style={fieldStyle} />
                         : site.address ?? <span style={{ color: "#aaa" }}>—</span>}
+                    </td>
+                    <td style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {isEditing
+                        ? <input value={editEmails} onChange={(e) => setEditEmails(e.target.value)}
+                            placeholder="email1@co.com, email2@co.com"
+                            style={fieldStyle} title="Comma-separated. First = TO, rest = CC" />
+                        : (site.contact_emails ?? []).length > 0
+                          ? <span style={{ fontSize: 11, color: "#374151" }} title={(site.contact_emails ?? []).join(", ")}>
+                              {(site.contact_emails ?? [])[0]}
+                              {(site.contact_emails ?? []).length > 1 && <span style={{ color: "#9ca3af" }}> +{(site.contact_emails ?? []).length - 1}</span>}
+                            </span>
+                          : <span style={{ color: "#aaa" }}>—</span>}
                     </td>
                     <td>
                       {isEditing

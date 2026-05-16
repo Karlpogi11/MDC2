@@ -68,19 +68,17 @@ export function UsersPage() {
     const client = getSupabaseClient();
     if (!client) { setInviteError("Supabase not configured."); setInviting(false); return; }
 
-    // Use magic link (OTP) — works with anon key, no service role needed
-    const { error } = await client.auth.signInWithOtp({
-      email,
-      options: { shouldCreateUser: true, data: { full_name: fullName } },
+    const { data, error } = await client.functions.invoke("invite-user", {
+      body: { email, username, full_name: fullName, role },
     });
 
-    if (error) { setInviteError(error.message); setInviting(false); return; }
+    if (error || data?.error) {
+      setInviteError(data?.error ?? error?.message ?? "Invite failed.");
+      setInviting(false);
+      return;
+    }
 
-    // Note: profile row (with role + username) will be created on first login
-    // via the auth.tsx loadProfile auto-create. The admin should then edit
-    // the profile to set the correct role and username from the Users page.
-
-    setInviteSuccess(`Magic link sent to ${email}. They can log in immediately with that link.`);
+    setInviteSuccess(`Invite sent to ${email}. User created with role ${role} and username "${username}".`);
     setEmail(""); setUsername(""); setFullName(""); setRole("dc_operator");
     const rows = await fetchUsers();
     setUsers(rows);

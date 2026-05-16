@@ -48,7 +48,7 @@ async function uploadLogo(file: File): Promise<{ url: string | null; error: stri
 export function ConfigPage() {
   const { state: authState } = useAuth();
   const actorId = authState.status === "authenticated" ? authState.user.id : "";
-  const [tab, setTab] = useState<"branding" | "parts" | "sites" | "system">("branding");
+  const [tab, setTab] = useState<"branding" | "parts" | "sites" | "system" | "digest" | "webhooks">("branding");
   const [config, setConfig] = useState<ConfigMap>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
@@ -102,6 +102,8 @@ export function ConfigPage() {
     { key: "parts",    label: "Parts" },
     { key: "sites",    label: "Sites" },
     { key: "system",   label: "System" },
+    { key: "digest",   label: "Email Digest" },
+    { key: "webhooks", label: "Webhooks" },
   ] as const;
 
   return (
@@ -189,6 +191,16 @@ export function ConfigPage() {
               onSave={(e) => void handleSave(e, "login_notice")} saving={saving === "login_notice"} saved={saved === "login_notice"} multiline />
           </Section>
         )}
+
+        {/* Email digest tab */}
+        {tab === "digest" && (
+          <DigestTab actorId={actorId} />
+        )}
+
+        {/* Webhooks tab */}
+        {tab === "webhooks" && (
+          <WebhooksTab actorId={actorId} />
+        )}
       </main>
     </AppLayout>
   );
@@ -262,5 +274,181 @@ function ColorField({ label, value, onChange, onSave, saving, saved }: {
         </button>
       </form>
     </Field>
+  );
+}
+
+function DigestTab({ actorId }: { actorId: string }) {
+  const [jobs, setJobs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [recipients, setRecipients] = useState("");
+  const [schedule, setSchedule] = useState("0 8 * * 1");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    const client = getSupabaseClient();
+    if (!client) return;
+    client.from("report_jobs").select("*").order("created_at", { ascending: false })
+      .then(({ data }) => { setJobs(data ?? []); setLoading(false); });
+  }, []);
+
+  async function handleSave(e: FormEvent) {
+    e.preventDefault();
+    if (!actorId) return;
+    setSaving(true);
+    const client = getSupabaseClient();
+    if (!client) { setSaving(false); return; }
+    const recipientList = recipients.split(/[\n,]/).map((r) => r.trim()).filter(Boolean);
+    await client.from("report_jobs").insert({
+      type: "weekly_digest", schedule, recipients: recipientList,
+      is_active: true, created_by: actorId,
+    });
+    setSaved(true); setSaving(false);
+    setTimeout(() => setSaved(false), 2000);
+    const { data } = await client.from("report_jobs").select("*").order("created_at", { ascending: false });
+    setJobs(data ?? []);
+  }
+
+  async function toggleJob(id: string, is_active: boolean) {
+    const client = getSupabaseClient();
+    if (!client) return;
+    await client.from("report_jobs").update({ is_active }).eq("id", id);
+    setJobs((prev) => prev.map((j) => j.id === id ? { ...j, is_active } : j));
+  }
+
+  return (
+    <div style={{ display: "grid", gap: 20 }}>
+      <Section title="New digest job" description="Schedule automatic inventory summary emails.">
+        <form onSubmit={(e) => void handleSave(e)} style={{ display: "grid", gap: 16 }}>
+          <Field label="Recipients" hint="One email per line or comma-separated.">
+            <textarea value={recipients} onChange={(e) => setRecipients(e.target.value)} rows={3}
+              placeholder="admin@company.com&#10;manager@company.com"
+              style={{ width: "100%", border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "9px 12px", fontSize: 13, outline: "none", resize: "vertical", boxSizing: "border-box" }} />
+          </Field>
+          <Field label="Cron schedule" hint="Default: Monday 8AM. Use crontab.guru to build expressions.">
+            <input type="text" value={schedule} onChange={(e) => setSchedule(e.target.value)}
+              style={{ border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "9px 12px", fontSize: 13, fontFamily: "monospace", outline: "none", width: 200 }} />
+          </Field>
+          <div>
+            <button type="submit" disabled={saving}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: saved ? "#16a34a" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              {saved ? <><Check size={14} /> Saved</> : <><Save size={14} /> {saving ? "Saving…" : "Create job"}</>}
+            </button>
+          </div>
+        </form>
+      </Section>
+      {!loading && jobs.length > 0 && (
+        <Section title="Active jobs" description="">
+          {jobs.map((j) => (
+            <div key={j.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #f3f4f6" }}>
+              <div>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#111827", fontFamily: "monospace" }}>{j.schedule}</p>
+                <p style={{ margin: "2px 0 0", fontSize: 12, color: "#6b7a8d" }}>{(j.recipients ?? []).join(", ")}</p>
+              </div>
+              <button type="button" onClick={() => void toggleJob(j.id, !j.is_active)}
+                style={{ fontSize: 12, fontWeight: 600, padding: "4px 12px", borderRadius: 8, border: "1px solid #d1d5db", background: j.is_active ? "#dcfce7" : "#f3f4f6", color: j.is_active ? "#15803d" : "#6b7a8d", cursor: "pointer" }}>
+                {j.is_active ? "Active" : "Paused"}
+              </button>
+            </div>
+          ))}
+        </Section>
+      )}
+    </div>
+  );
+}
+
+function WebhooksTab({ actorId }: { actorId: string }) {
+  const [webhooks, setWebhooks] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [url, setUrl] = useState("");
+  const [secret, setSecret] = useState("");
+  const [events, setEvents] = useState("transfer.received,stock_in.completed");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const ALL_EVENTS = ["transfer.received", "transfer.created", "stock_in.completed", "correction.approved", "physical_count.submitted"];
+
+  useEffect(() => {
+    const client = getSupabaseClient();
+    if (!client) return;
+    client.from("webhooks").select("*").order("created_at", { ascending: false })
+      .then(({ data }) => { setWebhooks(data ?? []); setLoading(false); });
+  }, []);
+
+  async function handleSave(e: FormEvent) {
+    e.preventDefault();
+    if (!actorId || !url.trim() || !secret.trim()) return;
+    setSaving(true);
+    const client = getSupabaseClient();
+    if (!client) { setSaving(false); return; }
+    const eventList = events.split(",").map((ev) => ev.trim()).filter(Boolean);
+    await client.from("webhooks").insert({ url: url.trim(), secret: secret.trim(), events: eventList, created_by: actorId });
+    setSaved(true); setSaving(false);
+    setTimeout(() => setSaved(false), 2000);
+    setUrl(""); setSecret(""); setEvents("transfer.received,stock_in.completed");
+    const { data } = await client.from("webhooks").select("*").order("created_at", { ascending: false });
+    setWebhooks(data ?? []);
+  }
+
+  async function toggleWebhook(id: string, is_active: boolean) {
+    const client = getSupabaseClient();
+    if (!client) return;
+    await client.from("webhooks").update({ is_active }).eq("id", id);
+    setWebhooks((prev) => prev.map((w) => w.id === id ? { ...w, is_active } : w));
+  }
+
+  return (
+    <div style={{ display: "grid", gap: 20 }}>
+      <Section title="Register webhook" description="Receive outbound events when inventory actions occur.">
+        <form onSubmit={(e) => void handleSave(e)} style={{ display: "grid", gap: 16 }}>
+          <Field label="Endpoint URL" hint="Must be HTTPS.">
+            <input type="url" required value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://your-system.com/webhook"
+              style={{ width: "100%", border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "9px 12px", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+          </Field>
+          <Field label="Signing secret" hint="Used to compute X-MDC-Signature HMAC header.">
+            <input type="text" required value={secret} onChange={(e) => setSecret(e.target.value)} placeholder="whsec_..."
+              style={{ width: "100%", border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "9px 12px", fontSize: 13, fontFamily: "monospace", outline: "none", boxSizing: "border-box" }} />
+          </Field>
+          <Field label="Events" hint="Comma-separated event names.">
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+              {ALL_EVENTS.map((ev) => (
+                <button key={ev} type="button"
+                  onClick={() => setEvents((prev) => {
+                    const list = prev.split(",").map((e) => e.trim()).filter(Boolean);
+                    return list.includes(ev) ? list.filter((e) => e !== ev).join(",") : [...list, ev].join(",");
+                  })}
+                  style={{ fontSize: 11, padding: "3px 10px", borderRadius: 8, border: "1px solid #d1d5db", cursor: "pointer",
+                    background: events.includes(ev) ? "var(--blue)" : "#fff",
+                    color: events.includes(ev) ? "#fff" : "#374151" }}>
+                  {ev}
+                </button>
+              ))}
+            </div>
+          </Field>
+          <div>
+            <button type="submit" disabled={saving}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: saved ? "#16a34a" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              {saved ? <><Check size={14} /> Saved</> : <><Save size={14} /> {saving ? "Saving…" : "Register"}</>}
+            </button>
+          </div>
+        </form>
+      </Section>
+      {!loading && webhooks.length > 0 && (
+        <Section title="Registered webhooks" description="">
+          {webhooks.map((w) => (
+            <div key={w.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "10px 0", borderBottom: "1px solid #f3f4f6", gap: 12 }}>
+              <div style={{ minWidth: 0 }}>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--blue)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.url}</p>
+                <p style={{ margin: "2px 0 0", fontSize: 11, color: "#9ca3af" }}>{(w.events ?? []).join(", ")}</p>
+              </div>
+              <button type="button" onClick={() => void toggleWebhook(w.id, !w.is_active)}
+                style={{ flexShrink: 0, fontSize: 12, fontWeight: 600, padding: "4px 12px", borderRadius: 8, border: "1px solid #d1d5db", background: w.is_active ? "#dcfce7" : "#f3f4f6", color: w.is_active ? "#15803d" : "#6b7a8d", cursor: "pointer" }}>
+                {w.is_active ? "Active" : "Paused"}
+              </button>
+            </div>
+          ))}
+        </Section>
+      )}
+    </div>
   );
 }

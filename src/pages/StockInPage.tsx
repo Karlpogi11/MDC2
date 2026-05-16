@@ -1,10 +1,14 @@
-import { useState, useRef, type ChangeEvent, type DragEvent, type FormEvent } from "react";
+import { useState, useRef, useEffect, type ChangeEvent, type DragEvent, type FormEvent, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Upload, Download, CheckCircle, XCircle, FileText, X, Plus } from "lucide-react";
+import { Upload, Download, CheckCircle, XCircle, FileText, X, Plus, ScanLine } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { AppLayout } from "@/components/AppLayout";
 import { PartNumberInput } from "@/components/PartNumberInput";
+import { BarcodeScanner } from "@/components/BarcodeScanner";
+import { useFeatureFlag } from "@/lib/useFeatureFlag";
+import { enqueueOp, getQueue, removeFromQueue } from "@/lib/offlineQueue";
+import { useOnlineStatus } from "@/lib/useOnlineStatus";
 
 type BatchResult = {
   batchId: string;
@@ -13,9 +17,19 @@ type BatchResult = {
   failedRows: { row: number; serial: string; reason: string }[];
 };
 
+type PreviewRow = {
+  row: number;
+  serial_number: string;
+  part_number: string;
+  notes?: string;
+  valid: boolean;
+  error?: string;
+};
+
 type UploadState =
   | { status: "idle" }
   | { status: "selected"; file: File }
+  | { status: "previewing"; file: File; rows: PreviewRow[] }
   | { status: "uploading" }
   | { status: "done"; result: BatchResult }
   | { status: "error"; message: string };
@@ -47,138 +61,166 @@ function validateFile(file: File): string | null {
 }
 
 export function StockInPage() {
+  const onlineStatus = useOnlineStatus();
+  const [pendingCount, setPendingCount] = useState(() => getQueue().length);
+
+  // Replay queued operations when connection is restored
+  useEffect(() => {
+    if (onlineStatus !== "restored") return;
+    const queue = getQueue();
+    if (queue.length === 0) return;
+
+    void (async () => {
+      for (const op of queue) {
+        if (op.type !== "stock_in_batch") continue;
+        try {
+          await executeBatchInsert(op.payload.serials, op.payload.actorId);
+          removeFromQueue(op.id);
+        } catch {
+          // still offline or failed — leave in queue
+        }
+      }
+      setPendingCount(getQueue().length);
+    })();
+  }, [onlineStatus]);
+
   const navigate = useNavigate();
   const { state: authState } = useAuth();
   const actorId = authState.status === "authenticated" ? authState.user.id : null;
+
+  async function executeBatchInsert(
+    serials: { serial: string; partNumber: string; partName: string }[],
+    actor: string
+  ) {
+    const client = getSupabaseClient();
+    if (!client) throw new Error("Not configured.");
+    const { data: dcSite } = await client.from("sites").select("id").eq("is_dc", true).single();
+    if (!dcSite) throw new Error("DC site not configured.");
+    const uniqueParts = [...new Set(serials.map((r) => r.partNumber))];
+    const { data: existingParts } = await client.from("parts").select("id,part_number").in("part_number", uniqueParts);
+    const partMap = new Map((existingParts ?? []).map((p: any) => [p.part_number, p.id]));
+    const missing = uniqueParts.filter((pn) => !partMap.has(pn));
+    if (missing.length > 0) {
+      const { data: newParts } = await client.from("parts")
+        .insert(missing.map((pn) => { const r = serials.find((s) => s.partNumber === pn); return { part_number: pn, part_name: r?.partName || pn }; }))
+        .select("id,part_number");
+      for (const p of newParts ?? []) partMap.set((p as any).part_number, (p as any).id);
+    }
+    const { data: batch } = await client.from("stock_in_batches")
+      .insert({ source_type: "manual", imported_by: actor, total_rows: serials.length, success_rows: 0, failed_rows: 0 })
+      .select("id").single();
+    if (!batch) throw new Error("Failed to create batch.");
+    const { data: inserted } = await client.from("serial_numbers")
+      .insert(serials.map((r) => ({ serial_number: r.serial, part_id: partMap.get(r.partNumber), current_site_id: dcSite.id, status: "in_stock", stock_in_batch_id: batch.id })))
+      .select("id,serial_number");
+    const insertedRows = (inserted ?? []) as { id: string; serial_number: string }[];
+    if (insertedRows.length > 0) {
+      await client.from("stock_in_items").insert(
+        insertedRows.map((ins) => ({ batch_id: batch.id, part_id: partMap.get(serials.find((r) => r.serial === ins.serial_number)!.partNumber), serial_id: ins.id, quantity: 1 }))
+      );
+    }
+    await client.from("stock_in_batches").update({ success_rows: insertedRows.length, failed_rows: serials.length - insertedRows.length }).eq("id", batch.id);
+    return { ok: insertedRows.length, failed: serials.filter((r) => !insertedRows.some((ins) => ins.serial_number === r.serial)) };
+  }
 
   // --- Bulk upload state ---
   const [state, setState] = useState<UploadState>({ status: "idle" });
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // --- Manual entry state ---
-  const [manualSerial, setManualSerial] = useState("");
-  const [manualPartNumber, setManualPartNumber] = useState("");
-  const [manualPartName, setManualPartName] = useState("");
-  const [manualNotes, setManualNotes] = useState("");
-  const [manualResolving, setManualResolving] = useState(false);
-  const [manualSubmitting, setManualSubmitting] = useState(false);
-  const [manualError, setManualError] = useState<string | null>(null);
-  const [manualSuccess, setManualSuccess] = useState<string | null>(null);
+  // --- Scan mode always-on: Tab/Enter advances serial → part ---
+  const serialInputRef = useRef<HTMLInputElement>(null);
+  const partInputRef = useRef<HTMLInputElement>(null);
 
-  async function resolvePartBySerial(sn: string) {
-    if (!sn.trim()) return;
-    setManualResolving(true);
-    setManualError(null);
-    const client = getSupabaseClient();
-    if (!client) { setManualResolving(false); return; }
+  // --- Barcode camera scanner ---
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const barcodeEnabled = useFeatureFlag("enable_barcode_scanner");
 
-    // Check if serial already exists
-    const { data: existing } = await client
-      .from("serial_numbers")
-      .select("serial_number, status")
-      .eq("serial_number", sn.trim())
-      .maybeSingle();
+  // Parse CSV text into preview rows (first 10 + validation)
+  function parseCSVPreview(text: string): PreviewRow[] {
+    const lines = text.split(/\r?\n/).filter(Boolean);
+    if (lines.length === 0) return [];
+    const header = lines[0].toLowerCase().split(",").map((h) => h.trim().replace(/"/g, ""));
+    const snIdx = header.findIndex((h) => h.includes("serial"));
+    const pnIdx = header.findIndex((h) => h.includes("part"));
+    const notesIdx = header.findIndex((h) => h.includes("note"));
 
-    if (existing) {
-      const statusLabel: Record<string, string> = {
-        in_stock: "In Stock", transit: "In Transit", transferred: "Stocked Out",
-        consumed: "Consumed", void: "Void",
-      };
-      const label = statusLabel[existing.status] ?? existing.status;
-      setManualError(`Serial "${sn.trim()}" already exists in inventory (status: ${label}).`);
-      setManualResolving(false);
+    return lines.slice(1, 11).map((line, i) => {
+      const cols = line.split(",").map((c) => c.trim().replace(/"/g, ""));
+      const serial = snIdx >= 0 ? cols[snIdx] ?? "" : "";
+      const part = pnIdx >= 0 ? cols[pnIdx] ?? "" : "";
+      const notes = notesIdx >= 0 ? cols[notesIdx] : undefined;
+      const errors: string[] = [];
+      if (!serial) errors.push("missing serial");
+      if (!part) errors.push("missing part number");
+      return { row: i + 2, serial_number: serial, part_number: part, notes, valid: errors.length === 0, error: errors.join(", ") || undefined };
+    });
+  }
+
+  async function buildPreview(file: File) {
+    if (!file.name.endsWith(".csv")) {
+      // XLSX: skip preview, go straight to selected
+      setState({ status: "selected", file });
       return;
     }
-    setManualResolving(false);
+    const text = await file.text();
+    const rows = parseCSVPreview(text);
+    setState({ status: "previewing", file, rows });
   }
 
-  async function resolvePartByNumber(pn: string) {
-    if (!pn.trim()) return;
-    const client = getSupabaseClient();
-    if (!client) return;
-    const { data } = await client
-      .from("parts")
-      .select("part_name")
-      .eq("part_number", pn.trim())
-      .maybeSingle();
-    if (data?.part_name) setManualPartName(data.part_name);
-  }
+  // --- Batch draft: each row has serial + part number ---
+  type DraftRow = { serial: string; partNumber: string; partName: string; error?: string };
+  const [draftSerial, setDraftSerial] = useState("");
+  const [draftPartNumber, setDraftPartNumber] = useState("");
+  const [draftPartName, setDraftPartName] = useState("");
+  const [draftPartConfirmed, setDraftPartConfirmed] = useState(false);
+  const [draftList, setDraftList] = useState<DraftRow[]>([]);
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitResult, setSubmitResult] = useState<{ ok: number; failed: { serial: string; reason: string }[] } | null>(null);
 
-  async function handleManualSubmit(e: FormEvent) {
+  function handleSerialEnter(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key !== "Enter" && e.key !== "Tab") return;
     e.preventDefault();
-    if (!actorId) { setManualError("Not authenticated."); return; }
-    if (!manualSerial.trim()) { setManualError("Serial number is required."); return; }
-    if (!manualPartNumber.trim()) { setManualError("Part number is required."); return; }
-
-    setManualSubmitting(true);
-    setManualError(null);
-    setManualSuccess(null);
-
-    const client = getSupabaseClient();
-    if (!client) { setManualError("Supabase not configured."); setManualSubmitting(false); return; }
-
-    try {
-      // Get or create DC site
-      const { data: dcSite } = await client.from("sites").select("id").eq("is_dc", true).single();
-      if (!dcSite) throw new Error("DC site not configured. Add a site with is_dc=true.");
-
-      // Resolve part
-      let partId: string;
-      const { data: existingPart } = await client
-        .from("parts").select("id,part_name").eq("part_number", manualPartNumber.trim()).maybeSingle();
-
-      if (existingPart) {
-        partId = existingPart.id;
-        if (!manualPartName) setManualPartName(existingPart.part_name);
-      } else {
-        // Auto-create part if not found
-        const { data: newPart, error: partErr } = await client
-          .from("parts")
-          .insert({ part_number: manualPartNumber.trim(), part_name: manualPartName.trim() || manualPartNumber.trim() })
-          .select("id").single();
-        if (partErr || !newPart) throw new Error(partErr?.message ?? "Failed to create part.");
-        partId = newPart.id;
-      }
-
-      // Create batch record
-      const { data: batch, error: batchErr } = await client
-        .from("stock_in_batches")
-        .insert({ source_type: "manual", imported_by: actorId, total_rows: 1, success_rows: 1, failed_rows: 0 })
-        .select("id").single();
-      if (batchErr || !batch) throw new Error(batchErr?.message ?? "Failed to create batch.");
-
-      // Insert serial
-      const { data: newSerial, error: serialErr } = await client.from("serial_numbers").insert({
-        serial_number: manualSerial.trim(),
-        part_id: partId,
-        current_site_id: dcSite.id,
-        status: "in_stock",
-        stock_in_batch_id: batch.id,
-      }).select("id").single();
-      if (serialErr || !newSerial) throw new Error(serialErr?.message ?? "Failed to insert serial.");
-
-      // Insert stock_in_items so inventory_snapshot picks up this part
-      const { error: itemErr } = await client.from("stock_in_items").insert({
-        batch_id: batch.id,
-        part_id: partId,
-        serial_id: newSerial.id,
-        quantity: 1,
-      });
-      if (itemErr) throw new Error(itemErr.message);
-
-      setManualSuccess(`Serial ${manualSerial.trim()} stocked in successfully.`);
-      setManualSerial(""); setManualPartNumber(""); setManualPartName(""); setManualNotes("");
-    } catch (err) {
-      setManualError(err instanceof Error ? err.message : "Stock-in failed.");
-    }
-    setManualSubmitting(false);
+    const sn = draftSerial.replace(/\s/g, "");
+    if (!sn) return;
+    if (!draftPartNumber.trim()) { setDraftError("Set a part number first."); return; }
+    if (!draftPartConfirmed) { setDraftError("Select a part number from the suggestions."); return; }
+    setDraftError(null);
+    const error = draftList.some((r) => r.serial === sn) ? "duplicate" : undefined;
+    setDraftList((prev) => [...prev, { serial: sn, partNumber: draftPartNumber.trim(), partName: draftPartName, error }]);
+    setDraftSerial("");
+    serialInputRef.current?.focus();
   }
 
+  async function handleBatchSubmit() {
+    if (!actorId) return;
+    const valid = draftList.filter((r) => !r.error);
+    if (valid.length === 0) return;
+    setSubmitting(true);
+    try {
+      const result = await executeBatchInsert(valid, actorId);
+      setSubmitResult({ ok: result.ok, failed: result.failed.map((r) => ({ serial: r.serial, reason: "duplicate or constraint" })) });
+      setDraftList([]);
+      setDraftPartNumber(""); setDraftPartName(""); setDraftPartConfirmed(false);
+    } catch (err) {
+      const msg = (err instanceof Error ? err.message : "").toLowerCase();
+      const isNetwork = msg.includes("fetch") || msg.includes("network") || msg.includes("failed") || !navigator.onLine;
+      if (isNetwork) {
+        // Queue for replay when connection restores
+        enqueueOp({ type: "stock_in_batch", payload: { serials: valid, actorId } });
+        setPendingCount(getQueue().length);
+        setDraftError("No connection. Batch saved — will auto-submit when connection restores.");
+      } else {
+        setDraftError(err instanceof Error ? err.message : "Batch submit failed.");
+      }
+    }
+    setSubmitting(false);
+  }
   function selectFile(file: File) {
     const err = validateFile(file);
     if (err) { setState({ status: "error", message: err }); return; }
-    setState({ status: "selected", file });
+    void buildPreview(file);
   }
 
   function handleFileInput(e: ChangeEvent<HTMLInputElement>) {
@@ -194,7 +236,7 @@ export function StockInPage() {
   }
 
   async function handleUpload() {
-    if (state.status !== "selected") return;
+    if (state.status !== "selected" && state.status !== "previewing") return;
     const file = state.file;
     setState({ status: "uploading" });
 
@@ -233,21 +275,42 @@ export function StockInPage() {
 
   return (
     <AppLayout>
+      {cameraOpen && (
+        <BarcodeScanner
+          onScan={(val) => {
+            setDraftSerial(val);
+            setCameraOpen(false);
+            serialInputRef.current?.focus();
+          }}
+          onClose={() => setCameraOpen(false)}
+        />
+      )}
       <main style={{ maxWidth: 680, margin: "0 auto", padding: "32px 24px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 28 }}>
           <div>
-            <h1 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#1a2a3a" }}>Stock-In Import</h1>
+            <h1 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#1a2a3a" }}>Stock-In</h1>
             <p style={{ margin: 0, fontSize: 13, color: "#6b7a8d" }}>
-              Upload a CSV or XLSX file to batch-import serials into DC inventory.
+              Scan serials manually or upload a CSV/XLSX file.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={downloadTemplate}
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "8px 14px", fontSize: 13, fontWeight: 600, color: "#374151", cursor: "pointer", whiteSpace: "nowrap" }}
-          >
-            <Download size={14} /> Download template
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            {barcodeEnabled && (
+              <button
+                type="button"
+                onClick={() => setCameraOpen(true)}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "8px 14px", fontSize: 13, fontWeight: 600, color: "#374151", cursor: "pointer", whiteSpace: "nowrap" }}
+              >
+                <ScanLine size={14} /> Camera scan
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={downloadTemplate}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "8px 14px", fontSize: 13, fontWeight: 600, color: "#374151", cursor: "pointer", whiteSpace: "nowrap" }}
+            >
+              <Download size={14} /> Download template
+            </button>
+          </div>
         </div>
 
         {/* Upload card */}
@@ -306,6 +369,48 @@ export function StockInPage() {
               </div>
             )}
 
+            {/* CSV Preview */}
+            {state.status === "previewing" && (
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 8, marginBottom: 12 }}>
+                  <FileText size={18} color="#0284c7" />
+                  <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#0c4a6e" }}>{state.file.name}</span>
+                  <button type="button" onClick={reset} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#6b7a8d" }}><X size={16} /></button>
+                </div>
+                <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 600, color: "#374151" }}>
+                  Preview — first {state.rows.length} rows
+                  {state.rows.some((r) => !r.valid) && (
+                    <span style={{ marginLeft: 8, color: "#b91c1c" }}>⚠ {state.rows.filter((r) => !r.valid).length} invalid row(s)</span>
+                  )}
+                </p>
+                <div style={{ border: "1px solid #e5e7eb", borderRadius: 6, overflow: "hidden" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                    <thead>
+                      <tr style={{ background: "#f9fafb" }}>
+                        {["Row", "Serial", "Part #", "Status"].map((h) => (
+                          <th key={h} style={{ padding: "7px 10px", textAlign: "left", fontWeight: 600, color: "#6b7a8d" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {state.rows.map((r) => (
+                        <tr key={r.row} style={{ borderTop: "1px solid #f3f4f6", background: r.valid ? "#fff" : "#fef2f2" }}>
+                          <td style={{ padding: "6px 10px", color: "#9ca3af" }}>{r.row}</td>
+                          <td style={{ padding: "6px 10px", fontFamily: "monospace", color: "#111827" }}>{r.serial_number || <span style={{ color: "#ef4444" }}>—</span>}</td>
+                          <td style={{ padding: "6px 10px", color: "#374151" }}>{r.part_number || <span style={{ color: "#ef4444" }}>—</span>}</td>
+                          <td style={{ padding: "6px 10px" }}>
+                            {r.valid
+                              ? <span style={{ color: "#15803d", fontWeight: 600 }}>✓ OK</span>
+                              : <span style={{ color: "#b91c1c", fontSize: 11 }}>{r.error}</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
             {/* Uploading */}
             {state.status === "uploading" && (
               <div style={{ textAlign: "center", padding: "32px 0" }}>
@@ -324,9 +429,9 @@ export function StockInPage() {
             )}
 
             {/* Actions */}
-            {(state.status === "selected" || state.status === "error") && (
+            {(state.status === "selected" || state.status === "previewing" || state.status === "error") && (
               <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-                {state.status === "selected" && (
+                {(state.status === "selected" || state.status === "previewing") && (
                   <button
                     type="button"
                     onClick={() => void handleUpload()}
@@ -409,83 +514,106 @@ export function StockInPage() {
           </div>
         )}
 
-        {/* Manual single entry */}
+        {/* Lock + Batch Serial Entry */}
         <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: "var(--radius)", overflow: "hidden", marginBottom: 20 }}>
           <div style={{ padding: "14px 20px", borderBottom: "1px solid #f3f4f6", display: "flex", alignItems: "center", gap: 8 }}>
             <Plus size={15} color="var(--blue)" />
-            <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>Manual single entry</h2>
+            <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>Scan serials</h2>
+            {pendingCount > 0 && (
+              <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 600, color: "#a16207", background: "#fef9c3", padding: "2px 8px", borderRadius: 10 }}>
+                {pendingCount} pending — will sync on reconnect
+              </span>
+            )}
           </div>
-          <form onSubmit={(e) => void handleManualSubmit(e)} style={{ padding: 20 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-              <div>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 5 }}>
-                  Serial number <span style={{ color: "#ef4444" }}>*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={manualSerial}
-                  onChange={(e) => { setManualSerial(e.target.value); setManualError(null); }}
-                  onBlur={(e) => void resolvePartBySerial(e.target.value)}
-                  placeholder="e.g. F2LWX2QC4J9N"
-                  style={{ width: "100%", border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "9px 12px", fontSize: 13, fontFamily: "monospace", outline: "none", boxSizing: "border-box" as const }}
-                />
-                {manualResolving && <p style={{ margin: "4px 0 0", fontSize: 11, color: "#6b7a8d" }}>Checking…</p>}
-              </div>
+          <div style={{ padding: 20 }}>
+            {/* Part + Serial inputs side by side */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
               <div>
                 <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 5 }}>
                   Part number <span style={{ color: "#ef4444" }}>*</span>
                 </label>
                 <PartNumberInput
-                  value={manualPartNumber}
+                  ref={partInputRef}
+                  value={draftPartNumber}
+                  disabled={draftList.length > 0}
                   onChange={(pn, part) => {
-                    setManualPartNumber(pn);
-                    if (part) setManualPartName(part.part_name);
+                    setDraftPartNumber(pn);
+                    if (part) { setDraftPartName(part.part_name); setDraftPartConfirmed(true); }
+                    else { setDraftPartConfirmed(false); }
                   }}
-                  required
                 />
               </div>
               <div>
                 <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 5 }}>
-                  Description <span style={{ fontSize: 11, color: "#9ca3af" }}>(auto-filled)</span>
+                  Serial number — press Enter to add
                 </label>
                 <input
+                  ref={serialInputRef}
                   type="text"
-                  value={manualPartName}
-                  onChange={(e) => setManualPartName(e.target.value)}
-                  placeholder="Auto-filled from part number"
-                  style={{ width: "100%", border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "9px 12px", fontSize: 13, background: "#f9fafb", outline: "none", boxSizing: "border-box" as const }}
-                />
-              </div>
-              <div>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 5 }}>Notes</label>
-                <input
-                  type="text"
-                  value={manualNotes}
-                  onChange={(e) => setManualNotes(e.target.value)}
-                  placeholder="Optional"
-                  style={{ width: "100%", border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "9px 12px", fontSize: 13, outline: "none", boxSizing: "border-box" as const }}
+                  value={draftSerial}
+                  onChange={(e) => setDraftSerial(e.target.value)}
+                  onKeyDown={handleSerialEnter}
+                  placeholder="Scan or type serial…"
+                  autoFocus
+                  autoComplete="off"
+                  style={{ width: "100%", border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "9px 12px", fontSize: 13, fontFamily: "monospace", outline: "none", boxSizing: "border-box" as const }}
                 />
               </div>
             </div>
 
-            {manualError && (
-              <div role="alert" style={{ marginBottom: 14, padding: "9px 12px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "var(--radius)", color: "#b91c1c", fontSize: 13 }}>
-                {manualError}
-              </div>
-            )}
-            {manualSuccess && (
-              <div role="status" style={{ marginBottom: 14, padding: "9px 12px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "var(--radius)", color: "#15803d", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
-                <CheckCircle size={14} /> {manualSuccess}
+            {draftError && <p style={{ margin: "0 0 10px", fontSize: 12, color: "#b91c1c" }}>{draftError}</p>}
+
+            {/* Draft list */}
+            {draftList.length > 0 && (
+              <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
+                <div style={{ padding: "8px 12px", background: "#f9fafb", borderBottom: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>
+                    {draftList.filter((r) => !r.error).length} ready · {draftList.filter((r) => r.error).length} errors
+                  </span>
+                  <button type="button" onClick={() => { setDraftList([]); setDraftPartNumber(""); setDraftPartName(""); setDraftPartConfirmed(false); }}
+                    style={{ fontSize: 11, color: "#9ca3af", background: "none", border: "none", cursor: "pointer" }}>
+                    Clear all
+                  </button>
+                </div>
+                <div style={{ maxHeight: 220, overflowY: "auto" }}>
+                  {[...draftList].reverse().map((row, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 12px", borderBottom: "1px solid #f9fafb", background: row.error ? "#fef2f2" : "#fff" }}>
+                      <span style={{ fontSize: 12, fontFamily: "monospace", minWidth: 120, color: row.error ? "#b91c1c" : "#111827" }}>{row.serial}</span>
+                      <span style={{ fontSize: 11, color: "#6b7a8d", flex: 1 }}>{row.partNumber}</span>
+                      {row.error
+                        ? <span style={{ fontSize: 11, color: "#b91c1c" }}>{row.error}</span>
+                        : <span style={{ fontSize: 11, color: "#15803d", fontWeight: 600 }}>✓</span>}
+                      <button type="button" onClick={() => setDraftList((prev) => prev.filter((_, j) => j !== draftList.length - 1 - i))}
+                        style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", padding: 0 }}>
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
-            <button type="submit" disabled={manualSubmitting}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: manualSubmitting ? "#6b8fc4" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: manualSubmitting ? "not-allowed" : "pointer" }}>
-              <Plus size={14} />
-              {manualSubmitting ? "Saving…" : "Stock in"}
+            {submitResult && (
+              <div style={{ marginBottom: 14, padding: "10px 14px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, fontSize: 13, color: "#15803d", display: "flex", alignItems: "center", gap: 12 }}>
+                <span><CheckCircle size={14} style={{ display: "inline", marginRight: 6 }} />
+                {submitResult.ok} serial{submitResult.ok !== 1 ? "s" : ""} stocked in.
+                {submitResult.failed.length > 0 && <span style={{ color: "#b91c1c", marginLeft: 8 }}>{submitResult.failed.length} failed.</span>}
+                </span>
+                <button type="button" onClick={() => navigate("/")}
+                  style={{ marginLeft: "auto", background: "none", color: "var(--blue)", border: "none", padding: 0, fontSize: 13, fontWeight: 400, cursor: "pointer", whiteSpace: "nowrap" }}>
+                  View
+                </button>
+              </div>
+            )}
+
+            <button type="button"
+              onClick={() => void handleBatchSubmit()}
+              disabled={submitting || draftList.filter((r) => !r.error).length === 0}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: draftList.filter((r) => !r.error).length === 0 ? 0.5 : 1 }}>
+              <CheckCircle size={14} />
+              {submitting ? "Stocking in…" : `Stock in ${draftList.filter((r) => !r.error).length} serial${draftList.filter((r) => !r.error).length !== 1 ? "s" : ""}`}
             </button>
-          </form>
+          </div>
         </div>
 
         {/* Template info */}

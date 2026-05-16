@@ -59,6 +59,14 @@ Deno.serve(async (req) => {
     }
 
     if (rows.length === 0) throw new Error("No valid rows found in file.");
+    if (rows.length > 1000) throw new Error("Import limit is 1000 rows per batch.");
+
+    // Sanitize field lengths
+    rows = rows.map((r) => ({
+      serial: r.serial.slice(0, 100),
+      part_number: r.part_number.slice(0, 100),
+      part_name: r.part_name?.slice(0, 200),
+    }));
 
     // Resolve DC site
     const { data: dcSite } = await client.from("sites").select("id").eq("is_dc", true).single();
