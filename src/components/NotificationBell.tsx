@@ -39,7 +39,7 @@ export function NotificationBell() {
         {unreadCount > 0 && (
           <span style={{
             position: "absolute", top: 4, right: 4,
-            width: 8, height: 8, borderRadius: "50%",
+            width: 8, height: 8,
             background: "#ef4444", border: "1.5px solid #fff",
           }} />
         )}
@@ -83,7 +83,7 @@ export function NotificationBell() {
                 }}
               >
                 {!n.read_at && (
-                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--blue)", flexShrink: 0, marginTop: 5 }} />
+                  <span style={{ width: 7, height: 7, background: "var(--blue)", flexShrink: 0, marginTop: 5 }} />
                 )}
                 <div style={{ flex: 1, minWidth: 0, paddingLeft: n.read_at ? 17 : 0 }}>
                   <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: n.read_at ? 400 : 600, color: "#111827" }}>{n.title}</p>

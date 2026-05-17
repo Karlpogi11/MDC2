@@ -3,52 +3,47 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-Deno.serve(async (_req) => {
-  const checks: Record<string, "ok" | "error"> = {};
-  let healthy = true;
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey",
+};
 
-  // 1. DB connectivity — lightweight query
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
+
+  const client = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  const checks: Record<string, "ok" | "error"> = {};
+
+  // DB check
   try {
-    const client = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const { error } = await client.from("feature_flags").select("key").limit(1);
+    const { error } = await client.from("parts").select("id").limit(1);
     checks.db = error ? "error" : "ok";
-    if (error) healthy = false;
   } catch {
     checks.db = "error";
-    healthy = false;
   }
 
-  // 2. Storage — list buckets (confirms storage service is reachable)
+  // Storage check
   try {
-    const client = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const { error } = await client.storage.listBuckets();
+    const { error } = await client.storage.getBucket("imports-stockin");
     checks.storage = error ? "error" : "ok";
-    if (error) healthy = false;
   } catch {
     checks.storage = "error";
-    healthy = false;
   }
 
-  // 3. Auth service — get service role user (confirms auth is reachable)
+  // Auth check
   try {
-    const client = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const { error } = await client.auth.admin.listUsers({ page: 1, perPage: 1 });
     checks.auth = error ? "error" : "ok";
-    if (error) healthy = false;
   } catch {
     checks.auth = "error";
-    healthy = false;
   }
 
+  const allOk = Object.values(checks).every((v) => v === "ok");
+  const status = allOk ? 200 : 503;
+
   return new Response(
-    JSON.stringify({
-      status: healthy ? "ok" : "degraded",
-      timestamp: new Date().toISOString(),
-      checks,
-    }),
-    {
-      status: healthy ? 200 : 503,
-      headers: { "Content-Type": "application/json" },
-    },
+    JSON.stringify({ status: allOk ? "ok" : "degraded", ...checks, ts: new Date().toISOString() }),
+    { status, headers: { "Content-Type": "application/json", ...CORS } }
   );
 });

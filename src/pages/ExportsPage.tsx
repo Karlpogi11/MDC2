@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Download, FileDown } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase";
 import { AppLayout } from "@/components/AppLayout";
+import { DatePicker } from "@/components/DatePicker";
 
 type Site = { id: string; site_name: string; site_code: string };
 
@@ -181,14 +182,8 @@ export function ExportsPage() {
             </div>
             <div style={{ padding: 20 }}>
               <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
-                <div>
-                  <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#666", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>From date</label>
-                  <input type="date" value={siFrom} onChange={(e) => setSiFrom(e.target.value)} style={inputStyle} />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#666", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>To date</label>
-                  <input type="date" value={siTo} onChange={(e) => setSiTo(e.target.value)} style={inputStyle} />
-                </div>
+                <DatePicker label="From date" value={siFrom} onChange={setSiFrom} />
+                <DatePicker label="To date" value={siTo} onChange={setSiTo} />
                 <button type="button" onClick={() => void exportStockedIn()} disabled={siExporting}
                   style={{ display: "inline-flex", alignItems: "center", gap: 6, background: siExporting ? "#6b8fc4" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: siExporting ? "not-allowed" : "pointer" }}>
                   <Download size={14} /> {siExporting ? "Exporting…" : "Download CSV"}
@@ -211,14 +206,8 @@ export function ExportsPage() {
             </div>
             <div style={{ padding: 20 }}>
               <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
-                <div>
-                  <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#666", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>From date</label>
-                  <input type="date" value={trFrom} onChange={(e) => setTrFrom(e.target.value)} style={inputStyle} />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#666", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>To date</label>
-                  <input type="date" value={trTo} onChange={(e) => setTrTo(e.target.value)} style={inputStyle} />
-                </div>
+                <DatePicker label="From date" value={trFrom} onChange={setTrFrom} />
+                <DatePicker label="To date" value={trTo} onChange={setTrTo} />
                 <div>
                   <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#666", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>Destination site</label>
                   <select value={trSite} onChange={(e) => setTrSite(e.target.value)} style={{ ...inputStyle, cursor: "pointer", minWidth: 160 }}>

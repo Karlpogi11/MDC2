@@ -245,6 +245,7 @@ export function PhysicalCountPage() {
           <div style={{ padding: "12px 16px", borderBottom: "1px solid #f3f4f6" }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>Count history</span>
           </div>
+          <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr style={{ background: "#f9fafb" }}>
@@ -272,6 +273,7 @@ export function PhysicalCountPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       </main>
     </AppLayout>

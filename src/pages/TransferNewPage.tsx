@@ -1,6 +1,6 @@
 import { useState, useEffect, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
-import { Plus, X, Send } from "lucide-react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { Plus, X } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { AppLayout } from "@/components/AppLayout";
@@ -39,12 +39,18 @@ function generateTransferNo(): string {
 
 export function TransferNewPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const prefill = (location.state as { prefill?: { part_number: string; part_name: string }[] } | null)?.prefill;
   const { state: authState } = useAuth();
   const actorId = authState.status === "authenticated" ? authState.user.id : null;
 
   const [sites, setSites] = useState<Site[]>([]);
   const [destinationId, setDestinationId] = useState("");
-  const [lines, setLines] = useState<LineItem[]>([{ serial_number: "", part_number: "", part_name: "", qty: 1, resolving: false }]);
+  const [lines, setLines] = useState<LineItem[]>(() =>
+    prefill && prefill.length > 0
+      ? prefill.map((p) => ({ serial_number: "", part_number: p.part_number, part_name: p.part_name, qty: 1, resolving: false }))
+      : [{ serial_number: "", part_number: "", part_name: "", qty: 1, resolving: false }]
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -133,7 +139,7 @@ export function TransferNewPage() {
 
       if (tErr || !transfer) throw new Error(tErr?.message ?? "Failed to create transfer.");
 
-      // Generate invoice_ref using source site (DC) prefix — partspal format: PREFIX-YYYYMMDD-LNNN
+      // Generate invoice_ref using source site (DC) prefix — format: PREFIXYYYYMMDDLNNN
       const { data: invoiceRef } = await client.rpc("generate_invoice_ref", { p_site_id: dcSite.id });
       if (invoiceRef) {
         await client.from("transfers").update({ invoice_ref: invoiceRef }).eq("id", transfer.id);
@@ -297,7 +303,6 @@ export function TransferNewPage() {
 
           <button type="submit" disabled={submitting}
             style={{ display: "inline-flex", alignItems: "center", gap: 6, background: submitting ? "#6b8fc4" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "10px 24px", fontSize: 13, fontWeight: 600, cursor: submitting ? "not-allowed" : "pointer" }}>
-            <Send size={14} />
             {submitting ? "Creating…" : "Review & Create"}
           </button>
         </form>
@@ -317,38 +322,38 @@ export function TransferNewPage() {
               aria-labelledby="confirm-transfer-title"
               style={{
               position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
-              background: "#fff", borderRadius: 10, padding: 28, width: 440, zIndex: 101,
+              background: "#fff", borderRadius: 0, padding: 28, width: 440, zIndex: 101,
               boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
             }}>
-              <h2 id="confirm-transfer-title" style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700, color: "#1a2a3a" }}>Confirm Transfer</h2>
-              <p style={{ margin: "0 0 16px", fontSize: 13, color: "#6b7a8d" }}>
+              <h2 id="confirm-transfer-title" style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700, color: "var(--text)" }}>Confirm Transfer</h2>
+              <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--muted)" }}>
                 Please review before creating. This cannot be undone without cancelling the transfer.
               </p>
-              <div style={{ background: "#f7f7f7", border: "1px solid #e5e5e5", borderRadius: "var(--radius)", padding: "12px 14px", marginBottom: 16, fontSize: 13 }}>
+              <div style={{ background: "#f7f7f7", border: "1px solid var(--line)", borderRadius: 0, padding: "12px 14px", marginBottom: 16, fontSize: 13 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                  <span style={{ color: "#6b7a8d" }}>Destination</span>
-                  <strong style={{ color: "#111827" }}>{dest?.site_name ?? "—"}</strong>
+                  <span style={{ color: "var(--muted)" }}>Destination</span>
+                  <strong style={{ color: "var(--text)" }}>{dest?.site_name ?? "—"}</strong>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                  <span style={{ color: "#6b7a8d" }}>Total items</span>
-                  <strong style={{ color: "#111827" }}>{validLines.length}</strong>
+                  <span style={{ color: "var(--muted)" }}>Total items</span>
+                  <strong style={{ color: "var(--text)" }}>{validLines.length}</strong>
                 </div>
-                <div style={{ borderTop: "1px solid #e5e5e5", marginTop: 8, paddingTop: 8, maxHeight: 140, overflowY: "auto" }}>
+                <div style={{ borderTop: "1px solid var(--line)", marginTop: 8, paddingTop: 8, maxHeight: 140, overflowY: "auto" }}>
                   {validLines.map((l, i) => (
                     <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
                       <code style={{ color: "var(--blue)" }}>{l.serial_number || l.part_number}</code>
-                      <span style={{ color: "#374151" }}>{l.part_name || l.part_number}</span>
+                      <span style={{ color: "var(--text)" }}>{l.part_name || l.part_number}</span>
                     </div>
                   ))}
                 </div>
               </div>
               <div style={{ display: "flex", gap: 10 }}>
                 <button type="button" onClick={() => void confirmAndSubmit()}
-                  style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "10px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                  <Send size={14} /> Confirm & Create
+                  style={{ flex: 1, background: "var(--blue)", color: "#fff", border: "none", borderRadius: 0, padding: "10px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                  Confirm
                 </button>
                 <button type="button" onClick={() => setShowConfirm(false)}
-                  style={{ flex: 1, background: "#fff", border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "10px 0", fontSize: 13, fontWeight: 600, color: "#374151", cursor: "pointer" }}>
+                  style={{ flex: 1, background: "#fff", border: "1px solid var(--line)", borderRadius: 0, padding: "10px 0", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
                   Go back
                 </button>
               </div>

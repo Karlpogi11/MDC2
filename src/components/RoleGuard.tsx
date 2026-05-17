@@ -15,7 +15,7 @@ export function RoleGuard({ allow, requireMfa, children }: Props) {
     const isConnecting = state.status === "connecting";
     return (
       <div style={{ position: "fixed", inset: 0, background: "#f9fafb", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
-        <div style={{ width: 40, height: 40, border: "3px solid #e5e7eb", borderTopColor: isConnecting ? "#ef4444" : "var(--blue)", borderRadius: "50%", animation: "spin 0.8s linear infinite", marginBottom: 16 }} />
+        <div className="circle" style={{ width: 40, height: 40, border: "3px solid #e5e7eb", borderTopColor: isConnecting ? "#ef4444" : "var(--blue)", animation: "spin 0.8s linear infinite", marginBottom: 16 }} />
         <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#374151" }}>
           {isConnecting ? "Connection lost" : "Loading…"}
         </p>
@@ -35,10 +35,10 @@ export function RoleGuard({ allow, requireMfa, children }: Props) {
 
   if (!allow.includes(state.profile.role)) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#efefef]">
-        <div className="text-center">
-          <p className="text-lg font-semibold text-gray-700">Access denied</p>
-          <p className="text-sm text-gray-500 mt-1">
+      <div style={{ position: "fixed", inset: 0, background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ textAlign: "center" }}>
+          <p style={{ fontSize: 15, fontWeight: 700, color: "#111827", margin: "0 0 4px" }}>Access denied</p>
+          <p style={{ fontSize: 13, color: "#6b7a8d", margin: 0 }}>
             Your role <strong>{state.profile.role}</strong> does not have permission to view this page.
           </p>
         </div>
@@ -47,39 +47,19 @@ export function RoleGuard({ allow, requireMfa, children }: Props) {
   }
 
   // MFA enforcement: dc_admin must have aal2 (TOTP verified)
-  // requireMfa defaults to true when the role is dc_admin
   const shouldEnforceMfa = requireMfa ?? state.profile.role === "dc_admin";
-  if (shouldEnforceMfa) {
-    const aal = state.session.user.factors?.length
-      ? state.session.user.factors.some((f) => f.status === "verified")
-        ? "aal2"
-        : "aal1"
-      : "aal1";
-
-    // Also check the JWT aal claim (set by Supabase after TOTP challenge)
-    const jwtAal = (state.session as { aal?: string }).aal
-      ?? (state.session.user as { aal?: string }).aal;
-
-    const effectiveAal = jwtAal ?? aal;
-
-    if (effectiveAal !== "aal2") {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-[#efefef]">
-          <div className="text-center max-w-sm">
-            <p className="text-lg font-semibold text-gray-700">MFA required</p>
-            <p className="text-sm text-gray-500 mt-1 mb-4">
-              Admin accounts must have two-factor authentication enabled and verified.
-            </p>
-            <a
-              href="/login?mfa=setup"
-              className="inline-block px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-            >
-              Set up MFA
-            </a>
-          </div>
-        </div>
-      );
-    }
+  if (shouldEnforceMfa && state.aal !== "aal2") {
+    return (
+      <div style={{ position: "fixed", inset: 0, background: "#f9fafb", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
+        <p style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 700, color: "#111827" }}>MFA required</p>
+        <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7a8d", textAlign: "center", maxWidth: 320 }}>
+          Admin accounts must have two-factor authentication enabled and verified.
+        </p>
+        <a href="/login?mfa=setup" style={{ padding: "8px 20px", background: "var(--blue)", color: "#fff", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
+          Set up MFA
+        </a>
+      </div>
+    );
   }
 
   return <>{children}</>;

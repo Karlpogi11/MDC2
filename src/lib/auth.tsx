@@ -20,9 +20,9 @@ type Profile = {
 
 type AuthState =
   | { status: "loading" }
-  | { status: "connecting" }   // loading timed out — DB unreachable
+  | { status: "connecting" }
   | { status: "unauthenticated" }
-  | { status: "authenticated"; user: User; session: Session; profile: Profile };
+  | { status: "authenticated"; user: User; session: Session; profile: Profile; aal: "aal1" | "aal2" };
 
 type AuthContextValue = {
   state: AuthState;
@@ -89,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      setState({ status: "authenticated", user: session.user, session, profile: newProfile as Profile });
+      setState({ status: "authenticated", user: session.user, session, profile: newProfile as Profile, aal: "aal1" });
       return;
     }
 
@@ -99,7 +99,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    setState({ status: "authenticated", user: session.user, session, profile: data as Profile });
+    const { data: aalData } = await client.auth.mfa.getAuthenticatorAssuranceLevel();
+    const aal = aalData?.currentLevel === "aal2" ? "aal2" : "aal1";
+
+    setState({ status: "authenticated", user: session.user, session, profile: data as Profile, aal });
   }
 
   async function signInWithUsername(username: string, password: string): Promise<string | null> {

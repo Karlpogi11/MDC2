@@ -100,12 +100,16 @@ function toInventoryRows(
       continue;
     }
 
-    if (serial.status === "in_stock") {
+    if (serial.status === "in_stock" || serial.status === "transit") {
       part.inStock += 1;
     }
 
-    if (serial.status === "transferred") {
+    if (serial.status === "transit") {
       part.committed += 1;
+    }
+
+    if (serial.status === "in_stock") {
+      part.available += 1;
     }
 
     if (!part.lastStockInAt || serial.stock_in_at > part.lastStockInAt) {
@@ -129,10 +133,6 @@ function toInventoryRows(
         part.lastStockOutAt = stockOutAt;
       }
     }
-  }
-
-  for (const part of byPart.values()) {
-    part.available = Math.max(part.inStock - part.committed, 0);
   }
 
   return Array.from(byPart.values()).sort((a, b) => a.partName.localeCompare(b.partName));

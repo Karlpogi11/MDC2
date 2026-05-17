@@ -205,6 +205,7 @@ export function UsersPage() {
             </div>
           )}
 
+          <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr style={{ borderBottom: "1px solid #f3f4f6" }}>
@@ -268,6 +269,7 @@ export function UsersPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       </main>
     </div>

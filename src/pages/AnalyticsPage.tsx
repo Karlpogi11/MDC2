@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth";
 import { AppLayout } from "@/components/AppLayout";
 import { CSVDropZone } from "@/components/CSVDropZone";
 import { ImportResult } from "@/components/ImportResult";
+import { DatePicker } from "@/components/DatePicker";
 
 type UploadRecord = {
   id: string;
@@ -96,6 +97,7 @@ export function AnalyticsPage() {
   const actorId = authState.status === "authenticated" ? authState.user.id : null;
 
   const [activeTab, setActiveTab] = useState<"upload" | "trend" | "abc" | "velocity">("upload");
+  const [sites, setSites] = useState<{ id: string; site_name: string; site_code: string }[]>([]);
 
   const [sourceType, setSourceType] = useState<"fixably" | "gsx">("fixably");
   const [importing, setImporting] = useState(false);
@@ -129,7 +131,14 @@ export function AnalyticsPage() {
     setUploadsLoading(false);
   }
 
-  useEffect(() => { void loadUploads(); }, []);
+  useEffect(() => {
+    void loadUploads();
+    const client = getSupabaseClient();
+    if (client) {
+      client.from("sites").select("id,site_name,site_code").eq("is_active", true).eq("is_dc", false).order("site_name")
+        .then(({ data }) => setSites((data ?? []) as { id: string; site_name: string; site_code: string }[]));
+    }
+  }, []);
 
   async function handleFile(file: File) {
     if (!actorId) return;
@@ -399,23 +408,32 @@ export function AnalyticsPage() {
 
         {/* Trend tab */}
         {activeTab === "trend" && (
-        <div style={{ background: "#fff", border: "1px solid #d0d0d0", borderRadius: "var(--radius)", overflow: "hidden" }}>
+        <div style={{ background: "#fff", border: "1px solid #d0d0d0", borderRadius: "var(--radius)", overflow: "visible" }}>
           <div style={{ padding: "14px 20px", borderBottom: "1px solid #e5e5e5", background: "#f7f7f7" }}>
             <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#2d2d2d" }}>Part usage trend</h2>
             <p style={{ margin: "2px 0 0", fontSize: 12, color: "#6b7a8d" }}>Aggregated from uploaded Fixably + GSX data</p>
           </div>
           <div style={{ padding: "14px 20px", borderBottom: "1px solid #f0f0f0", display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
+            <DatePicker
+              label="From date"
+              value={trendFrom}
+              onChange={setTrendFrom}
+              popperPlacement="bottom-start"
+              popperClassName="analytics-trend-datepicker-popper"
+            />
+            <DatePicker
+              label="To date"
+              value={trendTo}
+              onChange={setTrendTo}
+              popperPlacement="bottom-start"
+              popperClassName="analytics-trend-datepicker-popper"
+            />
             <div>
-              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#666", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>From date</label>
-              <input type="date" value={trendFrom} onChange={(e) => setTrendFrom(e.target.value)} style={inputStyle} />
-            </div>
-            <div>
-              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#666", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>To date</label>
-              <input type="date" value={trendTo} onChange={(e) => setTrendTo(e.target.value)} style={inputStyle} />
-            </div>
-            <div>
-              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#666", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>Site code</label>
-              <input type="text" value={trendSite} onChange={(e) => setTrendSite(e.target.value)} placeholder="e.g. PODIUM" style={{ ...inputStyle, width: 120 }} />
+              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#666", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>Site</label>
+              <select value={trendSite} onChange={(e) => setTrendSite(e.target.value)} style={{ ...inputStyle, cursor: "pointer", minWidth: 140 }}>
+                <option value="">All sites</option>
+                {sites.map((s) => <option key={s.id} value={s.site_code}>{s.site_name}</option>)}
+              </select>
             </div>
             <button type="button" onClick={() => void loadTrend()} disabled={trendLoading}
               style={{ display: "inline-flex", alignItems: "center", gap: 6, background: trendLoading ? "#6b8fc4" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: trendLoading ? "not-allowed" : "pointer" }}>

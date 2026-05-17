@@ -178,17 +178,36 @@ export function StockInPage() {
   const [draftError, setDraftError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState<{ ok: number; failed: { serial: string; reason: string }[] } | null>(null);
+  const [flashIdx, setFlashIdx] = useState<number | null>(null);
+  const [serialFocused, setSerialFocused] = useState(false);
 
   function handleSerialEnter(e: KeyboardEvent<HTMLInputElement>) {
+    // Cmd/Ctrl + Enter → submit the batch
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      if (draftList.filter((r) => !r.error).length > 0 && !submitting) {
+        void handleBatchSubmit();
+      }
+      return;
+    }
     if (e.key !== "Enter" && e.key !== "Tab") return;
     e.preventDefault();
     const sn = draftSerial.replace(/\s/g, "");
     if (!sn) return;
     if (!draftPartNumber.trim()) { setDraftError("Set a part number first."); return; }
     if (!draftPartConfirmed) { setDraftError("Select a part number from the suggestions."); return; }
+    // Reject duplicates inline (don't add)
+    if (draftList.some((r) => r.serial === sn)) {
+      setDraftError(`Duplicate: ${sn} already scanned in this batch.`);
+      setDraftSerial("");
+      serialInputRef.current?.focus();
+      return;
+    }
     setDraftError(null);
-    const error = draftList.some((r) => r.serial === sn) ? "duplicate" : undefined;
-    setDraftList((prev) => [...prev, { serial: sn, partNumber: draftPartNumber.trim(), partName: draftPartName, error }]);
+    const newIdx = draftList.length;
+    setDraftList((prev) => [...prev, { serial: sn, partNumber: draftPartNumber.trim(), partName: draftPartName }]);
+    setFlashIdx(newIdx);
+    setTimeout(() => setFlashIdx((cur) => (cur === newIdx ? null : cur)), 600);
     setDraftSerial("");
     serialInputRef.current?.focus();
   }
@@ -383,7 +402,7 @@ export function StockInPage() {
                     <span style={{ marginLeft: 8, color: "#b91c1c" }}>⚠ {state.rows.filter((r) => !r.valid).length} invalid row(s)</span>
                   )}
                 </p>
-                <div style={{ border: "1px solid #e5e7eb", borderRadius: 6, overflow: "hidden" }}>
+                <div style={{ border: "1px solid #e5e7eb", borderRadius: 6, overflow: "hidden", overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                     <thead>
                       <tr style={{ background: "#f9fafb" }}>
@@ -414,7 +433,7 @@ export function StockInPage() {
             {/* Uploading */}
             {state.status === "uploading" && (
               <div style={{ textAlign: "center", padding: "32px 0" }}>
-                <div style={{ width: 40, height: 40, border: "3px solid #e5e7eb", borderTopColor: "var(--blue)", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 16px" }} />
+                <div className="circle" style={{ width: 40, height: 40, border: "3px solid #e5e7eb", borderTopColor: "var(--blue)", animation: "spin 0.8s linear infinite", margin: "0 auto 16px" }} />
                 <p style={{ margin: 0, fontSize: 14, color: "#374151", fontWeight: 600 }}>Processing import…</p>
                 <p style={{ margin: "4px 0 0", fontSize: 12, color: "#9ca3af" }}>Validating and inserting rows</p>
               </div>
@@ -477,7 +496,7 @@ export function StockInPage() {
                   <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: "#b91c1c" }}>
                     Failed rows — fix and re-upload:
                   </p>
-                  <div style={{ border: "1px solid #fecaca", borderRadius: "var(--radius)", overflow: "hidden" }}>
+                  <div style={{ border: "1px solid #fecaca", borderRadius: "var(--radius)", overflow: "hidden", overflowX: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                       <thead>
                         <tr style={{ background: "#fef2f2" }}>
@@ -545,7 +564,7 @@ export function StockInPage() {
               </div>
               <div>
                 <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 5 }}>
-                  Serial number — press Enter to add
+                  Serial number — Enter to add · {navigator.platform.includes("Mac") ? "⌘" : "Ctrl"}+Enter to submit
                 </label>
                 <input
                   ref={serialInputRef}
@@ -553,10 +572,23 @@ export function StockInPage() {
                   value={draftSerial}
                   onChange={(e) => setDraftSerial(e.target.value)}
                   onKeyDown={handleSerialEnter}
-                  placeholder="Scan or type serial…"
+                  onFocus={() => setSerialFocused(true)}
+                  onBlur={() => setSerialFocused(false)}
+                  placeholder={draftPartConfirmed ? "Ready to scan…" : "Set part number first"}
                   autoFocus
                   autoComplete="off"
-                  style={{ width: "100%", border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "9px 12px", fontSize: 13, fontFamily: "monospace", outline: "none", boxSizing: "border-box" as const }}
+                  style={{
+                    width: "100%",
+                    border: `2px solid ${serialFocused && draftPartConfirmed ? "#15803d" : "#d1d5db"}`,
+                    borderRadius: "var(--radius)",
+                    padding: "8px 12px",
+                    fontSize: 13,
+                    fontFamily: "monospace",
+                    outline: "none",
+                    boxSizing: "border-box" as const,
+                    background: serialFocused && draftPartConfirmed ? "#f0fdf4" : "#fff",
+                    transition: "border-color 120ms, background 120ms",
+                  }}
                 />
               </div>
             </div>
@@ -576,19 +608,27 @@ export function StockInPage() {
                   </button>
                 </div>
                 <div style={{ maxHeight: 220, overflowY: "auto" }}>
-                  {[...draftList].reverse().map((row, i) => (
-                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 12px", borderBottom: "1px solid #f9fafb", background: row.error ? "#fef2f2" : "#fff" }}>
+                  {[...draftList].reverse().map((row, i) => {
+                    const realIdx = draftList.length - 1 - i;
+                    const isFlash = flashIdx === realIdx;
+                    return (
+                    <div key={i} style={{
+                      display: "flex", alignItems: "center", gap: 10, padding: "7px 12px",
+                      borderBottom: "1px solid #f9fafb",
+                      background: isFlash ? "#bbf7d0" : row.error ? "#fef2f2" : "#fff",
+                      transition: "background 600ms",
+                    }}>
                       <span style={{ fontSize: 12, fontFamily: "monospace", minWidth: 120, color: row.error ? "#b91c1c" : "#111827" }}>{row.serial}</span>
                       <span style={{ fontSize: 11, color: "#6b7a8d", flex: 1 }}>{row.partNumber}</span>
                       {row.error
                         ? <span style={{ fontSize: 11, color: "#b91c1c" }}>{row.error}</span>
                         : <span style={{ fontSize: 11, color: "#15803d", fontWeight: 600 }}>✓</span>}
-                      <button type="button" onClick={() => setDraftList((prev) => prev.filter((_, j) => j !== draftList.length - 1 - i))}
+                      <button type="button" onClick={() => setDraftList((prev) => prev.filter((_, j) => j !== realIdx))}
                         style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", padding: 0 }}>
                         <X size={12} />
                       </button>
                     </div>
-                  ))}
+                  );})}
                 </div>
               </div>
             )}

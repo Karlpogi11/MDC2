@@ -4,11 +4,11 @@ import { getSupabaseClient } from "./supabase";
 type RealtimeStatus = "connecting" | "live" | "disconnected";
 
 /**
- * Subscribes to postgres_changes on a table and calls onUpdate when any
- * INSERT/UPDATE/DELETE fires. Returns the current connection status.
+ * Subscribes to postgres_changes on one or more tables and calls onUpdate
+ * when any INSERT/UPDATE/DELETE fires. Returns the current connection status.
  */
 export function useRealtimeTable(
-  table: string,
+  tables: string | string[],
   onUpdate: () => void,
   enabled = true
 ): RealtimeStatus {
@@ -21,20 +21,24 @@ export function useRealtimeTable(
     const client = getSupabaseClient();
     if (!client) { setStatus("disconnected"); return; }
 
-    const channel = client
-      .channel(`realtime:${table}`)
-      .on(
+    const tableList = Array.isArray(tables) ? tables : [tables];
+    const key = tableList.join(",");
+
+    let channel = client.channel(`realtime:${key}`);
+    for (const table of tableList) {
+      channel = channel.on(
         "postgres_changes",
         { event: "*", schema: "public", table },
         () => onUpdateRef.current()
-      )
-      .subscribe((s) => {
-        if (s === "SUBSCRIBED") setStatus("live");
-        else if (s === "CLOSED" || s === "CHANNEL_ERROR") setStatus("disconnected");
-      });
+      );
+    }
+    channel.subscribe((s) => {
+      if (s === "SUBSCRIBED") setStatus("live");
+      else if (s === "CLOSED" || s === "CHANNEL_ERROR") setStatus("disconnected");
+    });
 
     return () => { void client.removeChannel(channel); };
-  }, [table, enabled]);
+  }, [Array.isArray(tables) ? tables.join(",") : tables, enabled]);
 
   return status;
 }

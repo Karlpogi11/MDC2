@@ -58,7 +58,7 @@ export function BarcodeScanner({ onScan, onClose }: Props) {
             </span>
           </div>
           <button type="button" onClick={onClose}
-            style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: "50%", width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff" }}>
+            style={{ background: "rgba(255,255,255,0.15)", border: "none", width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff" }}>
             <X size={16} />
           </button>
         </div>

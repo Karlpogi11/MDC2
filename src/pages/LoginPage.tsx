@@ -68,7 +68,7 @@ export function LoginPage() {
             </p>
             {["DC On-Hand Inventory", "Stock-In & Transfers", "Edit Serial / Corrections", "Analytics & Exports"].map((item) => (
               <div key={item} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--nav-active)", flexShrink: 0 }} />
+                <span style={{ width: 5, height: 5, background: "var(--nav-active)", flexShrink: 0 }} />
                 <span style={{ color: "#9fb4ba", fontSize: 13 }}>{item}</span>
               </div>
             ))}

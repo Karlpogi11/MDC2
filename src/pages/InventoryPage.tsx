@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState, useCallback, type ReactElement } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import { AppLayout } from "@/components/AppLayout";
 import { SerialDrawer } from "@/components/SerialDrawer";
 import {
-  ArrowDown, ArrowUp, ArrowUpDown,
-  CalendarDays, CheckSquare, ChevronDown,
-  Download, MapPin, Printer,
+  ArrowDown, ArrowUp, ArrowUpDown, RefreshCw, Download,
+  CheckSquare,
 } from "lucide-react";
 import { demoInventoryRows } from "../data/demoInventory";
 import { fetchInventoryRows } from "../services/inventory";
@@ -119,6 +119,7 @@ function BatchItems({ batchId }: { batchId: string }) {
     <>
       <tr>
         <td colSpan={7} style={{ padding: 0, background: "#f8fafc", borderTop: "1px solid #e5e7eb" }}>
+          <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ background: "#f1f5f9" }}>
@@ -152,6 +153,7 @@ function BatchItems({ batchId }: { batchId: string }) {
               })}
             </tbody>
           </table>
+          </div>
         </td>
       </tr>
     </>
@@ -227,18 +229,22 @@ export function InventoryPage(): ReactElement {
   const [serials, setSerials] = useState<SerialRow[]>([]);
   const [serialsLoading, setSerialsLoading] = useState(false);
   const [serialSearch, setSerialSearch] = useState("");
+  const [serialStatusFilter, setSerialStatusFilter] = useState("");
 
   const filteredSerials = useMemo(() => {
     const q = serialSearch.trim().toLowerCase();
-    if (!q) return serials;
-    return serials.filter(r =>
-      r.serial_number.toLowerCase().includes(q) ||
-      r.parts?.part_number.toLowerCase().includes(q) ||
-      r.parts?.part_name.toLowerCase().includes(q)
-    );
-  }, [serials, serialSearch]);
+    return serials.filter(r => {
+      if (serialStatusFilter && r.status !== serialStatusFilter) return false;
+      if (!q) return true;
+      return (
+        r.serial_number.toLowerCase().includes(q) ||
+        r.parts?.part_number.toLowerCase().includes(q) ||
+        r.parts?.part_name.toLowerCase().includes(q)
+      );
+    });
+  }, [serials, serialSearch, serialStatusFilter]);
 
-  useEffect(() => {
+  const loadSerials = useCallback(() => {
     if (activeTab !== "Serial numbers") return;
     setSerialsLoading(true);
     const client = getSupabaseClient();
@@ -253,13 +259,29 @@ export function InventoryPage(): ReactElement {
         setSerialsLoading(false);
       });
   }, [activeTab]);
+
+  useEffect(() => { loadSerials(); }, [loadSerials]);
+
+  // Realtime: refresh serial list when serial_numbers or transfer_items change
+  useEffect(() => {
+    if (activeTab !== "Serial numbers") return;
+    const client = getSupabaseClient();
+    if (!client) return;
+    const channel = client
+      .channel("serial-list-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "serial_numbers" }, () => loadSerials())
+      .on("postgres_changes", { event: "*", schema: "public", table: "transfer_items" }, () => loadSerials())
+      .subscribe();
+    return () => { void client.removeChannel(channel); };
+  }, [activeTab, loadSerials]);
   const [search, setSearch] = useState("");
   const [state, setState] = useState<LoadState>(INITIAL_STATE);
   const { state: authState } = useAuth();
+  const navigate = useNavigate();
   const isSystemAdmin = authState.status === "authenticated" && authState.profile.role === "system_admin";
 
   const realtimeEnabled = useFeatureFlag("enable_realtime");
-  const realtimeStatus = useRealtimeTable("serial_numbers", () => void loadInventory(), realtimeEnabled);
+  const realtimeStatus = useRealtimeTable(["serial_numbers", "transfers", "transfer_items"], () => void loadInventory(), realtimeEnabled);
 
   const [drawerPart, setDrawerPart] = useState<{ id: string; name: string; number: string } | null>(null);
   const closeDrawer = useCallback(() => setDrawerPart(null), []);
@@ -404,12 +426,17 @@ export function InventoryPage(): ReactElement {
     );
   };
 
-  const runBulkAction = (actionLabel: string) => {
-    if (selectedCount === 0) {
-      return;
-    }
+  const runTransfer = (partIds: string[]) => {
+    const parts = sortedRows
+      .filter((r) => partIds.includes(r.partId))
+      .map((r) => ({ part_number: r.partNumber, part_name: r.partName }));
+    navigate("/transfers/new", { state: { prefill: parts } });
+  };
 
-    setActionFeedback(`${actionLabel} prepared for ${selectedCount} selected item(s).`);
+  const runBulkAction = (actionLabel: string) => {
+    if (selectedCount === 0) return;
+    if (actionLabel === "Transfer") { runTransfer(selectedIds); return; }
+    setActionFeedback(`${actionLabel} — ${selectedCount} ${selectedCount === 1 ? "item" : "items"} selected.`);
   };
 
   const clearSelection = () => {
@@ -478,6 +505,16 @@ export function InventoryPage(): ReactElement {
                 onChange={(e) => setSerialSearch(e.target.value)}
                 style={{ border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "7px 12px", fontSize: 13, width: 260, outline: "none" }}
               />
+              <select
+                value={serialStatusFilter}
+                onChange={(e) => setSerialStatusFilter(e.target.value)}
+                style={{ border: "1px solid #d1d5db", padding: "7px 10px", fontSize: 13, color: "#374151", background: "#fff", cursor: "pointer" }}
+              >
+                <option value="">All statuses</option>
+                <option value="in_stock">In Stock</option>
+                <option value="transit">In Transit</option>
+                <option value="transferred">Transferred</option>
+              </select>
               <strong style={{ marginLeft: 8, fontSize: 13, color: "#6b7a8d" }}>
                 {serialsLoading ? "Loading…" : `${filteredSerials.length} serials`}
               </strong>
@@ -508,8 +545,8 @@ export function InventoryPage(): ReactElement {
                         <td>
                           <span style={{
                             display: "inline-block", padding: "2px 8px", borderRadius: "var(--radius-sm)", fontSize: 12, fontWeight: 600,
-                            background: r.status === "in_stock" ? "#dcfce7" : r.status === "transferred" ? "#dbeafe" : "#f3f4f6",
-                            color: r.status === "in_stock" ? "#15803d" : r.status === "transferred" ? "#1d4ed8" : "#374151",
+                            background: r.status === "in_stock" ? "#dcfce7" : r.status === "transferred" ? "#dbeafe" : r.status === "transit" ? "#fef9c3" : "#f3f4f6",
+                            color: r.status === "in_stock" ? "#15803d" : r.status === "transferred" ? "#1d4ed8" : r.status === "transit" ? "#a16207" : "#374151",
                           }}>
                             {STATUS_LABEL[r.status] ?? r.status}
                           </span>
@@ -554,20 +591,6 @@ export function InventoryPage(): ReactElement {
               Stocked Out
             </button>
           </div>
-
-          <div className="balance-controls">
-            <span className="balance-label">Inventory snapshot:</span>
-            <button className="control-btn" type="button">
-              <CalendarDays className="control-icon" aria-hidden="true" />
-              As of: Today
-              <ChevronDown className="control-chevron" aria-hidden="true" />
-            </button>
-            <button className="control-btn" type="button">
-              <MapPin className="control-icon" aria-hidden="true" />
-              Site: Main warehouse
-              <ChevronDown className="control-chevron" aria-hidden="true" />
-            </button>
-          </div>
         </section>
 
         <div className="blue-rule" />
@@ -584,18 +607,49 @@ export function InventoryPage(): ReactElement {
             <strong style={{ fontSize: 13, color: "#6b7a8d" }}>{sortedRows.length} items</strong>
           </div>
           <div className="action-right">
-            <button className="icon-btn blue" type="button" aria-label="Export inventory" onClick={() => runBulkAction("Export")}>
+            <button className="icon-btn blue" type="button" aria-label="Export inventory CSV"
+              title="Export all inventory with serials"
+              onClick={() => {
+                const rows: string[][] = [];
+                // Header
+                rows.push(["Part Number","Part Name","Category","In Stock","Reserved","Available","Serial Number","Serial Status","Site","Stock-In Date"]);
+                // One row per serial, grouped under their part
+                for (const row of sortedRows) {
+                  const partSerials = serials.filter(s => s.parts?.part_number === row.partNumber);
+                  if (partSerials.length === 0) {
+                    rows.push([row.partNumber, row.partName, row.category, String(row.inStock), String(row.committed), String(row.available), "", "", "", ""]);
+                  } else {
+                    partSerials.forEach((s, i) => {
+                      rows.push([
+                        i === 0 ? row.partNumber : "",
+                        i === 0 ? row.partName : "",
+                        i === 0 ? row.category : "",
+                        i === 0 ? String(row.inStock) : "",
+                        i === 0 ? String(row.committed) : "",
+                        i === 0 ? String(row.available) : "",
+                        s.serial_number,
+                        STATUS_LABEL[s.status] ?? s.status,
+                        s.sites?.site_name ?? "",
+                        s.stock_in_at ? new Date(s.stock_in_at).toLocaleDateString("en-US") : "",
+                      ]);
+                    });
+                  }
+                }
+                const csv = rows.map(r => r.map(v => `"${v.replace(/"/g, '""')}"`).join(",")).join("\n");
+                const blob = new Blob([csv], { type: "text/csv" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url; a.download = `inventory-${new Date().toISOString().slice(0,10)}.csv`;
+                a.click(); URL.revokeObjectURL(url);
+              }}>
               <Download aria-hidden="true" />
             </button>
-            <button className="icon-btn" type="button" aria-label="Print list">
-              <Printer aria-hidden="true" />
-            </button>
             <button className="icon-btn" type="button" aria-label="Refresh inventory" onClick={() => void loadInventory()}>
-              <ArrowUpDown aria-hidden="true" />
+              <RefreshCw aria-hidden="true" />
             </button>
             {realtimeEnabled && (
-              <span title={realtimeStatus === "live" ? "Live" : "Connecting…"} style={{
-                width: 8, height: 8, borderRadius: "50%", flexShrink: 0, alignSelf: "center",
+              <span className="circle" title={realtimeStatus === "live" ? "Live" : "Connecting…"} style={{
+                width: 8, height: 8, flexShrink: 0, alignSelf: "center",
                 background: realtimeStatus === "live" ? "#16a34a" : "#9ca3af",
                 animation: realtimeStatus === "live" ? "dot-pulse 2s ease-in-out infinite" : "none",
               }} />
@@ -635,7 +689,7 @@ export function InventoryPage(): ReactElement {
               </p>
             </div>
             <div className="row-focus-actions">
-              <button type="button" className="bulk-btn" onClick={() => runBulkAction("Transfer")}>Create transfer</button>
+              <button type="button" className="bulk-btn" onClick={() => runTransfer([focusedRow.partId])}>Create transfer</button>
               <button type="button" className="bulk-btn" onClick={() => runBulkAction("Export")}>Export part</button>
               <button type="button" className="bulk-btn ghost" onClick={() => setFocusedRowId(null)}>Close</button>
             </div>

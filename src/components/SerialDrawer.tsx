@@ -88,11 +88,11 @@ export function SerialDrawer({ partId, partName, partNumber, onClose }: Props) {
         boxShadow: "-4px 0 24px rgba(0,0,0,0.15)",
       }}>
         {/* Header */}
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid #e5e5e5", background: "#f7f7f7", flexShrink: 0 }}>
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--line)", background: "#f7f7f7", flexShrink: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
-              <h2 style={{ margin: "0 0 2px", fontSize: 16, fontWeight: 700, color: "#1a2a3a" }}>{partName}</h2>
-              <code style={{ fontSize: 12, color: "var(--blue)", background: "#eff6ff", padding: "1px 6px", borderRadius: 4 }}>{partNumber}</code>
+              <h2 style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 700, color: "var(--text)", fontFamily: "inherit" }}>{partName}</h2>
+              <span style={{ fontSize: 12, fontFamily: "monospace", color: "var(--blue)", background: "#eff6ff", padding: "1px 6px", borderRadius: "var(--radius-sm)", display: "inline-block" }}>{partNumber}</span>
             </div>
             <button type="button" onClick={onClose}
               style={{ background: "transparent", border: "none", cursor: "pointer", color: "#6b7a8d", padding: 4 }}>
@@ -104,9 +104,9 @@ export function SerialDrawer({ partId, partName, partNumber, onClose }: Props) {
           {!loading && (
             <div style={{ display: "flex", gap: 6, marginTop: 12, flexWrap: "wrap" }}>
               <button type="button" onClick={() => setStatusFilter("all")}
-                style={{ border: "none", borderRadius: "var(--radius-pill)", padding: "3px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer",
-                  background: statusFilter === "all" ? "var(--blue)" : "#f3f4f6",
-                  color: statusFilter === "all" ? "#fff" : "#6b7a8d" }}>
+                style={{ border: `1px solid ${statusFilter === "all" ? "var(--blue)" : "var(--line)"}`, borderRadius: "var(--radius-pill)", padding: "3px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer",
+                  background: statusFilter === "all" ? "var(--blue)" : "transparent",
+                  color: statusFilter === "all" ? "#fff" : "var(--muted)" }}>
                 All ({serials.length})
               </button>
               {Object.entries(counts).map(([status, count]) => {
@@ -114,8 +114,9 @@ export function SerialDrawer({ partId, partName, partNumber, onClose }: Props) {
                 const active = statusFilter === status;
                 return (
                   <button key={status} type="button" onClick={() => setStatusFilter(status)}
-                    style={{ border: "none", borderRadius: "var(--radius-pill)", padding: "3px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer",
-                      background: active ? s.color : s.bg, color: active ? "#fff" : s.color }}>
+                    style={{ border: `1px solid ${active ? s.color : "var(--line)"}`, borderRadius: "var(--radius-pill)", padding: "3px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer",
+                      background: active ? s.color : "transparent",
+                      color: active ? "#fff" : "var(--muted)" }}>
                     {s.label} ({count})
                   </button>
                 );
@@ -133,7 +134,7 @@ export function SerialDrawer({ partId, partName, partNumber, onClose }: Props) {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search serial number…"
-              style={{ width: "100%", border: "1px solid #d0d0d0", borderRadius: "var(--radius)", padding: "7px 10px 7px 30px", fontSize: 13, outline: "none", boxSizing: "border-box", fontFamily: "monospace" }}
+              style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 10px 7px 30px", fontSize: 12, outline: "none", boxSizing: "border-box", fontFamily: "inherit" }}
             />
           </div>
         </div>
@@ -157,10 +158,10 @@ export function SerialDrawer({ partId, partName, partNumber, onClose }: Props) {
                 background: i % 2 === 0 ? "#fff" : "#fafafa",
               }}>
                 <div>
-                  <div style={{ fontFamily: "monospace", fontWeight: 600, fontSize: 13, color: "#111827", marginBottom: 2 }}>
+                  <div style={{ fontFamily: "monospace", fontWeight: 600, fontSize: 12, color: "var(--blue)", marginBottom: 2 }}>
                     {serial.serial_number}
                   </div>
-                  <div style={{ fontSize: 11, color: "#9ca3af" }}>
+                  <div style={{ fontSize: 11, color: "var(--muted)" }}>
                     Stocked in {formatDate(serial.stock_in_at)}
                     {serial.current_site && <span> · {serial.current_site.site_name}</span>}
                   </div>
@@ -174,7 +175,7 @@ export function SerialDrawer({ partId, partName, partNumber, onClose }: Props) {
         </div>
 
         {/* Footer */}
-        <div style={{ padding: "10px 20px", borderTop: "1px solid #e5e5e5", background: "#f7f7f7", flexShrink: 0, fontSize: 12, color: "#9ca3af" }}>
+        <div style={{ padding: "10px 20px", borderTop: "1px solid var(--line)", background: "#f7f7f7", flexShrink: 0, fontSize: 12, color: "var(--muted)" }}>
           {!loading && `Showing ${filtered.length} of ${serials.length} serials`}
         </div>
       </div>

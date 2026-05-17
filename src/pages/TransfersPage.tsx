@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, FileText } from "lucide-react";
+import { FileText } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase";
 import { AppLayout } from "@/components/AppLayout";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -68,6 +68,8 @@ export function TransfersPage() {
   const { data: transfers = [], isLoading: loading, error } = useQuery({
     queryKey: ["transfers"],
     queryFn: fetchTransfers,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 
   // Realtime: invalidate on any transfer insert/update
@@ -118,9 +120,9 @@ export function TransfersPage() {
           <button
             type="button"
             onClick={() => navigate("/transfers/new")}
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+            style={{ background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
           >
-            <Plus size={15} /> New transfer
+            New transfer
           </button>
         </div>
 

@@ -115,6 +115,18 @@ export function CorrectionsPage() {
 
   useEffect(() => { void loadHistory(); void loadPending(); }, []);
 
+  useEffect(() => {
+    const client = getSupabaseClient();
+    if (!client) return;
+    const channel = client
+      .channel("corrections-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "workflow_requests" }, () => {
+        void loadPending();
+      })
+      .subscribe();
+    return () => { void client.removeChannel(channel); };
+  }, []);
+
   async function handleLookup(e: FormEvent) {
     e.preventDefault();
     setLooking(true); setLookupError(null); setFound(null);
@@ -321,11 +333,11 @@ export function CorrectionsPage() {
                   </div>
                   <span style={{ fontSize: 11, color: "#9ca3af" }}>by {req.requester?.full_name ?? req.requester?.username ?? "—"}</span>
                   <button type="button" onClick={() => void handleApprove(req)} disabled={approvingId === req.id}
-                    style={{ fontSize: 12, fontWeight: 600, padding: "4px 12px", borderRadius: 6, border: "none", background: "#dcfce7", color: "#15803d", cursor: "pointer" }}>
+                    style={{ fontSize: 12, fontWeight: 600, padding: "4px 12px", borderRadius: "var(--radius)", border: "none", background: "#dcfce7", color: "#15803d", cursor: "pointer" }}>
                     {approvingId === req.id ? "…" : "Approve"}
                   </button>
                   <button type="button" onClick={() => void handleReject(req.id)}
-                    style={{ fontSize: 12, fontWeight: 600, padding: "4px 12px", borderRadius: 6, border: "none", background: "#fee2e2", color: "#b91c1c", cursor: "pointer" }}>
+                    style={{ fontSize: 12, fontWeight: 600, padding: "4px 12px", borderRadius: "var(--radius)", border: "none", background: "#fee2e2", color: "#b91c1c", cursor: "pointer" }}>
                     Reject
                   </button>
                 </div>

@@ -1,6 +1,6 @@
 export type PackingListData = {
   transferNo: string;
-  /** Pre-built invoice ref from DB (e.g. DC-20260517-A001). Falls back to transferNo. */
+  /** Pre-built invoice ref from DB (e.g. DC20260517A001). Falls back to transferNo. */
   invoiceRef: string;
   createdAt: string;
   packedAt: string | null;
@@ -86,7 +86,6 @@ function buildMetaLines(data: PackingListData): [string, string][] {
   const lines: [string, string][] = [
     ["INVOICE REF:", asString(data.invoiceRef, "—")],
     ["SHIPMENT DATE:", formatPackingDate(displayDate)],
-    ["BOX/S #:", String(normalizePositiveInt(data.boxCount, 1))],
   ];
   if (asString(data.courier)) lines.push(["CARRIER:", asString(data.courier)]);
   if (asString(data.awb)) lines.push(["TRACKING NUMBER:", asString(data.awb)]);
@@ -107,6 +106,7 @@ export async function generatePackingListPDF(data: PackingListData): Promise<any
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 14;
+  const logoYOffset = 4.5; // Align logo center with sender address block.
   const logo = await fetchLogoBase64();
 
   const totalUnits = getTotalUnits(data);
@@ -124,7 +124,7 @@ export async function generatePackingListPDF(data: PackingListData): Promise<any
   // ── Logo ───────────────────────────────────────────────────────────────────
   if (logo) {
     try {
-      doc.addImage(logo.dataUrl, logo.format, margin, y, 22, 22, undefined, "FAST");
+      doc.addImage(logo.dataUrl, logo.format, margin, y + logoYOffset, 22, 22, undefined, "FAST");
     } catch { /* skip */ }
   }
 
@@ -141,15 +141,15 @@ export async function generatePackingListPDF(data: PackingListData): Promise<any
   doc.text("San Juan City, Metro Manila", senderX, y + 26);
 
   // ── Meta block (right side) ────────────────────────────────────────────────
-  const metaBlockX = pageWidth / 2 + 5;
-  const metaLabelW = 38;
-  const metaValX = metaBlockX + metaLabelW + 2;
-  const metaMaxValW = pageWidth - margin - metaValX - 2;
+  const metaLabelX = pageWidth / 2 + 5;
+  const metaLabelW = 40;
+  const metaValX = metaLabelX + metaLabelW + 3;
+  const metaMaxValW = pageWidth - margin - metaValX;
   doc.setFontSize(7.5);
   metaLines.forEach(([label, value], lineIndex) => {
     const rowY = y + 5 + lineIndex * 5.5;
     doc.setFont("helvetica", "bold");
-    doc.text(label, metaBlockX + metaLabelW, rowY, { align: "right" });
+    doc.text(label, metaLabelX, rowY);
     doc.setFont("helvetica", "normal");
     const metaValue = asString(value, "—");
     const wrapped = doc.splitTextToSize(metaValue, metaMaxValW);
