@@ -1,3 +1,4 @@
+import { useTableResize } from "@/components/ResizableColumns";
 import { useState, useEffect, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Boxes, UserPlus, Check, X } from "lucide-react";
@@ -35,6 +36,7 @@ async function fetchUsers(): Promise<UserRow[]> {
 }
 
 export function UsersPage() {
+  const tableRef = useTableResize();
   const { state: authState } = useAuth();
   const navigate = useNavigate();
 
@@ -192,70 +194,69 @@ export function UsersPage() {
         </div>
 
         {/* User list */}
-        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: "var(--radius)", overflow: "hidden" }}>
-          <div style={{ padding: "14px 20px", borderBottom: "1px solid #f3f4f6" }}>
+        <div className="table-card">
+          <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--line)" }}>
             <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>
               All users {!loading && <span style={{ fontWeight: 400, color: "#6b7a8d" }}>({users.length})</span>}
             </h2>
           </div>
 
           {actionError && (
-            <div role="alert" style={{ margin: "12px 20px 0", padding: "9px 12px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "var(--radius)", color: "#b91c1c", fontSize: 13 }}>
+            <div role="alert" style={{ margin: "12px 20px 0", padding: "9px 12px", background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", fontSize: 13 }}>
               {actionError}
             </div>
           )}
 
-          <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <div className="table-scroll">
+          <table ref={tableRef} style={{ minWidth: 640 }}>
             <thead>
-              <tr style={{ borderBottom: "1px solid #f3f4f6" }}>
-                {["Name", "Username", "Email", "Role", "Status", ""].map((h) => (
-                  <th key={h} style={{ padding: "10px 16px", textAlign: "left", fontSize: 12, fontWeight: 600, color: "#6b7a8d", background: "#f9fafb" }}>{h}</th>
-                ))}
+              <tr>
+                <th>Name</th>
+                <th>Username</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th style={{ width: 100 }} />
               </tr>
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={6} style={{ padding: "24px 16px", textAlign: "center", color: "#9ca3af", fontSize: 13 }}>Loading…</td></tr>
+                <tr><td colSpan={6} className="empty-row">Loading…</td></tr>
               )}
               {!loading && users.length === 0 && (
-                <tr><td colSpan={6} style={{ padding: "24px 16px", textAlign: "center", color: "#9ca3af", fontSize: 13 }}>No users yet.</td></tr>
+                <tr><td colSpan={6} className="empty-row">No users yet.</td></tr>
               )}
               {!loading && users.map((user) => (
-                <tr key={user.id} style={{ borderBottom: "1px solid #f3f4f6", opacity: user.is_active ? 1 : 0.5 }}>
-                  <td style={{ padding: "12px 16px", fontWeight: 600, color: "#111827" }}>
+                <tr key={user.id} style={{ opacity: user.is_active ? 1 : 0.5 }}>
+                  <td style={{ fontWeight: 600 }}>
                     {user.full_name ?? <span style={{ color: "#9ca3af" }}>—</span>}
                   </td>
-                  <td style={{ padding: "12px 16px", fontFamily: "monospace", color: "#374151" }}>
+                  <td style={{ fontFamily: "monospace" }}>
                     {user.username ?? <span style={{ color: "#9ca3af" }}>—</span>}
                   </td>
-                  <td style={{ padding: "12px 16px", color: "#6b7a8d" }}>{user.email ?? "—"}</td>
-                  <td style={{ padding: "12px 16px" }}>
-                    <span style={{
-                      display: "inline-block", padding: "2px 8px", borderRadius: "var(--radius-pill)", fontSize: 11, fontWeight: 700,
+                  <td style={{ color: "#6b7a8d" }}>{user.email ?? "—"}</td>
+                  <td>
+                    <span className="status-badge" style={{
                       background: user.role === "system_admin" ? "#1e3a5f" : user.role === "dc_admin" ? "#dbeafe" : user.role === "dc_operator" ? "#dcfce7" : "#f3f4f6",
                       color: user.role === "system_admin" ? "#9fb4ba" : user.role === "dc_admin" ? "#1d4ed8" : user.role === "dc_operator" ? "#15803d" : "#6b7a8d",
                     }}>
                       {ROLE_LABELS[user.role]}
                     </span>
                   </td>
-                  <td style={{ padding: "12px 16px" }}>
-                    <span style={{
-                      display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600,
-                      color: user.is_active ? "#15803d" : "#9ca3af",
-                    }}>
+                  <td>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600, color: user.is_active ? "#15803d" : "#9ca3af" }}>
                       {user.is_active ? <Check size={12} /> : <X size={12} />}
                       {user.is_active ? "Active" : "Inactive"}
                     </span>
                   </td>
-                  <td style={{ padding: "12px 16px" }}>
+                  <td>
                     {user.id !== currentUserId && (
                       <button
                         type="button"
                         disabled={togglingId === user.id}
                         onClick={() => void toggleActive(user)}
                         style={{
-                          border: "1px solid #e5e7eb", borderRadius: "var(--radius)", background: "#fff",
+                          border: "1px solid var(--line)", background: "#fff",
                           color: user.is_active ? "#b91c1c" : "#15803d",
                           fontSize: 12, fontWeight: 600, padding: "5px 12px", cursor: "pointer",
                           opacity: togglingId === user.id ? 0.6 : 1,

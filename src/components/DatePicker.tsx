@@ -54,15 +54,18 @@ export function DatePicker({
             <input
               readOnly
               style={{
-                border: "1px solid #d0d0d0",
-                padding: "8px 32px 8px 10px",
+                border: "1px solid #e2e8f0",
+                borderRadius: 6,
+                padding: "7px 32px 7px 10px",
                 fontSize: 13,
                 fontFamily: "inherit",
                 background: "#fff",
                 outline: "none",
                 width: 148,
                 cursor: "pointer",
-                color: selected ? "#111" : "#9ca3af",
+                color: selected ? "#0f172a" : "#94a3b8",
+                height: 34,
+                boxSizing: "border-box",
               }}
             />
           }

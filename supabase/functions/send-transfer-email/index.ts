@@ -265,26 +265,28 @@ async function buildPackingListPDF(opts: {
   const logoSizeMm = 22;
   const logoSizePt = mm(logoSizeMm);
 
+  const drawLogo = (image: Awaited<ReturnType<typeof doc.embedPng>>) => {
+    // Scale to fit within logoSizePt box, preserving aspect ratio
+    const { width: nw, height: nh } = image.size();
+    const scale = Math.min(logoSizePt / nw, logoSizePt / nh);
+    const w = nw * scale;
+    const h = nh * scale;
+    page.drawImage(image, {
+      x: mm(margin),
+      y: ptY(headerY + PACKING_LIST_LOGO_OFFSET_MM + logoSizeMm),
+      width: w,
+      height: h,
+    });
+  };
+
   // Logo (left)
   const logoBytes = await fetchLogoBytes(opts.logoUrl);
   if (logoBytes) {
     try {
-      const image = await doc.embedPng(logoBytes);
-      page.drawImage(image, {
-        x: mm(margin),
-        y: ptY(headerY + PACKING_LIST_LOGO_OFFSET_MM + logoSizeMm),
-        width: logoSizePt,
-        height: logoSizePt,
-      });
+      drawLogo(await doc.embedPng(logoBytes));
     } catch {
       try {
-        const image = await doc.embedJpg(logoBytes);
-        page.drawImage(image, {
-          x: mm(margin),
-          y: ptY(headerY + PACKING_LIST_LOGO_OFFSET_MM + logoSizeMm),
-          width: logoSizePt,
-          height: logoSizePt,
-        });
+        drawLogo(await doc.embedJpg(logoBytes));
       } catch {
         // Skip logo if it cannot be embedded.
       }
@@ -568,14 +570,14 @@ Deno.serve(async (req) => {
 
   let transfer_id: string | undefined;
   let include_attachment = true;
+  let pdf_base64: string | null = null;
   try {
     const body = await req.text();
     if (body) {
       const parsed = JSON.parse(body);
       transfer_id = parsed?.transfer_id;
-      if (typeof parsed?.include_attachment === "boolean") {
-        include_attachment = parsed.include_attachment;
-      }
+      if (typeof parsed?.include_attachment === "boolean") include_attachment = parsed.include_attachment;
+      if (typeof parsed?.pdf_base64 === "string" && parsed.pdf_base64.length > 0) pdf_base64 = parsed.pdf_base64;
     }
   } catch {
     return jsonResp({ ok: false, reason: "Invalid JSON" }, 400, cors);
@@ -814,39 +816,39 @@ Deno.serve(async (req) => {
   };
 
   // ── Packing list attachment ────────────────────────────────────────────────
+  // 1. Use pdf_base64 passed directly from the client (canonical jsPDF layout)
+  // 2. Fall back to stored PDF in bucket
+  // 3. Send without attachment if neither available
   let attachment: { filename: string; contentType: string; base64: string } | undefined;
   let pdfError: string | undefined;
   if (shouldAttachPackingList) {
-    try {
-      const pdfBytes = await withTimeout(
-        buildPackingListPDF({
-          transferNo: transfer.transfer_no,
-          invoiceRef: transfer.invoice_ref ?? transfer.transfer_no,
-          createdAt: transfer.created_at,
-          sourceSite: source?.site_name ?? "DC",
-          destSite: dest?.site_name ?? "—",
-          destAddress: dest?.address ?? null,
-          requestedBy: requester?.full_name ?? requester?.username ?? "—",
-          courier: transfer.courier ?? null,
-          awb: transfer.awb ?? null,
-          boxCount: 1,
-          notes: null,
-          logoUrl: brandLogoUrl,
-          items,
-        }),
-        PDF_BUILD_TIMEOUT_MS,
-        "Packing list PDF generation",
-      );
-      // base64 encode the binary PDF
-      const b64 = bytesToBase64(pdfBytes);
-      attachment = {
-        filename: `${transfer.invoice_ref ?? transfer.transfer_no}.pdf`,
-        contentType: "application/pdf",
-        base64: b64,
-      };
-    } catch (pdfErr) {
-      pdfError = pdfErr instanceof Error ? `${pdfErr.message}${pdfErr.stack ? "\n" + pdfErr.stack.split("\n").slice(0, 4).join("\n") : ""}` : String(pdfErr);
-      console.error("[send-transfer-email] PDF generation failed:", pdfError);
+    const attachmentFilename = `${transfer.invoice_ref ?? transfer.transfer_no}.pdf`;
+
+    if (pdf_base64) {
+      attachment = { filename: attachmentFilename, contentType: "application/pdf", base64: pdf_base64 };
+      console.log(`[send-transfer-email] Using client-provided PDF for ${transfer.transfer_no}`);
+    } else {
+      // Try stored PDF from bucket
+      try {
+        const storedFileName = `${transfer.transfer_no}.pdf`;
+        const { data: signedData, error: signedErr } = await adminClient.storage
+          .from("packing-lists")
+          .createSignedUrl(storedFileName, 60);
+        if (!signedErr && signedData?.signedUrl) {
+          const res = await fetchWithTimeout(signedData.signedUrl, {}, PDF_BUILD_TIMEOUT_MS);
+          if (res.ok) {
+            const bytes = new Uint8Array(await res.arrayBuffer());
+            attachment = { filename: attachmentFilename, contentType: "application/pdf", base64: bytesToBase64(bytes) };
+            console.log(`[send-transfer-email] Using stored PDF for ${transfer.transfer_no}`);
+          }
+        }
+      } catch (fetchErr) {
+        console.warn("[send-transfer-email] Could not fetch stored PDF:", fetchErr);
+      }
+      if (!attachment) {
+        pdfError = "No PDF provided and no stored packing list found.";
+        console.warn(`[send-transfer-email] No PDF available for ${transfer.transfer_no}, sending without attachment.`);
+      }
     }
   }
 

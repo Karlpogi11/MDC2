@@ -13,6 +13,7 @@ type Site = {
   invoice_prefix: string | null;
   address: string | null;
   contact_emails: string[];
+  ship_to_code: string | null;
 };
 
 const SITES_TEMPLATE = "site_code,site_name,is_dc,invoice_prefix,address\nDC-MNL,Main Distribution Center,true,,123 DC Street Manila\nPODIUM,Podium Site,false,PODSSR#,\"Podium Mall, Ortigas Center\"\nBGC-01,BGC Service Center,false,BGCSSR#,\"BGC High Street, Taguig\"";
@@ -74,6 +75,7 @@ export function SitesTab() {
   const [editAddress, setEditAddress] = useState("");
   const [editIsDC, setEditIsDC] = useState(false);
   const [editEmails, setEditEmails] = useState("");  // comma-separated
+  const [editShipTo, setEditShipTo] = useState("");
   const [editSaving, setEditSaving] = useState(false);
 
   async function load() {
@@ -123,6 +125,7 @@ export function SitesTab() {
     setEditPrefix(site.invoice_prefix ?? ""); setEditAddress(site.address ?? "");
     setEditIsDC(site.is_dc);
     setEditEmails((site.contact_emails ?? []).join(", "));
+    setEditShipTo(site.ship_to_code ?? "");
   }
 
   async function handleSaveEdit(id: string) {
@@ -134,6 +137,7 @@ export function SitesTab() {
       site_name: editName.trim(), invoice_prefix: editPrefix.trim() || null,
       address: editAddress.trim() || null, is_dc: editIsDC,
       contact_emails: emails,
+      ship_to_code: editShipTo.trim() || null,
     }).eq("id", id);
     setEditSaving(false); setEditId(null); void load();
   }
@@ -207,8 +211,9 @@ export function SitesTab() {
               <col style={{ width: 110 }} />
               <col style={{ width: 180 }} />
               <col style={{ width: 120 }} />
+              <col style={{ width: 160 }} />
               <col style={{ width: 180 }} />
-              <col style={{ width: 200 }} />
+              <col style={{ width: 110 }} />
               <col style={{ width: 80 }} />
               <col style={{ width: 70 }} />
               <col style={{ width: 140 }} />
@@ -220,14 +225,15 @@ export function SitesTab() {
                 <th>Invoice Prefix</th>
                 <th>Address</th>
                 <th>Contact Emails</th>
+                <th>GSX Ship-To</th>
                 <th>Type</th>
                 <th>Status</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {loading && <tr><td colSpan={8} className="empty-row">Loading…</td></tr>}
-              {!loading && sites.length === 0 && <tr><td colSpan={8} className="empty-row">No sites yet.</td></tr>}
+              {loading && <tr><td colSpan={9} className="empty-row">Loading…</td></tr>}
+              {!loading && sites.length === 0 && <tr><td colSpan={9} className="empty-row">No sites yet.</td></tr>}
               {sites.map((site) => {
                 const isEditing = editId === site.id;
                 return (
@@ -262,6 +268,15 @@ export function SitesTab() {
                               {(site.contact_emails ?? [])[0]}
                               {(site.contact_emails ?? []).length > 1 && <span style={{ color: "#9ca3af" }}> +{(site.contact_emails ?? []).length - 1}</span>}
                             </span>
+                          : <span style={{ color: "#aaa" }}>—</span>}
+                    </td>
+                    <td style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {isEditing
+                        ? <input value={editShipTo} onChange={(e) => setEditShipTo(e.target.value)}
+                            placeholder="e.g. 0001272226"
+                            style={{ ...fieldStyle, fontFamily: "monospace" }} />
+                        : site.ship_to_code
+                          ? <code style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "var(--radius-sm)", padding: "2px 7px", fontSize: 12 }}>{site.ship_to_code}</code>
                           : <span style={{ color: "#aaa" }}>—</span>}
                     </td>
                     <td>

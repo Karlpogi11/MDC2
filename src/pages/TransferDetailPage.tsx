@@ -1,3 +1,4 @@
+import { useTableResize } from "@/components/ResizableColumns";
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowRight, Package, CheckCircle, Truck, Check, X, FileText } from "lucide-react";
@@ -58,6 +59,7 @@ function formatDate(iso: string) {
 }
 
 export function TransferDetailPage() {
+  const tableRef = useTableResize();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { state: authState } = useAuth();
@@ -246,7 +248,7 @@ export function TransferDetailPage() {
 
   async function invokeTransferEmail(
     transferId: string,
-    options?: { attempts?: number; includeAttachment?: boolean; allowAttachmentFallback?: boolean },
+    options?: { attempts?: number; includeAttachment?: boolean; allowAttachmentFallback?: boolean; pdfBase64?: string | null },
   ): Promise<{ ok: boolean; detail?: string; packingListAttached?: boolean; pdfError?: string | null; smtpAttachmentError?: string | null }> {
     const client = getSupabaseClient();
     if (!client) return { ok: false, detail: "Supabase not configured." };
@@ -271,7 +273,7 @@ export function TransferDetailPage() {
             pdf_error?: string | null;
             smtp_attachment_error?: string | null;
           }>("send-transfer-email", {
-            body: { transfer_id: transferId, include_attachment: includeAttachmentInAttempt },
+            body: { transfer_id: transferId, include_attachment: includeAttachmentInAttempt, ...(options?.pdfBase64 ? { pdf_base64: options.pdfBase64 } : {}) },
           });
           const { data: emailResult, error: emailErr } = await invokeResult;
 
@@ -302,12 +304,59 @@ export function TransferDetailPage() {
     return { ok: false, detail };
   }
 
+  async function generateAndUploadPDF(courierOverride?: string | null, awbOverride?: string | null): Promise<string | null> {
+    if (!transfer || !actorId) return null;
+    const client = getSupabaseClient();
+    if (!client) return null;
+    try {
+      const { generatePackingListPDF } = await import("@/lib/packingList");
+      const doc = await generatePackingListPDF({
+        transferNo: transfer.transfer_no,
+        invoiceRef: transfer.invoice_ref ?? transfer.transfer_no,
+        createdAt: transfer.created_at,
+        packedAt: transfer.packed_at,
+        sourceSite: transfer.source_site?.site_name ?? "DC",
+        sourceAddress: transfer.source_site?.address ?? null,
+        sourceIsDC: transfer.source_site?.is_dc ?? true,
+        destinationSite: transfer.destination_site?.site_name ?? "—",
+        destinationAddress: transfer.destination_site?.address ?? null,
+        requestedBy: transfer.requested_by_profile?.full_name ?? transfer.requested_by_profile?.username ?? "—",
+        courier: courierOverride ?? transfer.courier ?? null,
+        awb: awbOverride ?? transfer.awb ?? null,
+        items: transfer.items.map((item) => ({
+          serialNumber: item.serial?.serial_number ?? null,
+          partNumber: item.part?.part_number ?? "—",
+          partName: item.part?.part_name ?? "—",
+          qty: item.qty,
+        })),
+      });
+      const pdfBlob = doc.output("blob") as Blob;
+      // Upload to storage (best-effort, for record keeping)
+      const fileName = `${transfer.transfer_no}.pdf`;
+      void client.storage.from("packing-lists").upload(fileName, pdfBlob, { contentType: "application/pdf", upsert: true });
+      void client.from("packing_lists").upsert(
+        { transfer_id: transfer.id, file_path: fileName, generated_by: actorId },
+        { onConflict: "transfer_id" }
+      );
+      // Return base64 for direct attachment
+      const arrayBuffer = await pdfBlob.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      return btoa(binary);
+    } catch (e) {
+      console.warn("generateAndUploadPDF failed:", e);
+      return null;
+    }
+  }
+
   async function resendTransferEmail(transferId: string) {
     setShowActionMenu(false);
     setSendingEmail(true);
+    const pdfBase64 = await generateAndUploadPDF();
     setActionError(null);
     setActionNotice(null);
-    const result = await invokeTransferEmail(transferId, { attempts: 1, includeAttachment: true, allowAttachmentFallback: false });
+    const result = await invokeTransferEmail(transferId, { attempts: 1, includeAttachment: true, allowAttachmentFallback: false, pdfBase64 });
     if (!result.ok) {
       const isMissingEmail = (result.detail ?? "").includes("contact_emails") || (result.detail ?? "").includes("No valid");
       setActionError(
@@ -341,10 +390,11 @@ export function TransferDetailPage() {
     const { error: err } = await client.from("transfers").update(update).eq("id", transfer.id);
     if (err) { setActionError(err.message); setAdvancing(false); return; }
 
-    // When dispatched (in_transit), send email to destination site
+    // When dispatched (in_transit), generate PDF first so email attachment uses the canonical layout
     if (next === "in_transit") {
+      const pdfBase64 = await generateAndUploadPDF(courier?.trim(), awb?.trim());
       setSendingEmail(true);
-      const result = await invokeTransferEmail(transfer.id, { attempts: 1, includeAttachment: true });
+      const result = await invokeTransferEmail(transfer.id, { attempts: 1, includeAttachment: true, pdfBase64 });
       if (!result.ok) {
         const isMissingEmail = (result.detail ?? "").includes("contact_emails") || (result.detail ?? "").includes("No valid");
         setActionError(
@@ -546,7 +596,7 @@ export function TransferDetailPage() {
               </span>
             </div>
             <div className="table-scroll">
-              <table style={{ minWidth: 480 }}>
+              <table ref={tableRef} style={{ minWidth: 480 }}>
                 <colgroup>
                   {transfer.status === "in_transit" && <col style={{ width: 40 }} />}
                   <col style={{ width: 140 }} />

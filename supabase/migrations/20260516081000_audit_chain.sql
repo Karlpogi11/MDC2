@@ -18,13 +18,7 @@ create or replace function public.audit_log_hash_trigger()
 returns trigger
 language plpgsql
 security definer
-set search_path = public
-as $$
-declare
-  v_prev_hash text;
-  v_content   text;
-begin
-  -- Get the hash of the most recent existing row
+set search_path = public, extensions
   select row_hash into v_prev_hash
   from public.audit_logs
   order by created_at desc, id desc

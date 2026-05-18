@@ -1,3 +1,4 @@
+import { useTableResize } from "@/components/ResizableColumns";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { FileText } from "lucide-react";
@@ -62,6 +63,7 @@ function formatDate(iso: string) {
 
 export function TransfersPage() {
   const navigate = useNavigate();
+  const tableRef = useTableResize();
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<TransferStatus | "all">("all");
 
@@ -146,32 +148,36 @@ export function TransfersPage() {
             ))}
         </div>
 
-        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: "var(--radius)", overflow: "hidden" }}>
-          <div style={{ overflowX: "auto", maxHeight: "65vh", overflowY: "auto" }}>
-          <table style={{ width: "100%", minWidth: 760, borderCollapse: "collapse", fontSize: 13 }}>
+        <section className="table-card">
+          <div className="table-scroll">
+          <table ref={tableRef} style={{ minWidth: 760 }}>
             <thead>
-              <tr style={{ borderBottom: "1px solid #f3f4f6" }}>
-                {["Transfer #", "Destination", "Items", "Status", "Requested by", "Date", ""].map((h) => (
-                  <th key={h} style={{ padding: "10px 16px", textAlign: "left", fontSize: 12, fontWeight: 600, color: "#6b7a8d", background: "#f9fafb", whiteSpace: "nowrap", position: "sticky", top: 0, zIndex: 1 }}>{h}</th>
-                ))}
+              <tr>
+                <th>Transfer #</th>
+                <th>Destination</th>
+                <th className="num">Items</th>
+                <th>Status</th>
+                <th>Requested by</th>
+                <th>Date</th>
+                <th style={{ width: 80 }} />
               </tr>
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={7} style={{ padding: "32px 16px", textAlign: "center", color: "#9ca3af" }}>Loading…</td></tr>
+                <tr><td colSpan={7} className="empty-row">Loading…</td></tr>
               )}
               {fetchError && (
-                <tr><td colSpan={7} style={{ padding: "20px 16px", textAlign: "center", color: "#b91c1c", fontSize: 13 }}>
+                <tr><td colSpan={7} className="empty-row" style={{ color: "#b91c1c" }}>
                   Failed to load transfers: {fetchError}
                 </td></tr>
               )}
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} style={{ padding: "48px 16px", textAlign: "center" }}>
-                    <FileText size={32} color="#d1d5db" style={{ marginBottom: 12 }} />
-                    <p style={{ margin: 0, fontSize: 14, color: "#9ca3af" }}>No transfers found.</p>
+                  <td colSpan={7} className="empty-row">
+                    <FileText size={28} color="#d1d5db" style={{ marginBottom: 8 }} />
+                    <p style={{ margin: "0 0 10px", color: "#9ca3af" }}>No transfers found.</p>
                     <button type="button" onClick={() => navigate("/transfers/new")}
-                      style={{ marginTop: 12, background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                      style={{ background: "var(--blue)", color: "#fff", border: "none", padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                       Create first transfer
                     </button>
                   </td>
@@ -180,30 +186,28 @@ export function TransfersPage() {
               {!loading && filtered.map((t) => {
                 const s = STATUS_STYLE[t.status];
                 return (
-                  <tr key={t.id} style={{ borderBottom: "1px solid #f9fafb" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "#f9fafb")}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = "")}>
-                    <td style={{ padding: "12px 16px", fontWeight: 700, color: "var(--blue)", fontFamily: "monospace" }}>
+                  <tr key={t.id}>
+                    <td style={{ fontWeight: 700, color: "var(--blue)", fontFamily: "monospace" }}>
                       {t.transfer_no}
                     </td>
-                    <td style={{ padding: "12px 16px", color: "#374151" }}>
+                    <td>
                       {t.destination_site
                         ? <><span style={{ fontWeight: 600 }}>{t.destination_site.site_name}</span> <span style={{ color: "#9ca3af", fontSize: 11 }}>{t.destination_site.site_code}</span></>
                         : <span style={{ color: "#9ca3af" }}>—</span>}
                     </td>
-                    <td style={{ padding: "12px 16px", color: "#374151" }}>{t.item_count}</td>
-                    <td style={{ padding: "12px 16px" }}>
-                      <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: "var(--radius-pill)", fontSize: 11, fontWeight: 700, background: s.bg, color: s.color }}>
+                    <td className="num">{t.item_count}</td>
+                    <td>
+                      <span className="status-badge" style={{ background: s.bg, color: s.color }}>
                         {s.label}
                       </span>
                     </td>
-                    <td style={{ padding: "12px 16px", color: "#6b7a8d" }}>
+                    <td style={{ color: "#6b7a8d" }}>
                       {t.requested_by_profile?.full_name ?? t.requested_by_profile?.username ?? "—"}
                     </td>
-                    <td style={{ padding: "12px 16px", color: "#6b7a8d", whiteSpace: "nowrap" }}>{formatDate(t.created_at)}</td>
-                    <td style={{ padding: "12px 16px" }}>
+                    <td style={{ color: "#6b7a8d" }}>{formatDate(t.created_at)}</td>
+                    <td>
                       <button type="button" onClick={() => navigate(`/transfers/${t.id}`)}
-                        style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 12, fontWeight: 600, color: "#374151", cursor: "pointer" }}>
+                        style={{ border: "1px solid var(--line)", background: "#fff", padding: "5px 12px", fontSize: 12, fontWeight: 600, color: "#374151", cursor: "pointer" }}>
                         View
                       </button>
                     </td>
@@ -213,7 +217,7 @@ export function TransfersPage() {
             </tbody>
           </table>
           </div>
-        </div>
+        </section>
       </main>
     </AppLayout>
   );

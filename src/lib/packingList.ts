@@ -43,7 +43,7 @@ function normalizePositiveInt(v: unknown, fallback = 1): number {
   return n > 0 ? n : fallback;
 }
 
-type PdfImageAsset = { dataUrl: string; format: "PNG" | "JPEG" };
+type PdfImageAsset = { dataUrl: string; format: "PNG" | "JPEG"; width: number; height: number };
 
 async function fetchLogoBase64(): Promise<PdfImageAsset | null> {
   try {
@@ -57,25 +57,23 @@ async function fetchLogoBase64(): Promise<PdfImageAsset | null> {
       reader.onerror = () => reject(new Error("read failed"));
       reader.readAsDataURL(blob);
     });
-    if (typeof document === "undefined") return { dataUrl: rawDataUrl, format: "PNG" };
-    try {
-      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-        const el = new Image();
-        el.onload = () => resolve(el);
-        el.onerror = () => reject(new Error("load failed"));
-        el.src = rawDataUrl;
-      });
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, img.naturalWidth || img.width || 1);
-      canvas.height = Math.max(1, img.naturalHeight || img.height || 1);
-      const ctx = canvas.getContext("2d")!;
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0);
-      return { dataUrl: canvas.toDataURL("image/png"), format: "PNG" };
-    } catch {
-      return { dataUrl: rawDataUrl, format: "PNG" };
-    }
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error("load failed"));
+      el.src = rawDataUrl;
+    });
+    const w = img.naturalWidth || img.width || 1;
+    const h = img.naturalHeight || img.height || 1;
+    // Flatten to RGB (white background) — jsPDF misrenders RGBA PNGs
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0);
+    return { dataUrl: canvas.toDataURL("image/png"), format: "PNG", width: w, height: h };
   } catch {
     return null;
   }
@@ -124,7 +122,8 @@ export async function generatePackingListPDF(data: PackingListData): Promise<any
   // ── Logo ───────────────────────────────────────────────────────────────────
   if (logo) {
     try {
-      doc.addImage(logo.dataUrl, logo.format, margin, y + logoYOffset, 22, 22, undefined, "FAST");
+      const scale = Math.min(22 / logo.width, 22 / logo.height);
+      doc.addImage(logo.dataUrl, logo.format, margin, y + logoYOffset, logo.width * scale, logo.height * scale, undefined, "FAST");
     } catch { /* skip */ }
   }
 

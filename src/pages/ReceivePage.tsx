@@ -1,3 +1,4 @@
+import { useTableResize } from "@/components/ResizableColumns";
 import { useState, useEffect } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { Package, Check, Truck, CheckCircle } from "lucide-react";
@@ -23,6 +24,7 @@ const ERROR_MESSAGES: Record<string, string> = {
 };
 
 export function ReceivePage() {
+  const tableRef = useTableResize();
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
@@ -247,7 +249,7 @@ export function ReceivePage() {
             <span style={{ fontSize: 13, fontWeight: 600, color: "#444" }}>Items <span style={{ fontWeight: 400, color: "#888" }}>({items.length})</span></span>
           </div>
           <div className="table-scroll">
-            <table style={{ tableLayout: "fixed", minWidth: 480 }}>
+            <table ref={tableRef} style={{ tableLayout: "fixed", minWidth: 480 }}>
               <colgroup><col style={{ width: 40 }} /><col style={{ width: 140 }} /><col /><col style={{ width: 110 }} /><col style={{ width: 50 }} /></colgroup>
               <thead><tr><th></th><th>Serial</th><th>Description</th><th>Part #</th><th className="num">Qty</th></tr></thead>
               <tbody>

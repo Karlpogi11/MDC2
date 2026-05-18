@@ -1,3 +1,4 @@
+import { useTableResize } from "@/components/ResizableColumns";
 import { useState, useEffect } from "react";
 import { ClipboardCheck, Download, Upload, CheckCircle, AlertTriangle } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase";
@@ -47,6 +48,7 @@ function parseCountCSV(text: string): { serial_number: string; actual_status: st
 }
 
 export function PhysicalCountPage() {
+  const tableRef = useTableResize();
   const { state: authState } = useAuth();
   const actorId = authState.status === "authenticated" ? authState.user.id : null;
 
@@ -203,33 +205,33 @@ export function PhysicalCountPage() {
 
         {/* Variance report */}
         {variance && (
-          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: "var(--radius)", overflow: "hidden", marginBottom: 20 }}>
-            <div style={{ padding: "12px 16px", borderBottom: "1px solid #f3f4f6", display: "flex", alignItems: "center", gap: 12 }}>
+          <section className="table-card" style={{ marginBottom: 20 }}>
+            <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", gap: 12 }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>Variance Report</span>
               <span style={{ fontSize: 12, color: "#6b7a8d" }}>{variance.length} items · {variance.filter((r) => r.variance !== "match").length} discrepancies</span>
             </div>
-            <div style={{ overflowX: "auto", maxHeight: 400, overflowY: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <div className="table-scroll" style={{ maxHeight: 400 }}>
+              <table ref={tableRef} style={{ minWidth: 600 }}>
                 <thead>
-                  <tr style={{ background: "#f9fafb", position: "sticky", top: 0 }}>
-                    {["Serial", "Part #", "Expected", "Actual", "Variance"].map((h) => (
-                      <th key={h} style={{ padding: "9px 14px", textAlign: "left", fontSize: 12, fontWeight: 600, color: "#6b7a8d" }}>{h}</th>
-                    ))}
+                  <tr>
+                    <th>Serial</th>
+                    <th>Part #</th>
+                    <th>Expected</th>
+                    <th>Actual</th>
+                    <th>Variance</th>
                   </tr>
                 </thead>
                 <tbody>
                   {variance.map((r, i) => {
                     const vs = VARIANCE_STYLE[r.variance];
                     return (
-                      <tr key={i} style={{ borderBottom: "1px solid #f9fafb", background: r.variance !== "match" ? "#fffbeb" : undefined }}>
-                        <td style={{ padding: "9px 14px", fontFamily: "monospace", fontSize: 12 }}>{r.serial_number}</td>
-                        <td style={{ padding: "9px 14px", color: "#374151" }}>{r.part_number || "—"}</td>
-                        <td style={{ padding: "9px 14px", color: "#6b7a8d" }}>{r.expected_status}</td>
-                        <td style={{ padding: "9px 14px", color: "#6b7a8d" }}>{r.actual_status || "—"}</td>
-                        <td style={{ padding: "9px 14px" }}>
-                          <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: vs.bg, color: vs.color }}>
-                            {vs.label}
-                          </span>
+                      <tr key={i} style={{ background: r.variance !== "match" ? "#fffbeb" : undefined }}>
+                        <td style={{ fontFamily: "monospace" }}>{r.serial_number}</td>
+                        <td>{r.part_number || "—"}</td>
+                        <td style={{ color: "#6b7a8d" }}>{r.expected_status}</td>
+                        <td style={{ color: "#6b7a8d" }}>{r.actual_status || "—"}</td>
+                        <td>
+                          <span className="status-badge" style={{ background: vs.bg, color: vs.color }}>{vs.label}</span>
                         </td>
                       </tr>
                     );
@@ -237,44 +239,46 @@ export function PhysicalCountPage() {
                 </tbody>
               </table>
             </div>
-          </div>
+          </section>
         )}
 
         {/* Count history */}
-        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: "var(--radius)", overflow: "hidden" }}>
-          <div style={{ padding: "12px 16px", borderBottom: "1px solid #f3f4f6" }}>
+        <section className="table-card">
+          <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)" }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>Count history</span>
           </div>
-          <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <div className="table-scroll">
+          <table style={{ minWidth: 500 }}>
             <thead>
-              <tr style={{ background: "#f9fafb" }}>
-                {["Date", "Items", "Status", "Notes"].map((h) => (
-                  <th key={h} style={{ padding: "9px 14px", textAlign: "left", fontSize: 12, fontWeight: 600, color: "#6b7a8d" }}>{h}</th>
-                ))}
+              <tr>
+                <th>Date</th>
+                <th className="num">Items</th>
+                <th>Status</th>
+                <th>Notes</th>
               </tr>
             </thead>
             <tbody>
-              {loadingCounts && <tr><td colSpan={4} style={{ padding: "24px 14px", textAlign: "center", color: "#9ca3af" }}>Loading…</td></tr>}
-              {!loadingCounts && counts.length === 0 && <tr><td colSpan={4} style={{ padding: "24px 14px", textAlign: "center", color: "#9ca3af" }}>No counts yet.</td></tr>}
+              {loadingCounts && <tr><td colSpan={4} className="empty-row">Loading…</td></tr>}
+              {!loadingCounts && counts.length === 0 && <tr><td colSpan={4} className="empty-row">No counts yet.</td></tr>}
               {counts.map((c) => (
-                <tr key={c.id} style={{ borderBottom: "1px solid #f9fafb" }}>
-                  <td style={{ padding: "9px 14px", color: "#374151" }}>{new Date(c.created_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "2-digit" })}</td>
-                  <td style={{ padding: "9px 14px", color: "#374151" }}>{c.item_count}</td>
-                  <td style={{ padding: "9px 14px" }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 10,
+                <tr key={c.id}>
+                  <td>{new Date(c.created_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "2-digit" })}</td>
+                  <td className="num">{c.item_count}</td>
+                  <td>
+                    <span className="status-badge" style={{
                       background: c.status === "approved" ? "#dcfce7" : c.status === "submitted" ? "#dbeafe" : "#f3f4f6",
-                      color: c.status === "approved" ? "#15803d" : c.status === "submitted" ? "#1d4ed8" : "#6b7a8d" }}>
+                      color: c.status === "approved" ? "#15803d" : c.status === "submitted" ? "#1d4ed8" : "#6b7a8d",
+                    }}>
                       {c.status}
                     </span>
                   </td>
-                  <td style={{ padding: "9px 14px", color: "#6b7a8d", fontSize: 12 }}>{c.notes ?? "—"}</td>
+                  <td style={{ color: "#6b7a8d" }}>{c.notes ?? "—"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
           </div>
-        </div>
+        </section>
       </main>
     </AppLayout>
   );
