@@ -1,3 +1,4 @@
+import { friendlyError } from "@/lib/friendlyError";
 import { useState, useEffect, type FormEvent } from "react";
 import { Plus, Check, Save, X } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase";
@@ -96,7 +97,7 @@ export function SitesTab() {
     if (!client || rows.length === 0) { setImporting(false); return; }
     const { data, error } = await client.rpc("batch_upsert_sites", { p_rows: rows });
     if (error) {
-      setImportResult({ added: 0, skipped: 0, errors: [error.message] });
+      setImportResult({ added: 0, skipped: 0, errors: [friendlyError(error)] });
     } else {
       const result = data as { error_count: number; errors: { code: string; reason: string }[] };
       const errCount = result.error_count ?? 0;
@@ -114,7 +115,7 @@ export function SitesTab() {
       site_code: code.trim().toUpperCase(), site_name: name.trim(),
       is_dc: isDC, invoice_prefix: prefix.trim() || null, address: address.trim() || null,
     });
-    if (error) { setAddError(error.message); setAdding(false); return; }
+    if (error) { setAddError(friendlyError(error)); setAdding(false); return; }
     setCode(""); setName(""); setIsDC(false); setPrefix(""); setAddress("");
     setAddSuccess(true); setTimeout(() => setAddSuccess(false), 2000);
     setAdding(false); void load();

@@ -3,13 +3,14 @@ import { CheckCircle, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
 
 type Props = {
   added: number;
+  updated?: number;
   skipped: number;
   errors: string[];
 };
 
 const MAX_VISIBLE = 5;
 
-export function ImportResult({ added, skipped, errors }: Props) {
+export function ImportResult({ added, updated = 0, skipped, errors }: Props) {
   const [expanded, setExpanded] = useState(false);
   const hasErrors = errors.length > 0;
   const visibleErrors = expanded ? errors : errors.slice(0, MAX_VISIBLE);
@@ -27,7 +28,8 @@ export function ImportResult({ added, skipped, errors }: Props) {
           ? <AlertCircle size={15} color="#b91c1c" />
           : <CheckCircle size={15} color="#15803d" />}
         <span style={{ fontWeight: 600, color: hasErrors ? "#b91c1c" : "#15803d" }}>
-          {added} imported
+          {added} added
+          {updated > 0 && `, ${updated} updated`}
           {skipped > 0 && `, ${skipped} skipped`}
           {hasErrors && `, ${errors.length} error${errors.length > 1 ? "s" : ""}`}
         </span>

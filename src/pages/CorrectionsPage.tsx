@@ -1,5 +1,7 @@
+import { friendlyError } from "@/lib/friendlyError";
 import { useState, useEffect, useRef, type FormEvent } from "react";
-import { useResizableColumns, ResizableTh, useTableResize } from "@/components/ResizableColumns";
+import { useTableResize } from "@/components/ResizableColumns";
+import { DangerAction } from "@/components/DangerAction";
 import { ClipboardCheck, Search, AlertTriangle, Check, Clock, ArrowRight } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
@@ -148,7 +150,7 @@ function CorrectionModal({ serial, onClose, onDone, actorId }: {
         requested_by: actorId,
         payload: { old_serial_id: serial.id, old_serial_number: serial.serial_number, new_serial_number: trimmed, reason: reason.trim(), transfer_id: serial.transfer?.id ?? null },
       });
-      if (err) { setError(err.message); setSubmitting(false); return; }
+      if (err) { setError(friendlyError(err)); setSubmitting(false); return; }
       onDone(`Serial correction submitted: ${serial.serial_number} → ${trimmed}`);
     } else {
       const { error: err } = await client.from("workflow_requests").insert({
@@ -156,7 +158,7 @@ function CorrectionModal({ serial, onClose, onDone, actorId }: {
         requested_by: actorId,
         payload: { serial_id: serial.id, serial_number: serial.serial_number, new_part_id: newPart!.id, new_part_number: newPart!.part_number, new_part_name: newPart!.part_name, reason: reason.trim() },
       });
-      if (err) { setError(err.message); setSubmitting(false); return; }
+      if (err) { setError(friendlyError(err)); setSubmitting(false); return; }
       onDone(`Part reassignment submitted: ${serial.serial_number} → ${newPart!.part_number}`);
     }
   }
@@ -372,7 +374,7 @@ export function CorrectionsPage() {
       }));
     }
     if (error) {
-      setApproveError(`RPC error: ${error.message}`);
+      setApproveError(`RPC error: ${friendlyError(error)}`);
     } else {
       const { error: updateErr } = await client.from("workflow_requests")
         .update({ status: "approved", reviewed_by: actorId, reviewed_at: new Date().toISOString() })
@@ -394,7 +396,6 @@ export function CorrectionsPage() {
   }
 
   const statusColor = (s: string) => s === "in_stock" ? GREEN : s === "transferred" ? BLUE : MUTED;
-  const { widths: hw, onResizeStart: hResize } = useResizableColumns([150, 150, 110, null, 130, 150]);
   const histTableRef = useTableResize();
 
   return (
@@ -502,10 +503,8 @@ export function CorrectionsPage() {
                   style={{ fontSize: 12, fontWeight: 600, padding: "5px 14px", borderRadius: 6, border: "none", background: BLUE, color: "#fff", cursor: approvingId === req.id ? "not-allowed" : "pointer", opacity: approvingId === req.id ? 0.5 : 1, flexShrink: 0 }}>
                   {approvingId === req.id ? "…" : "Approve"}
                 </button>
-                <button type="button" onClick={() => void handleReject(req.id)}
-                  style={{ fontSize: 12, fontWeight: 600, padding: "5px 14px", borderRadius: 6, border: `1px solid ${BORDER}`, background: "#fff", color: MUTED, cursor: "pointer", flexShrink: 0 }}>
-                  Reject
-                </button>
+                <DangerAction label="Reject" confirmLabel="Reject" description="Reject this correction?"
+                  onConfirm={() => void handleReject(req.id)} />
               </div>
             ))}
           </div>
@@ -517,15 +516,15 @@ export function CorrectionsPage() {
             <span style={{ fontSize: 13, fontWeight: 600, color: INK }}>Correction history</span>
           </div>
           <div className="table-scroll">
-            <table ref={histTableRef} style={{ tableLayout: "fixed", minWidth: 760 }}>
+            <table ref={histTableRef}>
               <thead>
                 <tr>
-                  <ResizableTh width={hw[0]} onResizeStart={hResize(0)}>Old serial</ResizableTh>
-                  <ResizableTh width={hw[1]} onResizeStart={hResize(1)}>New serial</ResizableTh>
-                  <ResizableTh width={hw[2]} onResizeStart={hResize(2)}>Transfer</ResizableTh>
-                  <ResizableTh width={hw[3]} onResizeStart={hResize(3)}>Reason</ResizableTh>
-                  <ResizableTh width={hw[4]} onResizeStart={hResize(4)}>By</ResizableTh>
-                  <ResizableTh width={hw[5]} onResizeStart={hResize(5)}>Date</ResizableTh>
+                  <th>Old serial</th>
+                  <th>New serial</th>
+                  <th>Transfer</th>
+                  <th>Reason</th>
+                  <th>By</th>
+                  <th>Date</th>
                 </tr>
               </thead>
               <tbody>

@@ -1,3 +1,4 @@
+import { friendlyError } from "@/lib/friendlyError";
 import { useTableResize } from "@/components/ResizableColumns";
 import { useState, useEffect } from "react";
 import { ClipboardCheck, Download, Upload, CheckCircle, AlertTriangle } from "lucide-react";
@@ -49,6 +50,7 @@ function parseCountCSV(text: string): { serial_number: string; actual_status: st
 
 export function PhysicalCountPage() {
   const tableRef = useTableResize();
+  const varianceTableRef = useTableResize();
   const { state: authState } = useAuth();
   const actorId = authState.status === "authenticated" ? authState.user.id : null;
 
@@ -211,7 +213,7 @@ export function PhysicalCountPage() {
               <span style={{ fontSize: 12, color: "#6b7a8d" }}>{variance.length} items · {variance.filter((r) => r.variance !== "match").length} discrepancies</span>
             </div>
             <div className="table-scroll" style={{ maxHeight: 400 }}>
-              <table ref={tableRef} style={{ minWidth: 600 }}>
+              <table ref={varianceTableRef}>
                 <thead>
                   <tr>
                     <th>Serial</th>
@@ -248,7 +250,7 @@ export function PhysicalCountPage() {
             <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>Count history</span>
           </div>
           <div className="table-scroll">
-          <table style={{ minWidth: 500 }}>
+          <table ref={tableRef}>
             <thead>
               <tr>
                 <th>Date</th>

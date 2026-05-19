@@ -1,3 +1,4 @@
+import { friendlyError } from "@/lib/friendlyError";
 import { useTableResize } from "@/components/ResizableColumns";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -42,7 +43,7 @@ async function fetchTransfers(): Promise<Transfer[]> {
     .order("created_at", { ascending: false })
     .limit(100);
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(friendlyError(error));
   if (!data) return [];
 
   return data.map((t: any) => ({
@@ -93,7 +94,7 @@ export function TransfersPage() {
       const client = getSupabaseClient();
       if (!client) throw new Error("Not configured");
       const { error } = await client.from("transfers").update({ status }).eq("id", id);
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(friendlyError(error));
     },
     onMutate: async ({ id, status }) => {
       await queryClient.cancelQueries({ queryKey: ["transfers"] });
@@ -109,7 +110,7 @@ export function TransfersPage() {
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["transfers"] }),
   });
 
-  const fetchError = error instanceof Error ? error.message : null;
+  const fetchError = error instanceof Error ? friendlyError(error) : null;
   const filtered = statusFilter === "all" ? transfers : transfers.filter((t) => t.status === statusFilter);
 
   return (
@@ -150,7 +151,7 @@ export function TransfersPage() {
 
         <section className="table-card">
           <div className="table-scroll">
-          <table ref={tableRef} style={{ minWidth: 760 }}>
+          <table ref={tableRef}>
             <thead>
               <tr>
                 <th>Transfer #</th>
@@ -159,7 +160,7 @@ export function TransfersPage() {
                 <th>Status</th>
                 <th>Requested by</th>
                 <th>Date</th>
-                <th style={{ width: 80 }} />
+                <th />
               </tr>
             </thead>
             <tbody>

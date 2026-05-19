@@ -477,20 +477,12 @@ table {
   font-size: 13px;
 }
 
-/* Inventory table needs extra width for all its columns */
-.inventory-shell .table-scroll table {
-  min-width: 1800px;
-}
-
 th,
 td {
   border: 1px solid var(--line);
   padding: 10px 12px;
   background: #f7f7f7;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 0; /* required for text-overflow to work in table-layout:fixed */
 }
 
 th {

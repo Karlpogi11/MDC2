@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTableResize } from "@/components/ResizableColumns";
+import { friendlyError } from "@/lib/friendlyError";
 import { BarChart3, Upload, RefreshCw, TrendingUp } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
@@ -152,7 +153,8 @@ function normalizeSiteCode(raw: string): string {
   const v = raw.trim();
   // Numeric codes: strip leading zeros so "0001272226" → "1272226" matches sites.ship_to_code
   if (/^\d+$/.test(v)) return v.replace(/^0+/, "") || "0";
-  return v.split(/[-_]/)[0].trim().toUpperCase();
+  // Preserve full string — site name matching happens later via shipToSiteMap
+  return v.toUpperCase();
 }
 
 function applyMapping(rows: Record<string, string>[], mapping: ColumnMapping, uploadId: string, sourceType: string, descLookup: Map<string, string>) {
@@ -234,7 +236,7 @@ function MappingModal({ state, onConfirm, onCancel, importing }: { state: Mappin
                     const desc = mapping.description !== NONE ? row[mapping.description] : "";
                     const displayPn = pn || (desc ? `→ "${desc.slice(0, 28)}"` : "—");
                     const qty  = mapping.qty !== NONE ? row[mapping.qty] : "1 (default)";
-                    const site = mapping.site_code !== NONE ? normalizeSiteCode(row[mapping.site_code] ?? "") : "—";
+                    const site = mapping.site_code !== NONE ? (row[mapping.site_code] ?? "—") : "—";
                     const date = mapping.used_at !== NONE ? (row[mapping.used_at]?.slice(0, 10) || "today") : "today";
                     return (
                       <tr key={i} style={{ borderBottom: i < 2 ? `1px solid ${FAINT}` : "none" }}>
@@ -339,6 +341,12 @@ function SeriesChips({ list, selected, onChange }: {
         <>
           <div style={{ position: "fixed", inset: 0, zIndex: 99 }} onClick={() => setOpen(false)} />
           <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 100, background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,.1)", minWidth: 220, maxHeight: 320, overflowY: "auto", padding: "6px 0" }}>
+            {selected.length < list.length && (
+              <button type="button" onClick={() => { onChange([...list]); setOpen(false); }}
+                style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 14px", fontSize: 12, color: BLUE, background: "transparent", border: "none", cursor: "pointer", borderBottom: `1px solid ${BORDER}`, marginBottom: 4 }}>
+                Select all
+              </button>
+            )}
             {selected.length > 0 && (
               <button type="button" onClick={() => { onChange([]); setOpen(false); }}
                 style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 14px", fontSize: 12, color: "#dc2626", background: "transparent", border: "none", cursor: "pointer", borderBottom: `1px solid ${BORDER}`, marginBottom: 4 }}>
@@ -467,24 +475,27 @@ function AreaChart({ data, keys, height = 200 }: {
         return <circle key={k.key} cx={px(data.length-1)} cy={py(val)} r={3} fill={k.color} stroke="#fff" strokeWidth={1.5} />;
       })}
 
-      {/* X labels — year anchors bold+large, month labels small+faded */}
+      {/* X labels — month names, year at Jan */}
       {data.map((d, i) => {
-        const lbl = String(d.month ?? d.site ?? "").slice(0, 7);
-        const isJan = lbl.endsWith("-01");
-        const isLast = i === data.length - 1;
+        const lbl = String(d.month ?? d.site ?? "").slice(0, 7); // "2025-07"
+        const [yr, mo] = lbl.split("-");
+        const isJan = mo === "01";
         const isFirst = i === 0;
-        const dense = data.length > 18;
-        const show = dense ? (isJan || isFirst || isLast) : (i % Math.max(1, Math.ceil(data.length/10)) === 0 || isLast);
+        const isLast = i === data.length - 1;
+        const dense = data.length > 14;
+        const show = dense
+          ? (isJan || isFirst || isLast || i % 3 === 0)
+          : true;
         if (!show) return null;
-        const display = dense && isJan ? lbl.slice(0, 4) : lbl;
+        const monthName = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][parseInt(mo, 10) - 1] ?? mo;
+        const display = (isJan || isFirst) ? `${monthName} ${yr}` : monthName;
         return (
           <g key={i}>
-            {dense && isJan && <line x1={px(i)} x2={px(i)} y1={pad.t+ch} y2={pad.t+ch+4} stroke="#cbd5e1" strokeWidth={1} />}
-            <text x={px(i)} y={height - pad.b + (dense && isJan ? 18 : 15)} textAnchor="middle"
-              fontSize={dense && isJan ? 11 : 9}
-              fontWeight={dense && isJan ? "700" : "400"}
-              fill={dense && isJan ? "#475569" : "#94a3b8"}
-              opacity={isFirst || isLast ? 0.55 : 1}
+            {(isJan && !isFirst) && <line x1={px(i)} x2={px(i)} y1={pad.t + ch} y2={pad.t + ch + 4} stroke="#cbd5e1" strokeWidth={1} />}
+            <text x={px(i)} y={height - pad.b + 15} textAnchor="middle"
+              fontSize={(isJan || isFirst) ? 10 : 9}
+              fontWeight={(isJan || isFirst) ? "600" : "400"}
+              fill={(isJan || isFirst) ? "#475569" : "#94a3b8"}
               fontFamily="system-ui">{display}</text>
           </g>
         );
@@ -506,51 +517,42 @@ function AreaChart({ data, keys, height = 200 }: {
 }
 
 /** Ranked horizontal bar — two-line label: part# + description */
-function RankedBar({ data, height }: { data: { name: string; value: number; label?: string }[]; height?: number }) {
+function RankedBar({ data, height: _height }: { data: { name: string; value: number; label?: string }[]; height?: number }) {
   if (!data.length) return <Empty />;
-  const rowH = 48; // taller rows for two-line labels
-  const H = height ?? data.length * rowH + 8;
-  const labelW = 200;
-  const barW   = W - labelW - 64;
+  const total = data.reduce((s, d) => s + d.value, 0);
   const maxVal = Math.max(...data.map((d) => d.value), 1);
-  const total  = data.reduce((s, d) => s + d.value, 0);
+  const rowH = 50;
+  const labelW = 188;
+  const valW = 52;
+  const svgW = 520;
+  const barW = svgW - labelW - valW - 8;
+  const H = data.length * rowH + 4;
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}>
+    <svg viewBox={`0 0 ${svgW} ${H}`} style={{ width: "100%", display: "block" }}>
       {data.map((d, i) => {
-        const y   = i * rowH + 4;
-        const bw  = Math.max(4, (d.value / maxVal) * barW);
+        const y = i * rowH;
+        const bw = Math.max(3, (d.value / maxVal) * barW);
         const pct = total > 0 ? ((d.value / total) * 100).toFixed(1) : "0";
-        const isTop = i === 0;
-        const barOpacity = isTop ? 1 : Math.max(0.45, 1 - i * 0.07);
-        const textOpacity = isTop ? 1 : Math.max(0.55, 1 - i * 0.06);
-        // part number = d.name, description = d.label (if different)
-        const partNo = d.name;
-        const desc   = d.label && d.label !== d.name ? d.label : null;
+        const desc = d.label && d.label !== d.name ? d.label : null;
+        const displayName = desc ?? d.name;
+        const truncated = displayName.length > 26 ? displayName.slice(0, 26) + "…" : displayName;
         return (
           <g key={i}>
-            {isTop && <rect x={0} y={y} width={W} height={rowH - 2} fill="#f8fafc" rx={4} />}
-            {/* Rank */}
-            <text x={16} y={y + (desc ? 18 : 28)} fontSize={isTop ? 13 : 11} fontWeight="800"
-              fill={isTop ? BLUE : "#cbd5e1"} opacity={isTop ? 1 : 0.6} fontFamily="system-ui">#{i + 1}</text>
-            {/* Part number — monospace, small, muted — only show if description exists */}
-            {desc && <text x={36} y={y + 16} fontSize={10} fill={MUTED} fontFamily="monospace" opacity={textOpacity}>{partNo}</text>}
-            {/* Description — full, dominant */}
-            {desc
-              ? <text x={36} y={y + 30} fontSize={isTop ? 12 : 11} fill={INK} fontWeight={isTop ? "700" : "500"} opacity={textOpacity} fontFamily="system-ui">{desc}</text>
-              : <text x={36} y={y + 26} fontSize={isTop ? 12 : 11} fill={INK} fontWeight={isTop ? "700" : "400"} opacity={textOpacity} fontFamily="monospace">{partNo}</text>
-            }
-            {/* Track */}
-            <rect x={labelW} y={y + 18} width={barW} height={10} fill="#f1f5f9" rx={5} />
-            {/* Bar */}
-            <rect x={labelW} y={y + 18} width={bw} height={10} fill={BLUE} rx={5} opacity={barOpacity} />
-            {/* Value */}
-            <text x={labelW + barW + 8} y={y + 28} fontSize={isTop ? 13 : 11} fontWeight="700"
-              fill={INK} opacity={textOpacity} fontFamily="system-ui">{d.value.toLocaleString()}</text>
-            {/* Pct */}
-            <text x={W - 2} y={y + 28} textAnchor="end" fontSize={9} fill={MUTED}
-              opacity={Math.max(0.4, textOpacity - 0.2)} fontFamily="system-ui">{pct}%</text>
-            <title>{d.name}{desc ? ` — ${desc}` : ""}: {d.value.toLocaleString()} ({pct}%)</title>
+            {/* rank */}
+            <text x={0} y={y + 30} fontSize={10} fontWeight="700" fill="#94a3b8" fontFamily="system-ui">#{i + 1}</text>
+            {/* part number (if has desc) */}
+            {desc && <text x={18} y={y + 17} fontSize={9} fill="#94a3b8" fontFamily="monospace">{d.name}</text>}
+            {/* name */}
+            <text x={18} y={desc ? y + 31 : y + 30} fontSize={11} fontWeight={i < 3 ? "600" : "400"} fill={INK} fontFamily="system-ui">{truncated}</text>
+            {/* track */}
+            <rect x={labelW} y={y + 20} width={barW} height={10} fill="#f1f5f9" rx={3} />
+            {/* bar */}
+            <rect x={labelW} y={y + 20} width={bw} height={10} fill={BLUE} rx={3} />
+            {/* value */}
+            <text x={labelW + barW + 6} y={y + 30} fontSize={11} fontWeight="600" fill={INK} fontFamily="system-ui">{d.value.toLocaleString()}</text>
+            {/* pct */}
+            <text x={svgW} y={y + 30} textAnchor="end" fontSize={9} fill={MUTED} fontFamily="system-ui">{pct}%</text>
           </g>
         );
       })}
@@ -558,42 +560,31 @@ function RankedBar({ data, height }: { data: { name: string; value: number; labe
   );
 }
 
-/** Site breakdown — site name large, bar proportional, value+pct right-aligned */
 function SiteBar({ data }: { data: { name: string; value: number }[] }) {
   if (!data.length) return <Empty />;
   const total = data.reduce((s, d) => s + d.value, 0);
-  const rowH = 40;
-  const H = data.length * rowH + 8;
-  const labelW = 168;
-  const barW = W - labelW - 88;
+  const maxVal = Math.max(...data.map((d) => d.value), 1);
+  const rowH = 38;
+  const labelW = 160;
+  const valW = 52;
+  const svgW = 520;
+  const barW = svgW - labelW - valW - 8;
+  const H = data.length * rowH + 4;
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}>
+    <svg viewBox={`0 0 ${svgW} ${H}`} style={{ width: "100%", display: "block" }}>
       {data.map((d, i) => {
-        const y    = i * rowH + 4;
-        const pct  = total > 0 ? d.value / total : 0;
-        const bw   = Math.max(4, pct * barW);
-        const pctLbl = (pct * 100).toFixed(1) + "%";
-        // Opacity: top site full, rest fade
-        const op = Math.max(0.45, 1 - i * 0.07);
+        const y = i * rowH;
+        const bw = Math.max(3, (d.value / maxVal) * barW);
+        const pct = total > 0 ? ((d.value / total) * 100).toFixed(1) : "0";
+        const name = d.name.length > 22 ? d.name.slice(0, 22) + "…" : d.name;
         return (
           <g key={i}>
-            {/* Site name — larger for top, fades down */}
-            <text x={0} y={y + 24} fontSize={i === 0 ? 13 : 12} fill={INK}
-              fontWeight={i === 0 ? "700" : "400"} opacity={op} fontFamily="system-ui">
-              {d.name.slice(0, 24)}
-            </text>
-            {/* Track */}
-            <rect x={labelW} y={y + 13} width={barW} height={12} fill="#f1f5f9" rx={6} />
-            {/* Bar — single blue, opacity cascade */}
-            <rect x={labelW} y={y + 13} width={bw} height={12} fill={BLUE} rx={6} opacity={op} />
-            {/* Value — bold */}
-            <text x={labelW + barW + 8} y={y + 24} fontSize={11} fontWeight="700"
-              fill={INK} opacity={op} fontFamily="system-ui">{d.value.toLocaleString()}</text>
-            {/* Pct — small, muted */}
-            <text x={W} y={y + 24} textAnchor="end" fontSize={9} fill={MUTED}
-              opacity={Math.max(0.35, op - 0.15)} fontFamily="system-ui">{pctLbl}</text>
-            <title>{d.name}: {d.value.toLocaleString()} ({pctLbl})</title>
+            <text x={0} y={y + 24} fontSize={11} fontWeight={i === 0 ? "600" : "400"} fill={INK} fontFamily="system-ui">{name}</text>
+            <rect x={labelW} y={y + 13} width={barW} height={10} fill="#f1f5f9" rx={3} />
+            <rect x={labelW} y={y + 13} width={bw} height={10} fill={BLUE} rx={3} />
+            <text x={labelW + barW + 6} y={y + 23} fontSize={11} fontWeight="600" fill={INK} fontFamily="system-ui">{d.value.toLocaleString()}</text>
+            <text x={svgW} y={y + 23} textAnchor="end" fontSize={9} fill={MUTED} fontFamily="system-ui">{pct}%</text>
           </g>
         );
       })}
@@ -851,10 +842,8 @@ export function AnalyticsPage() {
     const siteMap  = new Map<string, number>();
 
     for (const r of rows) {
-      // No date filter → group by year; with filter → group by month
-      const m = isFiltered
-        ? (r.month?.slice(0, 7) ?? "?")
-        : (r.month?.slice(0, 4) ?? "?");
+      // Always group by month for the chart
+      const m = r.month?.slice(0, 7) ?? "?";
       monthMap.set(m, (monthMap.get(m) ?? 0) + r.total_qty);
       const ex = partMap.get(r.part_number);
       if (ex) ex.qty += r.total_qty;
@@ -877,7 +866,7 @@ export function AnalyticsPage() {
   async function loadABC() {
     setAbcLoading(true);
     const client = getSupabaseClient(); if (!client) { setAbcLoading(false); return; }
-    let q = client.from("analytics_summary").select("part_number,part_name,total_qty").order("total_qty", { ascending: false }).limit(500);
+    let q = client.from("analytics_by_part").select("part_number,part_name,total_qty").order("total_qty", { ascending: false }).limit(2000);
     if (abcSeries.length === 1) q = q.ilike("part_name", `%${abcSeries[0]}%`);
     else if (abcSeries.length > 1) q = q.or(abcSeries.map((s) => `part_name.ilike.%${s}%`).join(","));
     const { data } = await q;
@@ -906,7 +895,7 @@ export function AnalyticsPage() {
   async function loadVelocity() {
     setVelLoading(true);
     const client = getSupabaseClient(); if (!client) { setVelLoading(false); return; }
-    let q = client.from("analytics_summary").select("part_number,part_name,total_qty,last_used").order("last_used", { ascending: false, nullsFirst: false }).limit(500);
+    let q = client.from("analytics_by_part").select("part_number,part_name,total_qty,last_used").order("last_used", { ascending: false, nullsFirst: false }).limit(2000);
     if (velSeries.length === 1) q = q.ilike("part_name", `%${velSeries[0]}%`);
     else if (velSeries.length > 1) q = q.or(velSeries.map((s) => `part_name.ilike.%${s}%`).join(","));
     const { data } = await q;
@@ -979,19 +968,27 @@ export function AnalyticsPage() {
     const NONE = "__none__";
 
     // Build ship_to_code → site_code lookup so we store site_code, not raw ship-to numbers
-    const { data: siteRows } = await client.from("sites").select("site_code, ship_to_code");
+    const { data: siteRows } = await client.from("sites").select("site_code, site_name, ship_to_code");
     const shipToSiteMap = new Map<string, string>();
-    for (const s of (siteRows ?? []) as { site_code: string; ship_to_code: string | null }[]) {
-      if (s.ship_to_code) shipToSiteMap.set(s.ship_to_code, s.site_code);
+    for (const s of (siteRows ?? []) as { site_code: string; site_name: string; ship_to_code: string | null }[]) {
+      // Exact site_code match
+      shipToSiteMap.set(s.site_code.toUpperCase(), s.site_code);
+      // ship_to numeric code
+      if (s.ship_to_code) shipToSiteMap.set(s.ship_to_code.replace(/^0+/, "") || "0", s.site_code);
+      // Full site_name match (e.g. "MOBILECARE - THE PODIUM")
+      shipToSiteMap.set(s.site_name.toUpperCase().trim(), s.site_code);
+      // Partial: last segment after " - " (e.g. "THE PODIUM")
+      const parts = s.site_name.split(/\s*-\s*/);
+      if (parts.length > 1) shipToSiteMap.set(parts[parts.length - 1].toUpperCase().trim(), s.site_code);
     }
 
     const descLookup = new Map<string, string>();
     if (mapping.description !== NONE) {
       const descs = [...new Set(rows.map((r) => (r[mapping.description] ?? "").trim()).filter(Boolean))];
-      for (let i = 0; i < descs.length; i += 100) {
-        const { data: parts } = await client.from("parts").select("part_number,part_name").in("part_name", descs.slice(i, i + 100));
+      const chunks = Array.from({ length: Math.ceil(descs.length / 100) }, (_, i) => descs.slice(i * 100, i * 100 + 100));
+      const results = await Promise.all(chunks.map((chunk) => client.from("parts").select("part_number,part_name").in("part_name", chunk)));
+      for (const { data: parts } of results)
         for (const p of (parts ?? []) as { part_number: string; part_name: string }[]) descLookup.set(p.part_name.toLowerCase(), p.part_number);
-      }
     }
     const { data: upload, error: ue } = await client.from("analytics_uploads").insert({ source_type: sourceType, file_name: mappingState.file.name, file_path: "", uploaded_by: actorId, row_count: rows.length, status: "processing" }).select("id").single();
     if (ue || !upload) { setImportResult({ added: 0, skipped: 0, errors: [ue?.message ?? "Upload failed."] }); setImporting(false); setMappingState(null); return; }
@@ -999,15 +996,32 @@ export function AnalyticsPage() {
     const normalized = applyMapping(rows, mapping, upload.id, sourceType, descLookup)
       .map((r) => ({
         ...r,
-        // Resolve ship_to number → site_code so analytics always uses site codes
-        // Strip leading zeros to match sites.ship_to_code format
-        site_code: r.site_code ? (shipToSiteMap.get(r.site_code.replace(/^0+/, "") || "0") ?? shipToSiteMap.get(r.site_code) ?? r.site_code) : null,
+        // Resolve location name / ship_to number → site_code
+        // Try: exact full string → last segment after " - " → numeric strip → raw
+        site_code: r.site_code ? (() => {
+          const raw = r.site_code.trim();
+          const upper = raw.toUpperCase();
+          if (shipToSiteMap.has(upper)) return shipToSiteMap.get(upper)!;
+          const lastSeg = upper.split(/\s*-\s*/).pop()?.trim() ?? "";
+          if (lastSeg && shipToSiteMap.has(lastSeg)) return shipToSiteMap.get(lastSeg)!;
+          const stripped = raw.replace(/^0+/, "") || "0";
+          return shipToSiteMap.get(stripped) ?? shipToSiteMap.get(raw) ?? raw;
+        })() : null,
       }));
     const errors: string[] = []; let added = 0;
-    for (let i = 0; i < normalized.length; i += 500) {
-      const { error } = await client.from("analytics_rows").insert(normalized.slice(i, i + 500));
-      if (error) errors.push(error.message); else added += Math.min(500, normalized.length - i);
+    // Insert all chunks in parallel (max 5 concurrent to avoid overwhelming the DB)
+    const chunks = Array.from({ length: Math.ceil(normalized.length / 500) }, (_, i) => normalized.slice(i * 500, i * 500 + 500));
+    const CONCURRENCY = 5;
+    for (let i = 0; i < chunks.length; i += CONCURRENCY) {
+      const batch = chunks.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(batch.map((chunk) => client.from("analytics_rows").insert(chunk)));
+      for (const { error } of results) {
+        if (error) errors.push(friendlyError(error));
+        else added += 500;
+      }
+      if (errors.length) break;
     }
+    added = Math.min(added, normalized.length);
     await client.from("analytics_uploads").update({ status: errors.length ? "error" : "done", row_count: added, error_message: errors[0] ?? null }).eq("id", upload.id);
     setImportResult({ added, skipped: rows.length - normalized.length, errors });
 
@@ -1180,7 +1194,7 @@ export function AnalyticsPage() {
               </div>
             )}
 
-            <Panel title={demandData?.isFiltered ? "Monthly Repair Volume" : "Annual Repair Volume"} subtitle={demandData?.isFiltered ? "Parts consumed per month" : "Parts consumed per year — select a date range for monthly view"}>
+            <Panel title="Monthly Repair Volume" subtitle="Parts consumed per month">
               {demandLoading ? <Spinner /> : !demandData ? <Empty msg="Select filters and click Run Analysis." /> : !demandData.monthly.length ? <Empty msg="No data for selected filters." /> : (
                 <AreaChart data={demandData.monthly.map((d) => ({ month: d.month, qty: d.qty }))} keys={[{ key: "qty", label: "Parts used", color: BLUE }]} height={220} />
               )}
@@ -1240,13 +1254,21 @@ export function AnalyticsPage() {
             {abcData && (
               <Panel title="Part Classification List" noPad>
                 <div className="table-scroll">
-                  <table ref={abcTableRef} style={{ tableLayout: "fixed", minWidth: 560 }}>
+                  <table ref={abcTableRef}>
+                    <thead>
+                      <tr>
+                        <th>Tier</th>
+                        <th>Part number</th>
+                        <th>Part name</th>
+                        <th className="num">Total qty</th>
+                      </tr>
+                    </thead>
                     <tbody>
-                      {abcData.rows.slice(0, 100).map((r, i) => {
+                      {Array.from(new Map(abcData.rows.map((r) => [r.part_number, r])).values()).slice(0, 100).map((r) => {
                         const color = r.tier === "A" ? GREEN : r.tier === "B" ? BLUE : SLATE;
                         const bg    = r.tier === "A" ? "#f0fdf4" : r.tier === "B" ? BLUE_LIGHT : FAINT;
                         return (
-                          <tr key={i}>
+                          <tr key={r.part_number}>
                             <td><span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 4, background: bg, color }}>{r.tier}</span></td>
                             <td style={{ fontFamily: "monospace", fontSize: 12, color: BLUE }}>{r.part_number}</td>
                             <td style={{ overflow: "hidden", textOverflow: "ellipsis", color: MUTED }}>{r.part_name ?? "—"}</td>
@@ -1298,12 +1320,21 @@ export function AnalyticsPage() {
               <Panel title="Part Velocity Detail" noPad>
                 <div className="table-scroll">
                   <table ref={velTableRef} style={{ tableLayout: "fixed", minWidth: 560 }}>
+                    <thead>
+                      <tr>
+                        <th>Status</th>
+                        <th>Part #</th>
+                        <th>Description</th>
+                        <th className="num">Qty Used</th>
+                        <th className="num">Days Since Last</th>
+                      </tr>
+                    </thead>
                     <tbody>
-                      {velData.rows.slice(0, 100).map((r, i) => {
+                      {Array.from(new Map(velData.rows.map((r) => [r.part_number, r])).values()).slice(0, 100).map((r) => {
                         const color = r.category === "fast" ? GREEN : r.category === "slow" ? AMBER : SLATE;
                         const bg    = r.category === "fast" ? "#f0fdf4" : r.category === "slow" ? "#fffbeb" : FAINT;
                         return (
-                          <tr key={i}>
+                          <tr key={r.part_number}>
                             <td><span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 4, background: bg, color }}>{r.category}</span></td>
                             <td style={{ fontFamily: "monospace", fontSize: 12, color: BLUE }}>{r.part_number}</td>
                             <td style={{ overflow: "hidden", textOverflow: "ellipsis", color: MUTED }}>{r.part_name ?? "—"}</td>

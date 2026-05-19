@@ -1,3 +1,4 @@
+import { friendlyError } from "@/lib/friendlyError";
 import { useState, useEffect, type FormEvent } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Plus, X } from "lucide-react";
@@ -185,7 +186,7 @@ export function TransferNewPage() {
 
       navigate(`/transfers`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create transfer.");
+      setError(err instanceof Error ? friendlyError(err) : "Failed to create transfer.");
       setSubmitting(false);
     }
   }

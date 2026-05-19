@@ -1,4 +1,6 @@
+import { friendlyError } from "@/lib/friendlyError";
 import { useEffect, useMemo, useState, useCallback, type ReactElement } from "react";
+import { useTableResize } from "@/components/ResizableColumns";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import { AppLayout } from "@/components/AppLayout";
@@ -29,7 +31,7 @@ const STATUS_LABEL: Record<string, string> = {
   consumed: "Consumed", void: "Void",
 };
 
-type SegmentFilter = "all" | "products" | "stocked_out";
+type SegmentFilter = "all" | "in_stock" | "stocked_out";
 
 type SortKey =
   | "partName"
@@ -178,11 +180,11 @@ function ImportHistoryTab() {
   return (
     <section className="table-card">
       <div className="table-scroll">
-        <table style={{ tableLayout: "fixed" as const, minWidth: 700 }}>
+        <table style={{ tableLayout: "fixed" as const, minWidth: 660 }}>
           <colgroup>
-            <col style={{ width: 160 }} /><col style={{ width: 80 }} />
-            <col style={{ width: "auto" }} /><col style={{ width: 80 }} />
-            <col style={{ width: 80 }} /><col style={{ width: 80 }} />
+            <col style={{ width: 160 }} /><col style={{ width: 70 }} />
+            <col style={{ width: "auto" }} /><col style={{ width: 60 }} />
+            <col style={{ width: 60 }} /><col style={{ width: 70 }} />
             <col style={{ width: 140 }} />
           </colgroup>
           <thead>
@@ -224,6 +226,8 @@ function ImportHistoryTab() {
 export function InventoryPage(): ReactElement {
   const [segment, setSegment] = useState<SegmentFilter>("all");
   const [activeTab, setActiveTab] = useState("Inventory");
+  const inventoryTableRef = useTableResize();
+  const serialsTableRef = useTableResize();
 
   // Serial numbers tab state
   const [serials, setSerials] = useState<SerialRow[]>([]);
@@ -305,7 +309,7 @@ export function InventoryPage(): ReactElement {
         error: null,
       });
     } catch (error) {
-      const reason = error instanceof Error ? error.message : "Failed to load inventory";
+      const reason = error instanceof Error ? friendlyError(error) : "Failed to load inventory";
       setState({
         rows: demoInventoryRows,
         source: "demo",
@@ -322,8 +326,8 @@ export function InventoryPage(): ReactElement {
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
     return state.rows.filter((row) => {
-      if (segment === "products" && row.partType !== "product") return false;
-      if (segment === "stocked_out" && row.available > 0) return false; // only show parts with 0 available (all transferred out)
+      if (segment === "in_stock" && row.available <= 0) return false;
+      if (segment === "stocked_out" && row.available > 0) return false;
       if (!q) return true;
       return (
         row.partName.toLowerCase().includes(q) ||
@@ -522,7 +526,7 @@ export function InventoryPage(): ReactElement {
           </section>
           <section className="table-card">
             <div className="table-scroll">
-              <table>
+              <table ref={serialsTableRef}>
                 <thead>
                   <tr>
                     <th>Serial number</th>
@@ -578,10 +582,10 @@ export function InventoryPage(): ReactElement {
             </button>
             <button
               type="button"
-              className={segment === "products" ? "segment" : "segment ghost"}
-              onClick={() => setSegment("products")}
+              className={segment === "in_stock" ? "segment" : "segment ghost"}
+              onClick={() => setSegment("in_stock")}
             >
-              Products
+              In Stock
             </button>
             <button
               type="button"
@@ -704,7 +708,7 @@ export function InventoryPage(): ReactElement {
 
         <section className="table-card">
           <div className="table-scroll">
-            <table>
+            <table ref={inventoryTableRef}>
               <thead>
                 <tr>
                   <th className="cell-check">

@@ -1,6 +1,8 @@
+import { friendlyError } from "@/lib/friendlyError";
 import { useState, useEffect, type FormEvent } from "react";
 import { Plus, Save, Check, X } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase";
+import { useTableResize } from "@/components/ResizableColumns";
 import { CSVDropZone } from "@/components/CSVDropZone";
 import { ImportResult } from "@/components/ImportResult";
 import { PartNumberInput } from "@/components/PartNumberInput";
@@ -71,7 +73,12 @@ export function PartsTab() {
   const [editCost, setEditCost] = useState("");
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [importResult, setImportResult] = useState<{ added: number; skipped: number; errors: string[] } | null>(null);
+  const [importResult, setImportResult] = useState<{ added: number; updated?: number; skipped: number; errors: string[] } | null>(null);
+
+  const [csvRows, setCsvRows] = useState<Record<string, string>[] | null>(null);
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [colMap, setColMap] = useState<Record<string, string>>({});
+  const [importMode, setImportMode] = useState<"merge" | "deactivate_unlisted" | "replace_all">("merge");
 
   async function load() {
     const client = getSupabaseClient();
@@ -84,19 +91,82 @@ export function PartsTab() {
   useEffect(() => { void load(); }, []);
 
   async function handleImport(file: File) {
-    setImporting(true); setImportResult(null);
     const text = await file.text();
     const rows = parseCSV(text);
+    if (!rows.length) return;
+    const headers = Object.keys(rows[0]);
+    // Auto-guess mapping
+    const guess = (hints: string[]) => headers.find((h) => hints.some((hint) => h.includes(hint))) ?? "";
+    setCsvRows(rows);
+    setCsvHeaders(headers);
+    setColMap({
+      part_number: guess(["part_number", "part_no", "partno", "number"]),
+      part_name:   guess(["part_name", "name", "description", "desc"]),
+      category:    guess(["cat"]),
+      average_cost: guess(["cost", "price"]),
+    });
+    setImportResult(null);
+  }
+
+  async function handleConfirmImport() {
+    if (!csvRows || !colMap.part_number || !colMap.part_name) return;
+    setImporting(true);
     const client = getSupabaseClient();
-    if (!client || rows.length === 0) { setImporting(false); return; }
-    const { data, error } = await client.rpc("batch_upsert_parts", { p_rows: rows });
-    if (error) {
-      setImportResult({ added: 0, skipped: 0, errors: [error.message] });
+    if (!client) { setImporting(false); return; }
+
+    const valid = csvRows
+      .filter((r) => r[colMap.part_number]?.trim() && r[colMap.part_name]?.trim())
+      .map((r) => ({
+        part_number:  r[colMap.part_number].trim(),
+        part_name:    r[colMap.part_name].trim(),
+        category:     colMap.category ? r[colMap.category]?.trim() || null : null,
+        average_cost: colMap.average_cost ? parseFloat(r[colMap.average_cost]) || 0 : 0,
+        part_type:    "product",
+      }));
+
+    // Fetch existing part numbers to diff added vs updated
+    const { data: existing } = await client
+      .from("parts")
+      .select("part_number")
+      .in("part_number", valid.map((r) => r.part_number));
+    const existingSet = new Set((existing ?? []).map((r: any) => r.part_number));
+
+    const toAdd    = valid.filter((r) => !existingSet.has(r.part_number));
+    const toUpdate = valid.filter((r) =>  existingSet.has(r.part_number));
+
+    const importedPNs = valid.map((r) => r.part_number);
+
+    if (importMode === "replace_all") {
+      // Upsert all from CSV, then deactivate everything not in this file
+      const { error } = await client.from("parts").upsert(valid, { onConflict: "part_number" });
+      if (error) {
+        setImportResult({ added: 0, updated: 0, skipped: csvRows.length - valid.length, errors: [friendlyError(error)] });
+      } else {
+        const { data: allParts } = await client.from("parts").select("id,part_number");
+        const toDeactivate = (allParts ?? []).filter((p: any) => !importedPNs.includes(p.part_number)).map((p: any) => p.id);
+        if (toDeactivate.length > 0) await client.from("parts").update({ is_active: false }).in("id", toDeactivate);
+        // Ensure imported parts are active
+        await client.from("parts").update({ is_active: true }).in("part_number", importedPNs);
+        setImportResult({ added: toAdd.length, updated: toUpdate.length, skipped: csvRows.length - valid.length, errors: [] });
+      }
     } else {
-      const result = data as { error_count: number; errors: { pn: string; reason: string }[] };
-      const errCount = result.error_count ?? 0;
-      setImportResult({ added: rows.length - errCount, skipped: 0, errors: (result.errors ?? []).map((e) => `${e.pn}: ${e.reason}`) });
+      let errors: string[] = [];
+      if (toAdd.length > 0) {
+        const { error } = await client.from("parts").insert(toAdd);
+        if (error) errors.push(`Insert error: ${friendlyError(error)}`);
+      }
+      if (toUpdate.length > 0) {
+        const { error } = await client.from("parts").upsert(toUpdate, { onConflict: "part_number" });
+        if (error) errors.push(`Update error: ${friendlyError(error)}`);
+      }
+      if (importMode === "deactivate_unlisted" && !errors.length) {
+        const { data: allParts } = await client.from("parts").select("id,part_number").eq("is_active", true);
+        const toDeactivate = (allParts ?? []).filter((p: any) => !importedPNs.includes(p.part_number)).map((p: any) => p.id);
+        if (toDeactivate.length > 0) await client.from("parts").update({ is_active: false }).in("id", toDeactivate);
+      }
+      setImportResult({ added: errors.length ? 0 : toAdd.length, updated: errors.length ? 0 : toUpdate.length, skipped: csvRows.length - valid.length, errors });
     }
+    setCsvRows(null);
     setImporting(false);
     void load();
   }
@@ -110,7 +180,7 @@ export function PartsTab() {
       part_number: pn.trim(), part_name: name.trim(),
       category: category.trim() || null, average_cost: parseFloat(cost) || 0,
     });
-    if (error) { setAddError(error.message); setAdding(false); return; }
+    if (error) { setAddError(friendlyError(error)); setAdding(false); return; }
     setPn(""); setName(""); setCategory(""); setCost("");
     setAddSuccess(true); setTimeout(() => setAddSuccess(false), 2000);
     setAdding(false); void load();
@@ -139,6 +209,7 @@ export function PartsTab() {
     setEditCategory(part.category ?? ""); setEditCost(String(part.average_cost));
   }
 
+  const tableRef = useTableResize();
   const filtered = parts.filter((p) =>
     !search || p.part_number.toLowerCase().includes(search.toLowerCase()) ||
     p.part_name.toLowerCase().includes(search.toLowerCase())
@@ -152,7 +223,91 @@ export function PartsTab() {
   return (
     <div style={{ display: "grid", gap: 20 }}>
       <CSVDropZone onFile={(f) => void handleImport(f)} onTemplate={downloadPartsTemplate} importing={importing} />
-      {importResult && <ImportResult added={importResult.added} skipped={importResult.skipped} errors={importResult.errors} />}
+
+      {/* Column mapping */}
+      {csvRows && (
+        <div style={{ background: "#fff", border: "1px solid #d0d0d0", borderRadius: "var(--radius)", padding: 16 }}>
+          <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 600, color: "#111" }}>
+            Map columns — {csvRows.length} rows detected
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+            {([
+              { field: "part_number", label: "Part number *" },
+              { field: "part_name",   label: "Part name *" },
+              { field: "category",    label: "Category" },
+              { field: "average_cost",label: "Avg cost" },
+            ] as const).map(({ field, label }) => (
+              <div key={field}>
+                <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#666", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</label>
+                <select
+                  value={colMap[field] ?? ""}
+                  onChange={(e) => setColMap((m) => ({ ...m, [field]: e.target.value }))}
+                  style={{ width: "100%", border: "1px solid #d0d0d0", padding: "7px 10px", fontSize: 13, background: "#fff", outline: "none" }}
+                >
+                  <option value="">— skip —</option>
+                  {csvHeaders.map((h) => <option key={h} value={h}>{h}</option>)}
+                </select>
+              </div>
+            ))}
+          </div>
+          {/* Preview table — shows exactly what will be imported */}
+          {colMap.part_number && colMap.part_name && (
+            <div style={{ marginBottom: 12, border: "1px solid #e5e7eb", overflow: "auto", maxHeight: 220 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: "#f9fafb", position: "sticky", top: 0 }}>
+                    <th style={{ padding: "6px 10px", textAlign: "left", fontWeight: 600, color: "#6b7a8d", borderBottom: "1px solid #e5e7eb" }}>Part number</th>
+                    <th style={{ padding: "6px 10px", textAlign: "left", fontWeight: 600, color: "#6b7a8d", borderBottom: "1px solid #e5e7eb" }}>Part name</th>
+                    {colMap.category && <th style={{ padding: "6px 10px", textAlign: "left", fontWeight: 600, color: "#6b7a8d", borderBottom: "1px solid #e5e7eb" }}>Category</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {csvRows.filter(r => r[colMap.part_number]?.trim() && r[colMap.part_name]?.trim()).slice(0, 10).map((r, i) => (
+                    <tr key={i} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                      <td style={{ padding: "5px 10px", fontFamily: "monospace", color: "#0b4fa8" }}>{r[colMap.part_number]}</td>
+                      <td style={{ padding: "5px 10px", color: "#111" }}>{r[colMap.part_name]}</td>
+                      {colMap.category && <td style={{ padding: "5px 10px", color: "#6b7a8d" }}>{r[colMap.category] || "—"}</td>}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div style={{ padding: "6px 10px", fontSize: 11, color: "#9ca3af", borderTop: "1px solid #f3f4f6" }}>
+                Showing first 10 of {csvRows.filter(r => r[colMap.part_number]?.trim() && r[colMap.part_name]?.trim()).length} valid rows
+                {csvRows.length - csvRows.filter(r => r[colMap.part_number]?.trim() && r[colMap.part_name]?.trim()).length > 0 &&
+                  <span style={{ color: "#f59e0b", marginLeft: 8 }}>
+                    · {csvRows.length - csvRows.filter(r => r[colMap.part_number]?.trim() && r[colMap.part_name]?.trim()).length} rows will be skipped (empty part number or name)
+                  </span>
+                }
+              </div>
+            </div>
+          )}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+            {([
+              { value: "merge",               label: "Merge — add new, update existing, keep unlisted",                                    danger: false },
+              { value: "deactivate_unlisted", label: "Deactivate unlisted — same as merge but hides parts not in this file",               danger: false },
+              { value: "replace_all",         label: "Replace all — delete every existing part and re-import from scratch",                danger: true  },
+            ] as const).map(({ value, label, danger }) => (
+              <label key={value} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: danger ? "#b91c1c" : "#374151", cursor: "pointer" }}>
+                <input type="radio" name="importMode" value={value} checked={importMode === value} onChange={() => setImportMode(value)} />
+                {label}
+              </label>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="button" onClick={() => void handleConfirmImport()}
+              disabled={importing || !colMap.part_number || !colMap.part_name}
+              style={{ background: "var(--blue)", color: "#fff", border: "none", padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: (!colMap.part_number || !colMap.part_name) ? 0.5 : 1 }}>
+              {importing ? "Importing…" : `Import ${csvRows.filter(r => r[colMap.part_number]?.trim() && r[colMap.part_name]?.trim()).length} rows`}
+            </button>
+            <button type="button" onClick={() => setCsvRows(null)}
+              style={{ background: "#fff", border: "1px solid #d0d0d0", padding: "8px 14px", fontSize: 13, color: "#666", cursor: "pointer" }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {importResult && <ImportResult added={importResult.added} updated={importResult.updated} skipped={importResult.skipped} errors={importResult.errors} />}
 
       {/* Add form */}
       <div style={{ background: "#fff", border: "1px solid #d0d0d0", borderRadius: "var(--radius)", overflow: "hidden" }}>
@@ -205,15 +360,7 @@ export function PartsTab() {
             style={{ border: "1px solid #d0d0d0", borderRadius: "var(--radius)", padding: "5px 10px", fontSize: 12, outline: "none", width: 220, fontFamily: "inherit" }} />
         </div>
         <div className="table-scroll">
-          <table style={{ tableLayout: "fixed", minWidth: 800 }}>
-            <colgroup>
-              <col style={{ width: 130 }} />
-              <col style={{ width: "auto" }} />
-              <col style={{ width: 140 }} />
-              <col style={{ width: 100 }} />
-              <col style={{ width: 80 }} />
-              <col style={{ width: 150 }} />
-            </colgroup>
+          <table ref={tableRef}>
             <thead>
               <tr>
                 <th>Part number</th>
@@ -291,6 +438,9 @@ export function PartsTab() {
           </table>
         </div>
       </div>
+
+
     </div>
   );
 }
+

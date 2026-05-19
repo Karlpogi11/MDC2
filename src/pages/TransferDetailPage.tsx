@@ -1,4 +1,6 @@
+import { friendlyError } from "@/lib/friendlyError";
 import { useTableResize } from "@/components/ResizableColumns";
+import { DangerAction } from "@/components/DangerAction";
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowRight, Package, CheckCircle, Truck, Check, X, FileText } from "lucide-react";
@@ -148,7 +150,7 @@ export function TransferDetailPage() {
       // Download
       doc.save(`${transfer.transfer_no}-packing-list.pdf`);
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "PDF generation failed.");
+      setActionError(err instanceof Error ? friendlyError(err) : "PDF generation failed.");
     }
     setGeneratingPDF(false);
   }
@@ -292,7 +294,7 @@ export function TransferDetailPage() {
             return { ok: true, packingListAttached: emailResult?.packing_list_attached ?? false, pdfError: emailResult?.pdf_error ?? null, smtpAttachmentError: emailResult?.smtp_attachment_error ?? null };
           }
         } catch (err) {
-          detail = err instanceof Error ? err.message : String(err);
+          detail = err instanceof Error ? friendlyError(err) : String(err);
         }
 
         if (attempt < attempts) {
@@ -388,7 +390,7 @@ export function TransferDetailPage() {
       if (awb?.trim()) update.awb = awb.trim();
     }
     const { error: err } = await client.from("transfers").update(update).eq("id", transfer.id);
-    if (err) { setActionError(err.message); setAdvancing(false); return; }
+    if (err) { setActionError(friendlyError(err)); setAdvancing(false); return; }
 
     // When dispatched (in_transit), generate PDF first so email attachment uses the canonical layout
     if (next === "in_transit") {
@@ -434,7 +436,7 @@ export function TransferDetailPage() {
     setCancelling(true); setActionError(null);
     const client = getSupabaseClient()!;
     const { error: err } = await client.from("transfers").update({ status: "cancelled" }).eq("id", transfer.id);
-    if (err) setActionError(err.message);
+    if (err) setActionError(friendlyError(err));
     else await load(true);
     setCancelling(false);
   }
@@ -479,10 +481,8 @@ export function TransferDetailPage() {
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
               {/* Secondary */}
               {(transfer.status === "draft" || transfer.status === "packed") && (
-                <button type="button" onClick={() => void cancelTransfer()} disabled={cancelling}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", color: "#b91c1c", border: "1px solid #fecaca", borderRadius: "var(--radius)", padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                  <X size={14} /> Cancel
-                </button>
+                <DangerAction label="Cancel transfer" confirmLabel="Yes, cancel" description="This cannot be undone."
+                  onConfirm={() => void cancelTransfer()} busy={cancelling} />
               )}
               {["packed", "received"].includes(transfer.status) && (
                 <button type="button" onClick={() => void generatePDF()} disabled={generatingPDF}
@@ -596,14 +596,7 @@ export function TransferDetailPage() {
               </span>
             </div>
             <div className="table-scroll">
-              <table ref={tableRef} style={{ minWidth: 480 }}>
-                <colgroup>
-                  {transfer.status === "in_transit" && <col style={{ width: 40 }} />}
-                  <col style={{ width: 140 }} />
-                  <col style={{ width: "auto" }} />
-                  <col style={{ width: 120 }} />
-                  <col style={{ width: 60 }} />
-                </colgroup>
+              <table ref={tableRef}>
                 <thead>
                   <tr>
                     {transfer.status === "in_transit" && <th style={{ width: 40 }}></th>}
@@ -739,7 +732,7 @@ export function TransferDetailPage() {
                   setAdvancing(true); setActionError(null);
                   const client = getSupabaseClient()!;
                   const { error: err } = await client.from("transfers").update({ status: "received" }).eq("id", transfer.id);
-                  if (err) { setActionError(err.message); setAdvancing(false); return; }
+                  if (err) { setActionError(friendlyError(err)); setAdvancing(false); return; }
                   const destId = transfer.destination_site ? await getDestSiteId(client, transfer.destination_site.site_code) : undefined;
                   if (destId) {
                     const receivedSerials = transfer.items

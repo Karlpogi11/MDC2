@@ -1,3 +1,4 @@
+import { friendlyError } from "@/lib/friendlyError";
 import { useState, useRef, useEffect, type ChangeEvent, type DragEvent, type FormEvent, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Upload, Download, CheckCircle, XCircle, FileText, X, Plus, ScanLine } from "lucide-react";
@@ -29,8 +30,8 @@ type PreviewRow = {
 type UploadState =
   | { status: "idle" }
   | { status: "selected"; file: File }
-  | { status: "previewing"; file: File; rows: PreviewRow[] }
-  | { status: "uploading" }
+  | { status: "previewing"; file: File; rows: PreviewRow[]; totalRows: number }
+  | { status: "uploading"; totalRows: number }
   | { status: "done"; result: BatchResult }
   | { status: "error"; message: string };
 
@@ -101,10 +102,7 @@ export function StockInPage() {
     const partMap = new Map((existingParts ?? []).map((p: any) => [p.part_number, p.id]));
     const missing = uniqueParts.filter((pn) => !partMap.has(pn));
     if (missing.length > 0) {
-      const { data: newParts } = await client.from("parts")
-        .insert(missing.map((pn) => { const r = serials.find((s) => s.partNumber === pn); return { part_number: pn, part_name: r?.partName || pn }; }))
-        .select("id,part_number");
-      for (const p of newParts ?? []) partMap.set((p as any).part_number, (p as any).id);
+      throw new Error(`Unknown part number${missing.length > 1 ? "s" : ""}: ${missing.join(", ")}. Add them in Config → Parts first.`);
     }
     const { data: batch } = await client.from("stock_in_batches")
       .insert({ source_type: "manual", imported_by: actor, total_rows: serials.length, success_rows: 0, failed_rows: 0 })
@@ -137,15 +135,17 @@ export function StockInPage() {
   const barcodeEnabled = useFeatureFlag("enable_barcode_scanner");
 
   // Parse CSV text into preview rows (first 10 + validation)
-  function parseCSVPreview(text: string): PreviewRow[] {
+  function parseCSVPreview(text: string): { rows: PreviewRow[]; totalRows: number } {
     const lines = text.split(/\r?\n/).filter(Boolean);
-    if (lines.length === 0) return [];
+    if (lines.length === 0) return { rows: [], totalRows: 0 };
     const header = lines[0].toLowerCase().split(",").map((h) => h.trim().replace(/"/g, ""));
     const snIdx = header.findIndex((h) => h.includes("serial"));
     const pnIdx = header.findIndex((h) => h.includes("part"));
     const notesIdx = header.findIndex((h) => h.includes("note"));
+    const dataLines = lines.slice(1);
+    const totalRows = dataLines.filter(Boolean).length;
 
-    return lines.slice(1, 11).map((line, i) => {
+    const rows = dataLines.slice(0, 10).map((line, i) => {
       const cols = line.split(",").map((c) => c.trim().replace(/"/g, ""));
       const serial = snIdx >= 0 ? cols[snIdx] ?? "" : "";
       const part = pnIdx >= 0 ? cols[pnIdx] ?? "" : "";
@@ -155,17 +155,18 @@ export function StockInPage() {
       if (!part) errors.push("missing part number");
       return { row: i + 2, serial_number: serial, part_number: part, notes, valid: errors.length === 0, error: errors.join(", ") || undefined };
     });
+
+    return { rows, totalRows };
   }
 
   async function buildPreview(file: File) {
     if (!file.name.endsWith(".csv")) {
-      // XLSX: skip preview, go straight to selected
       setState({ status: "selected", file });
       return;
     }
     const text = await file.text();
-    const rows = parseCSVPreview(text);
-    setState({ status: "previewing", file, rows });
+    const { rows, totalRows } = parseCSVPreview(text);
+    setState({ status: "previewing", file, rows, totalRows });
   }
 
   // --- Batch draft: each row has serial + part number ---
@@ -223,7 +224,7 @@ export function StockInPage() {
       setDraftList([]);
       setDraftPartNumber(""); setDraftPartName(""); setDraftPartConfirmed(false);
     } catch (err) {
-      const msg = (err instanceof Error ? err.message : "").toLowerCase();
+      const msg = (err instanceof Error ? friendlyError(err) : "").toLowerCase();
       const isNetwork = msg.includes("fetch") || msg.includes("network") || msg.includes("failed") || !navigator.onLine;
       if (isNetwork) {
         // Queue for replay when connection restores
@@ -231,7 +232,7 @@ export function StockInPage() {
         setPendingCount(getQueue().length);
         setDraftError("No connection. Batch saved — will auto-submit when connection restores.");
       } else {
-        setDraftError(err instanceof Error ? err.message : "Batch submit failed.");
+        setDraftError(err instanceof Error ? friendlyError(err) : "Batch submit failed.");
       }
     }
     setSubmitting(false);
@@ -257,33 +258,25 @@ export function StockInPage() {
   async function handleUpload() {
     if (state.status !== "selected" && state.status !== "previewing") return;
     const file = state.file;
-    setState({ status: "uploading" });
+    const totalRows = state.status === "previewing" ? state.totalRows : 0;
+    setState({ status: "uploading", totalRows });
 
     const client = getSupabaseClient();
     if (!client) { setState({ status: "error", message: "Supabase not configured." }); return; }
 
     try {
-      // 1. Upload file to storage
       const path = `stockin/${Date.now()}-${file.name}`;
-      const { error: uploadError } = await client.storage
-        .from("imports-stockin")
-        .upload(path, file);
-
+      const { error: uploadError } = await client.storage.from("imports-stockin").upload(path, file);
       if (uploadError) throw new Error(uploadError.message);
 
-      // 2. Call Edge Function to parse + import
       const { data, error: fnError } = await client.functions.invoke("import-stockin", {
         body: { filePath: path, fileName: file.name },
       });
-
       if (fnError) throw new Error(fnError.message);
 
       setState({ status: "done", result: data as BatchResult });
     } catch (err) {
-      setState({
-        status: "error",
-        message: err instanceof Error ? err.message : "Upload failed.",
-      });
+      setState({ status: "error", message: err instanceof Error ? friendlyError(err) : "Upload failed." });
     }
   }
 
@@ -397,11 +390,16 @@ export function StockInPage() {
                   <button type="button" onClick={reset} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#6b7a8d" }}><X size={16} /></button>
                 </div>
                 <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 600, color: "#374151" }}>
-                  Preview — first {state.rows.length} rows
+                  Preview — first {state.rows.length} of {state.totalRows.toLocaleString()} rows
                   {state.rows.some((r) => !r.valid) && (
-                    <span style={{ marginLeft: 8, color: "#b91c1c" }}>⚠ {state.rows.filter((r) => !r.valid).length} invalid row(s)</span>
+                    <span style={{ marginLeft: 8, color: "#b91c1c" }}>⚠ {state.rows.filter((r) => !r.valid).length} invalid row(s) in preview</span>
                   )}
                 </p>
+                {state.totalRows > 500 && (
+                  <div style={{ marginBottom: 10, padding: "8px 12px", background: "#fef9c3", border: "1px solid #fde68a", borderRadius: 6, fontSize: 12, color: "#92400e" }}>
+                    ⚠ Large file ({state.totalRows.toLocaleString()} rows) — import may take 30–60 seconds. Do not close this tab.
+                  </div>
+                )}
                 <div style={{ border: "1px solid #e5e7eb", borderRadius: 6, overflow: "hidden", overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                     <thead>
@@ -435,7 +433,14 @@ export function StockInPage() {
               <div style={{ textAlign: "center", padding: "32px 0" }}>
                 <div className="circle" style={{ width: 40, height: 40, border: "3px solid #e5e7eb", borderTopColor: "var(--blue)", animation: "spin 0.8s linear infinite", margin: "0 auto 16px" }} />
                 <p style={{ margin: 0, fontSize: 14, color: "#374151", fontWeight: 600 }}>Processing import…</p>
-                <p style={{ margin: "4px 0 0", fontSize: 12, color: "#9ca3af" }}>Validating and inserting rows</p>
+                <p style={{ margin: "4px 0 0", fontSize: 12, color: "#9ca3af" }}>
+                  {state.totalRows > 0 ? `Importing ${state.totalRows.toLocaleString()} rows — this may take a moment` : "Validating and inserting rows"}
+                </p>
+                {state.totalRows > 200 && (
+                  <p style={{ margin: "8px 0 0", fontSize: 12, color: "#a16207", background: "#fef9c3", display: "inline-block", padding: "4px 12px", borderRadius: 8 }}>
+                    Large file — do not close this tab
+                  </p>
+                )}
               </div>
             )}
 

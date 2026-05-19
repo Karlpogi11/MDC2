@@ -89,40 +89,55 @@ Deno.serve(async (req) => {
     const failedRows: { row: number; serial: string; reason: string }[] = [];
     let successCount = 0;
 
+    // Batch-fetch all referenced part numbers in one query
+    const uniquePartNumbers = [...new Set(rows.map((r) => r.part_number))];
+    const { data: partsData } = await client
+      .from("parts")
+      .select("id, part_number")
+      .in("part_number", uniquePartNumbers)
+      .eq("is_active", true);
+    const partMap = new Map((partsData ?? []).map((p: any) => [p.part_number, p.id]));
+
+    // Validate all rows upfront, split into valid/failed
+    const validRows: { serial: string; part_number: string; rowNum: number }[] = [];
     for (let i = 0; i < rows.length; i++) {
-      const { serial, part_number, part_name } = rows[i];
-      try {
-        // Upsert part
-        const { data: part, error: partErr } = await client
-          .from("parts")
-          .upsert({ part_number, part_name: part_name ?? part_number }, { onConflict: "part_number" })
-          .select("id").single();
-        if (partErr || !part) throw new Error(partErr?.message ?? "Part upsert failed");
+      const { serial, part_number } = rows[i];
+      const partId = partMap.get(part_number);
+      if (!partId) {
+        failedRows.push({ row: i + 2, serial, reason: `Part number "${part_number}" not found. Add it in Config → Parts first.` });
+      } else {
+        validRows.push({ serial, part_number, rowNum: i + 2 });
+      }
+    }
 
-        // Insert serial
-        const { data: newSerial, error: serialErr } = await client
-          .from("serial_numbers")
-          .insert({
-            serial_number: serial,
-            part_id: part.id,
-            current_site_id: dcSite.id,
-            status: "in_stock",
-            stock_in_batch_id: batch.id,
-          })
-          .select("id").single();
-        if (serialErr || !newSerial) throw new Error(serialErr?.message ?? "Serial insert failed");
+    // Bulk insert serials
+    if (validRows.length > 0) {
+      const { data: inserted, error: insertErr } = await client
+        .from("serial_numbers")
+        .insert(validRows.map((r) => ({
+          serial_number: r.serial,
+          part_id: partMap.get(r.part_number),
+          current_site_id: dcSite.id,
+          status: "in_stock",
+          stock_in_batch_id: batch.id,
+        })))
+        .select("id, serial_number");
 
-        // Insert stock_in_item
-        await client.from("stock_in_items").insert({
-          batch_id: batch.id,
-          part_id: part.id,
-          serial_id: newSerial.id,
-          quantity: 1,
-        });
-
-        successCount++;
-      } catch (err) {
-        failedRows.push({ row: i + 2, serial, reason: err instanceof Error ? err.message : "Unknown error" });
+      if (insertErr) {
+        // Fall back: mark all as failed
+        for (const r of validRows) failedRows.push({ row: r.rowNum, serial: r.serial, reason: insertErr.message });
+      } else {
+        const insertedMap = new Map((inserted ?? []).map((r: any) => [r.serial_number, r.id]));
+        // Bulk insert stock_in_items for successfully inserted serials
+        const items = validRows
+          .filter((r) => insertedMap.has(r.serial))
+          .map((r) => ({ batch_id: batch.id, part_id: partMap.get(r.part_number), serial_id: insertedMap.get(r.serial), quantity: 1 }));
+        if (items.length > 0) await client.from("stock_in_items").insert(items);
+        successCount = items.length;
+        // Rows that didn't make it into inserted (duplicates etc.)
+        for (const r of validRows) {
+          if (!insertedMap.has(r.serial)) failedRows.push({ row: r.rowNum, serial: r.serial, reason: "Duplicate serial or constraint violation" });
+        }
       }
     }
 

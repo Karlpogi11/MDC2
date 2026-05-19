@@ -48,7 +48,7 @@ async function uploadLogo(file: File): Promise<{ url: string | null; error: stri
 export function ConfigPage() {
   const { state: authState } = useAuth();
   const actorId = authState.status === "authenticated" ? authState.user.id : "";
-  const [tab, setTab] = useState<"branding" | "parts" | "sites" | "system" | "digest" | "webhooks">("branding");
+  const [tab, setTab] = useState<"branding" | "parts" | "sites" | "system" | "digest" | "webhooks" | "danger">("branding");
   const [config, setConfig] = useState<ConfigMap>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
@@ -97,6 +97,8 @@ export function ConfigPage() {
     else { setSaved(configKey); setTimeout(() => setSaved(null), 2000); notifyBrandingUpdated(); }
   }
 
+  const role = authState.status === "authenticated" ? authState.profile.role : null;
+
   const TABS = [
     { key: "branding", label: "Branding" },
     { key: "parts",    label: "Parts" },
@@ -104,6 +106,7 @@ export function ConfigPage() {
     { key: "system",   label: "System" },
     { key: "digest",   label: "Email Digest" },
     { key: "webhooks", label: "Webhooks" },
+    ...(role === "system_admin" ? [{ key: "danger" as const, label: "⚠ Danger Zone" }] : []),
   ] as const;
 
   return (
@@ -200,6 +203,11 @@ export function ConfigPage() {
         {/* Webhooks tab */}
         {tab === "webhooks" && (
           <WebhooksTab actorId={actorId} />
+        )}
+
+        {/* Danger Zone tab */}
+        {tab === "danger" && (
+          <DangerZoneTab role={role} />
         )}
       </main>
     </AppLayout>
@@ -449,6 +457,102 @@ function WebhooksTab({ actorId }: { actorId: string }) {
           ))}
         </Section>
       )}
+    </div>
+  );
+}
+
+function DangerZoneTab({ role }: { role: string | null }) {
+  const [confirm, setConfirm] = useState("");
+  const [running, setRunning] = useState(false);
+  const [done, setDone] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  if (role !== "system_admin") {
+    return (
+      <div style={{ padding: 32, textAlign: "center", color: "#b91c1c", fontSize: 14 }}>
+        Only <strong>system_admin</strong> can access this section.
+      </div>
+    );
+  }
+
+  const TABLES = [
+    "audit_logs", "serial_part_reassignments", "serial_corrections",
+    "packing_lists", "transfer_items", "transfers",
+    "stock_in_items", "stock_in_batches", "serial_numbers",
+    "analytics_rows", "analytics_uploads",
+  ];
+
+  async function handleReset() {
+    if (confirm !== "RESET") return;
+    setRunning(true); setErr(null);
+    const client = getSupabaseClient();
+    if (!client) { setErr("Supabase not configured."); setRunning(false); return; }
+    try {
+      // Delete in FK-safe order
+      for (const table of TABLES) {
+        const { error } = await client.from(table as any).delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        if (error) throw new Error(`Failed on ${table}: ${error.message}`);
+      }
+      setDone(true);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Reset failed.");
+    }
+    setRunning(false);
+  }
+
+  if (done) {
+    return (
+      <div style={{ padding: 32, textAlign: "center" }}>
+        <p style={{ fontSize: 16, fontWeight: 700, color: "#15803d" }}>✓ Test data cleared.</p>
+        <p style={{ fontSize: 13, color: "#6b7a8d" }}>Sites, parts, and user accounts are intact. You're ready for go-live.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "grid", gap: 20 }}>
+      <div style={{ background: "#fff", border: "2px solid #fca5a5", borderRadius: "var(--radius)", overflow: "hidden" }}>
+        <div style={{ padding: "14px 20px", borderBottom: "1px solid #fecaca", background: "#fef2f2" }}>
+          <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#b91c1c" }}>Go-Live Data Reset</h2>
+          <p style={{ margin: "2px 0 0", fontSize: 12, color: "#b91c1c" }}>
+            Permanently deletes all test/sample transactional data. Cannot be undone.
+          </p>
+        </div>
+        <div style={{ padding: 20 }}>
+          <p style={{ margin: "0 0 12px", fontSize: 13, color: "#374151" }}>
+            <strong>Will delete:</strong> all serials, transfers, stock-in batches, corrections, audit logs, analytics data.
+          </p>
+          <p style={{ margin: "0 0 16px", fontSize: 13, color: "#374151" }}>
+            <strong>Will keep:</strong> sites, parts list, user accounts, branding, config.
+          </p>
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 6 }}>
+              Type <code style={{ background: "#f3f4f6", padding: "1px 6px", borderRadius: 4 }}>RESET</code> to confirm
+            </label>
+            <input
+              type="text"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              placeholder="RESET"
+              style={{ border: "1px solid #fca5a5", borderRadius: "var(--radius)", padding: "9px 12px", fontSize: 13, fontFamily: "monospace", outline: "none", width: 200 }}
+            />
+          </div>
+          {err && <p style={{ margin: "0 0 12px", fontSize: 13, color: "#b91c1c" }}>{err}</p>}
+          <button
+            type="button"
+            disabled={confirm !== "RESET" || running}
+            onClick={() => void handleReset()}
+            style={{
+              background: confirm === "RESET" ? "#b91c1c" : "#d1d5db",
+              color: "#fff", border: "none", borderRadius: "var(--radius)",
+              padding: "9px 20px", fontSize: 13, fontWeight: 700,
+              cursor: confirm === "RESET" && !running ? "pointer" : "not-allowed",
+            }}
+          >
+            {running ? "Clearing data…" : "Clear all test data"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

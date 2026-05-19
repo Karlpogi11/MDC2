@@ -1,4 +1,6 @@
+import { friendlyError } from "@/lib/friendlyError";
 import { useTableResize } from "@/components/ResizableColumns";
+import { DangerAction } from "@/components/DangerAction";
 import { useState, useEffect, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Boxes, UserPlus, Check, X } from "lucide-react";
@@ -75,7 +77,7 @@ export function UsersPage() {
     });
 
     if (error || data?.error) {
-      setInviteError(data?.error ?? error?.message ?? "Invite failed.");
+      setInviteError(data?.error ?? friendlyError(error) ?? "Invite failed.");
       setInviting(false);
       return;
     }
@@ -98,7 +100,7 @@ export function UsersPage() {
       .update({ is_active: !user.is_active })
       .eq("id", user.id);
 
-    if (error) { setActionError(error.message); }
+    if (error) { setActionError(friendlyError(error)); }
     else { setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, is_active: !u.is_active } : u)); }
     setTogglingId(null);
   }
@@ -208,7 +210,7 @@ export function UsersPage() {
           )}
 
           <div className="table-scroll">
-          <table ref={tableRef} style={{ minWidth: 640 }}>
+          <table ref={tableRef}>
             <thead>
               <tr>
                 <th>Name</th>
@@ -216,7 +218,7 @@ export function UsersPage() {
                 <th>Email</th>
                 <th>Role</th>
                 <th>Status</th>
-                <th style={{ width: 100 }} />
+                <th />
               </tr>
             </thead>
             <tbody>
@@ -251,19 +253,13 @@ export function UsersPage() {
                   </td>
                   <td>
                     {user.id !== currentUserId && (
-                      <button
-                        type="button"
-                        disabled={togglingId === user.id}
-                        onClick={() => void toggleActive(user)}
-                        style={{
-                          border: "1px solid var(--line)", background: "#fff",
-                          color: user.is_active ? "#b91c1c" : "#15803d",
-                          fontSize: 12, fontWeight: 600, padding: "5px 12px", cursor: "pointer",
-                          opacity: togglingId === user.id ? 0.6 : 1,
-                        }}
-                      >
-                        {togglingId === user.id ? "…" : user.is_active ? "Deactivate" : "Activate"}
-                      </button>
+                      user.is_active
+                        ? <DangerAction label="Deactivate" confirmLabel="Deactivate" description={`Deactivate ${user.full_name ?? user.username ?? "user"}?`}
+                            onConfirm={() => void toggleActive(user)} busy={togglingId === user.id} />
+                        : <button type="button" disabled={togglingId === user.id} onClick={() => void toggleActive(user)}
+                            style={{ border: "1px solid var(--line)", background: "#fff", color: "#15803d", fontSize: 12, fontWeight: 600, padding: "5px 12px", cursor: "pointer" }}>
+                            {togglingId === user.id ? "…" : "Activate"}
+                          </button>
                     )}
                   </td>
                 </tr>

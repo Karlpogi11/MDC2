@@ -1,11 +1,11 @@
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useRef } from "react";
 
 /**
- * useTableResize — Notion/Linear/GitHub pattern:
- * - Drag handle on right edge of each <th>
- * - Blue ghost line spans full table height during drag
- * - Only dragged column resizes; table grows freely (scroll container handles overflow)
- * - Widths locked from actual rendered widths on first init
+ * useTableResize
+ * - No upfront width locking: table stays auto-layout so columns fit content naturally
+ * - On first drag: snapshot actual rendered widths → lock into colgroup → fixed layout
+ * - Only the dragged column changes width; table total width updates accordingly
+ * - Blue ghost line during drag
  */
 export function useTableResize() {
   const tableRef = useRef<HTMLTableElement>(null);
@@ -14,30 +14,43 @@ export function useTableResize() {
     const table = tableRef.current;
     if (!table) return;
 
-    // Ghost line — positioned relative to scroll container
-    const ghost = document.createElement("div");
-    ghost.style.cssText = [
-      "position:absolute", "top:0", "width:2px", "background:#2563eb",
-      "opacity:0", "pointer-events:none", "z-index:100", "transition:opacity .08s",
-    ].join(";");
     const container = table.parentElement!;
     if (getComputedStyle(container).position === "static") container.style.position = "relative";
+
+    const ghost = document.createElement("div");
+    ghost.style.cssText =
+      "position:absolute;top:0;width:2px;background:#2563eb;opacity:0;pointer-events:none;z-index:100;transition:opacity .08s";
     container.appendChild(ghost);
+
+    let locked = false;
+
+    function getCols() {
+      let cg = table!.querySelector("colgroup");
+      if (!cg) { cg = document.createElement("colgroup"); table!.prepend(cg); }
+      const ths = Array.from(table!.querySelectorAll("thead th")) as HTMLTableCellElement[];
+      while (cg.children.length < ths.length) cg.appendChild(document.createElement("col"));
+      while (cg.children.length > ths.length) cg.removeChild(cg.lastChild!);
+      return { cols: Array.from(cg.children) as HTMLElement[], ths };
+    }
+
+    function lock() {
+      if (locked) return;
+      locked = true;
+      const { cols, ths } = getCols();
+      // Snapshot natural rendered widths (table is still auto-layout here)
+      ths.forEach((th, i) => { cols[i].style.width = th.offsetWidth + "px"; });
+      table!.style.tableLayout = "fixed";
+      table!.style.width = cols.reduce((s, c) => s + parseInt(c.style.width || "0"), 0) + "px";
+    }
+
+    function totalWidth() {
+      const cols = Array.from(table!.querySelectorAll("colgroup col")) as HTMLElement[];
+      return cols.reduce((s, c) => s + parseInt(c.style.width || "0"), 0);
+    }
 
     function init() {
       const ths = Array.from(table!.querySelectorAll("thead th")) as HTMLTableCellElement[];
       if (!ths.length) return;
-
-      // Build colgroup if missing
-      let cg = table!.querySelector("colgroup");
-      if (!cg) { cg = document.createElement("colgroup"); table!.prepend(cg); }
-      while (cg.children.length < ths.length) cg.appendChild(document.createElement("col"));
-      while (cg.children.length > ths.length) cg.removeChild(cg.lastChild!);
-      const cols = Array.from(cg.children) as HTMLElement[];
-
-      // Snapshot actual rendered widths → lock into cols → enable fixed layout
-      ths.forEach((th, i) => { if (!cols[i].style.width) cols[i].style.width = th.offsetWidth + "px"; });
-      table!.style.tableLayout = "fixed";
 
       ths.forEach((th, i) => {
         if (th.dataset.resizable) return;
@@ -45,39 +58,45 @@ export function useTableResize() {
         th.style.position = "relative";
         th.style.overflow = "hidden";
         th.style.whiteSpace = "nowrap";
+        th.style.textOverflow = "ellipsis";
 
         const handle = document.createElement("div");
-        handle.style.cssText = "position:absolute;right:0;top:0;bottom:0;width:8px;cursor:col-resize;z-index:10";
-        // Visual indicator line on the handle
+        handle.style.cssText =
+          "position:absolute;right:0;top:0;bottom:0;width:8px;cursor:col-resize;z-index:10";
         const line = document.createElement("div");
-        line.style.cssText = "position:absolute;right:2px;top:20%;bottom:20%;width:1px;background:#d1d5db";
+        line.style.cssText =
+          "position:absolute;right:2px;top:20%;bottom:20%;width:1px;background:#d1d5db";
         handle.appendChild(line);
         th.appendChild(handle);
 
         handle.addEventListener("mousedown", (e) => {
           e.preventDefault();
           e.stopPropagation();
+
+          // Lock on first drag — snapshot content-fitted widths
+          lock();
+
+          const cols = Array.from(table!.querySelectorAll("colgroup col")) as HTMLElement[];
           const startX   = e.clientX;
           const startW   = th.offsetWidth;
           const contRect = container.getBoundingClientRect();
 
-          // Show ghost at current position
           ghost.style.height  = table!.offsetHeight + "px";
           ghost.style.left    = (e.clientX - contRect.left + container.scrollLeft) + "px";
           ghost.style.opacity = "1";
-          document.body.style.cursor = "col-resize";
+          document.body.style.cursor     = "col-resize";
           document.body.style.userSelect = "none";
 
           function onMove(ev: MouseEvent) {
-            const delta = ev.clientX - startX;
-            const newW  = Math.max(60, startW + delta);
+            const newW = Math.max(40, startW + ev.clientX - startX);
             cols[i].style.width = newW + "px";
-            ghost.style.left = (ev.clientX - contRect.left + container.scrollLeft) + "px";
+            table!.style.width  = totalWidth() + "px";
+            ghost.style.left    = (ev.clientX - contRect.left + container.scrollLeft) + "px";
           }
 
           function onUp() {
-            ghost.style.opacity = "0";
-            document.body.style.cursor = "";
+            ghost.style.opacity            = "0";
+            document.body.style.cursor     = "";
             document.body.style.userSelect = "";
             window.removeEventListener("mousemove", onMove);
             window.removeEventListener("mouseup", onUp);
@@ -92,41 +111,22 @@ export function useTableResize() {
     init();
 
     const observer = new MutationObserver(() => {
-      const uninit = Array.from(table.querySelectorAll("thead th"))
-        .some((th) => !(th as HTMLElement).dataset.resizable);
-      if (uninit) init();
+      // Data loaded into tbody → reset lock so columns re-fit content on next drag
+      locked = false;
+      table!.style.tableLayout = "";
+      table!.style.width = "";
+      const cg = table!.querySelector("colgroup");
+      if (cg) Array.from(cg.children).forEach((c) => ((c as HTMLElement).style.width = ""));
+      Array.from(table!.querySelectorAll("thead th")).forEach(
+        (th) => delete (th as HTMLElement).dataset.resizable
+      );
+      init();
     });
-    observer.observe(table, { childList: true, subtree: false });
+    const tbody = table.querySelector("tbody");
+    if (tbody) observer.observe(tbody, { childList: true });
 
     return () => { observer.disconnect(); ghost.remove(); };
   }, []);
 
   return tableRef;
-}
-
-export { ResizableTh } from "./ResizableTh";
-
-export function useResizableColumns(initial: (number | null)[]) {
-  const [widths, setWidths] = useState<(number | null)[]>(initial);
-  const dragging = useRef<{ idx: number; startX: number; startW: number } | null>(null);
-
-  const onResizeStart = useCallback((idx: number) => (e: React.MouseEvent) => {
-    e.preventDefault();
-    const th = (e.currentTarget as HTMLElement).parentElement!;
-    dragging.current = { idx, startX: e.clientX, startW: th.offsetWidth };
-    function onMove(ev: MouseEvent) {
-      if (!dragging.current) return;
-      const newW = Math.max(60, dragging.current.startW + ev.clientX - dragging.current.startX);
-      setWidths(prev => prev.map((w, i) => i === dragging.current!.idx ? newW : w));
-    }
-    function onUp() {
-      dragging.current = null;
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    }
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-  }, []);
-
-  return { widths, onResizeStart };
 }
