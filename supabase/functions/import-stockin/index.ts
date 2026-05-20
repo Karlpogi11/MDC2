@@ -128,21 +128,24 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Bulk insert serials
+    // Bulk insert serials inside a transaction via RPC
+    // If any insert fails, the entire batch rolls back — no partial commits
     if (validRows.length > 0) {
-      const { data: inserted, error: insertErr } = await client
-        .from("serial_numbers")
-        .insert(validRows.map((r) => ({
-          serial_number: r.serial,
-          part_id: partMap.get(r.part_number),
-          current_site_id: dcSite.id,
-          status: "in_stock",
-          stock_in_batch_id: batch.id,
-        })))
-        .select("id, serial_number");
+      const serialInserts = validRows.map((r) => ({
+        serial_number: r.serial,
+        part_id: partMap.get(r.part_number),
+        current_site_id: dcSite.id,
+        status: "in_stock",
+        stock_in_batch_id: batch.id,
+      }));
+
+      const { data: inserted, error: insertErr } = await client.rpc("bulk_insert_serials", {
+        p_batch_id: batch.id,
+        p_serials: serialInserts,
+      });
 
       if (insertErr) {
-        // Fall back: mark all as failed
+        // Entire batch failed — mark all valid rows as failed
         for (const r of validRows) failedRows.push({ row: r.rowNum, serial: r.serial, reason: insertErr.message });
       } else {
         const insertedMap = new Map((inserted ?? []).map((r: any) => [r.serial_number, r.id]));
@@ -152,7 +155,6 @@ Deno.serve(async (req) => {
           .map((r) => ({ batch_id: batch.id, part_id: partMap.get(r.part_number), serial_id: insertedMap.get(r.serial), quantity: 1 }));
         if (items.length > 0) await client.from("stock_in_items").insert(items);
         successCount = items.length;
-        // Rows that didn't make it into inserted (duplicates etc.)
         for (const r of validRows) {
           if (!insertedMap.has(r.serial)) failedRows.push({ row: r.rowNum, serial: r.serial, reason: "Duplicate serial or constraint violation" });
         }

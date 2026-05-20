@@ -147,7 +147,7 @@ export function TransferNewPage() {
       }
 
       // Resolve serials and parts, insert transfer_items
-      const itemInserts = [];
+      const itemInserts: Record<string, unknown>[] = [];
       for (const line of validLines) {
         const sn = line.serial_number.trim();
         const pn = line.part_number.trim();
@@ -178,7 +178,9 @@ export function TransferNewPage() {
         }
 
         if (!partId) continue;
-        itemInserts.push({ transfer_id: transfer.id, part_id: partId, serial_id: serialId, qty: line.qty });
+        const item: Record<string, unknown> = { transfer_id: transfer.id, part_id: partId, qty: line.qty };
+        if (serialId) item.serial_id = serialId;
+        itemInserts.push(item);
       }
 
       const { error: itemErr } = await client.from("transfer_items").insert(itemInserts);

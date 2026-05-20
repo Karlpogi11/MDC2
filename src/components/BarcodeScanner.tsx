@@ -14,6 +14,11 @@ export function BarcodeScanner({ onScan, onClose }: Props) {
   const [scanning, setScanning] = useState(false);
 
   useEffect(() => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setError("Camera not available. Make sure the app is served over HTTPS and camera permission is granted.");
+      return;
+    }
+
     const reader = new BrowserMultiFormatReader();
     readerRef.current = reader;
 

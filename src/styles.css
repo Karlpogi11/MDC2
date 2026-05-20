@@ -164,6 +164,30 @@ button {
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  position: relative;
+}
+
+.icon-btn[title]::after {
+  content: attr(title);
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a2a3a;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: 4px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.08s;
+  z-index: 999;
+}
+
+.icon-btn[title]:hover::after {
+  opacity: 1;
 }
 
 .icon-btn svg {
@@ -843,6 +867,8 @@ th .col-resize-handle:active::after {
 }
 
 @media (max-width: 760px) {
+  .back-btn { display: inline-flex !important; }
+  .main-modules { display: none; }
   .brand-word {
     font-size: 20px;
   }

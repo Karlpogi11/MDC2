@@ -551,7 +551,7 @@ export function StockInPage() {
           </div>
           <div style={{ padding: 20 }}>
             {/* Part + Serial inputs side by side */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginBottom: 12 }}>
               <div>
                 <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 5 }}>
                   Part number <span style={{ color: "#ef4444" }}>*</span>
@@ -569,7 +569,7 @@ export function StockInPage() {
               </div>
               <div>
                 <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 5 }}>
-                  Serial number — Enter to add · {navigator.platform.includes("Mac") ? "⌘" : "Ctrl"}+Enter to submit
+                  Serial number
                 </label>
                 <input
                   ref={serialInputRef}
@@ -595,6 +595,7 @@ export function StockInPage() {
                     transition: "border-color 120ms, background 120ms",
                   }}
                 />
+                <p style={{ margin: "4px 0 0", fontSize: 11, color: "#9ca3af" }}>Enter to add · {navigator.platform.includes("Mac") ? "⌘" : "Ctrl"}+Enter to submit</p>
               </div>
             </div>
 
@@ -651,6 +652,7 @@ export function StockInPage() {
               </div>
             )}
 
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
             <button type="button"
               onClick={() => void handleBatchSubmit()}
               disabled={submitting || draftList.filter((r) => !r.error).length === 0}
@@ -658,6 +660,7 @@ export function StockInPage() {
               <CheckCircle size={14} />
               {submitting ? "Stocking in…" : `Stock in ${draftList.filter((r) => !r.error).length} serial${draftList.filter((r) => !r.error).length !== 1 ? "s" : ""}`}
             </button>
+            </div>
           </div>
         </div>
 

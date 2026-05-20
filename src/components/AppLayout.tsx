@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import {
   BarChart3, Boxes, CircleHelp, ClipboardCheck, ClipboardList,
   FileDown, PackagePlus, Settings, ShieldCheck, Users, LogOut,
-  type LucideIcon, X,
+  ArrowLeft, ShieldAlert, type LucideIcon, X,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useBranding } from "@/lib/useBranding";
@@ -104,6 +104,7 @@ export function AppLayout({ children, activeModule }: Props) {
   const [showHelp, setShowHelp] = useState(false);
 
   const isSystemAdmin = authState.status === "authenticated" && authState.profile.role === "system_admin";
+  const isAdmin = authState.status === "authenticated" && ["system_admin", "dc_admin"].includes(authState.profile.role);
   const profileName =
     authState.status === "authenticated"
       ? (authState.profile.full_name ?? authState.profile.username ?? authState.profile.email ?? "User")
@@ -146,6 +147,11 @@ export function AppLayout({ children, activeModule }: Props) {
             <CircleHelp aria-hidden="true" />
           </button>
 
+          {isAdmin && (
+            <button type="button" className="icon-btn" aria-label="Audit Log" title="Audit Log" onClick={() => navigate("/audit-log")}>
+              <ShieldAlert aria-hidden="true" />
+            </button>
+          )}
           {isSystemAdmin && (
             <>
               <button type="button" className="icon-btn" aria-label="Users" title="Users" onClick={() => navigate("/users")}>

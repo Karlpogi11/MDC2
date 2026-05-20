@@ -6,6 +6,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import { AppLayout } from "@/components/AppLayout";
 import { SerialDrawer } from "@/components/SerialDrawer";
+import { ReservedSerialDrawer } from "@/components/ReservedSerialDrawer";
 import { ImportHistoryTab } from "@/components/ImportHistoryTab";
 import { SerialNumbersTab } from "@/components/SerialNumbersTab";
 import {
@@ -20,7 +21,7 @@ import { toCapitalized } from "@/lib/format";
 
 type SortKey =
   | "partName" | "partNumber" | "category"
-  | "inStock" | "committed" | "available"
+  | "inStock" | "stockedOut" | "reserved" | "available"
   | "lastStockInAt" | "lastStockOutAt";
 
 type SortState = { key: SortKey; direction: "asc" | "desc" };
@@ -30,6 +31,7 @@ type LoadState = {
   source: InventorySource;
   loading: boolean;
   error: string | null;
+  total: number | null;
 };
 
 type SegmentFilter = "all" | "in_stock" | "stocked_out";
@@ -70,13 +72,15 @@ function InventoryTab() {
   const setSegment = (v: SegmentFilter) => setSearchParams((p) => { p.set("seg", v); p.delete("page"); return p; }, { replace: true });
   const setSearch = (v: string) => setSearchParams((p) => { if (v) p.set("q", v); else p.delete("q"); p.delete("page"); return p; }, { replace: true });
   const setPage = (fn: (p: number) => number) => setSearchParams((p) => { const next = fn(page); if (next > 0) p.set("page", String(next)); else p.delete("page"); return p; }, { replace: true });
-  const [state, setState] = useState<LoadState>({ rows: [], source: "demo", loading: true, error: null });
+  const [state, setState] = useState<LoadState>({ rows: [], source: "demo", loading: true, error: null, total: null });
   const [sortState, setSortState] = useState<SortState>({ key: "partName", direction: "asc" });
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [focusedRowId, setFocusedRowId] = useState<string | null>(null);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
-  const [drawerPart, setDrawerPart] = useState<{ id: string; name: string; number: string } | null>(null);
+  const [drawerPart, setDrawerPart] = useState<{ id: string; name: string; number: string; status?: string } | null>(null);
+  const [reservedDrawerPart, setReservedDrawerPart] = useState<{ id: string; name: string; number: string; reserved: number } | null>(null);
   const closeDrawer = useCallback(() => setDrawerPart(null), []);
+  const closeReservedDrawer = useCallback(() => setReservedDrawerPart(null), []);
 
   const realtimeEnabled = useFeatureFlag("enable_realtime");
   const realtimeStatus = useRealtimeTable(["serial_numbers", "transfers", "transfer_items"], () => void loadInventory(page), realtimeEnabled);
@@ -84,42 +88,33 @@ function InventoryTab() {
   const loadInventory = async (p = page) => {
     setState((prev) => ({ ...prev, loading: true, error: null }));
     try {
-      const result = await fetchInventoryRows(p, PAGE_SIZE);
-      setState({ rows: result.rows, source: result.source, loading: false, error: null });
+      const result = await fetchInventoryRows(p, PAGE_SIZE, { segment, search });
+      setState({ rows: result.rows, source: result.source, loading: false, error: null, total: result.total ?? null });
     } catch (error) {
       const reason = error instanceof Error ? friendlyError(error) : "Failed to load inventory";
-      setState({ rows: demoInventoryRows, source: "demo", loading: false, error: `Unable to load project inventory (${reason}).` });
+      setState({ rows: demoInventoryRows, source: "demo", loading: false, error: `Unable to load project inventory (${reason}).`, total: null });
     }
   };
 
-  useEffect(() => { void loadInventory(page); }, [page]);
-
-  const filteredRows = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return state.rows.filter((row) => {
-      if (segment === "in_stock" && row.available <= 0) return false;
-      if (segment === "stocked_out" && row.available > 0) return false;
-      if (!q) return true;
-      return row.partName.toLowerCase().includes(q) || row.partNumber.toLowerCase().includes(q) || row.category.toLowerCase().includes(q);
-    });
-  }, [search, segment, state.rows]);
+  useEffect(() => { void loadInventory(page); }, [page, segment, search]);
 
   const sortedRows = useMemo(() => {
-    const rows = [...filteredRows];
+    const rows = [...state.rows];
     rows.sort((left, right) => {
       let result = 0;
       if (sortState.key === "partName") result = compareString(left.partName, right.partName);
       else if (sortState.key === "partNumber") result = compareString(left.partNumber, right.partNumber);
       else if (sortState.key === "category") result = compareString(left.category, right.category);
       else if (sortState.key === "inStock") result = left.inStock - right.inStock;
-      else if (sortState.key === "committed") result = left.committed - right.committed;
+      else if (sortState.key === "stockedOut") result = left.stockedOut - right.stockedOut;
+      else if (sortState.key === "reserved") result = left.reserved - right.reserved;
       else if (sortState.key === "available") result = left.available - right.available;
       else if (sortState.key === "lastStockInAt") result = (normalizeDateValue(left.lastStockInAt) ?? 0) - (normalizeDateValue(right.lastStockInAt) ?? 0);
       else if (sortState.key === "lastStockOutAt") result = (normalizeDateValue(left.lastStockOutAt) ?? 0) - (normalizeDateValue(right.lastStockOutAt) ?? 0);
       return sortState.direction === "asc" ? result : -result;
     });
     return rows;
-  }, [filteredRows, sortState]);
+  }, [state.rows, sortState]);
 
   useEffect(() => {
     setSelectedIds((prev) => prev.filter((id) => sortedRows.some((row) => row.partId === id)));
@@ -130,9 +125,22 @@ function InventoryTab() {
   }, [focusedRowId, sortedRows]);
 
   const totals = useMemo(() => sortedRows.reduce(
-    (acc, row) => { acc.inStock += row.inStock; acc.committed += row.committed; acc.available += row.available; return acc; },
-    { inStock: 0, committed: 0, available: 0 }
+    (acc, row) => {
+      acc.inStock += row.inStock;
+      acc.stockedOut += row.stockedOut;
+      acc.reserved += row.reserved;
+      acc.available += row.available;
+      return acc;
+    },
+    { inStock: 0, stockedOut: 0, reserved: 0, available: 0 }
   ), [sortedRows]);
+
+  const showStockInColumns = segment !== "stocked_out";
+  const showStockOutColumns = segment !== "in_stock";
+  const visibleColumnCount =
+    4 +
+    (showStockInColumns ? 4 : 0) +
+    (showStockOutColumns ? 2 : 0);
 
   const focusedRow = useMemo(() => sortedRows.find((row) => row.partId === focusedRowId) ?? null, [focusedRowId, sortedRows]);
   const visibleIds = sortedRows.map((row) => row.partId);
@@ -174,11 +182,27 @@ function InventoryTab() {
   );
 
   // Dummy serials array for export (InventoryTab doesn't load serials — pass empty, export hook handles gracefully)
-  const emptySerials: never[] = [];
 
   return (
     <main className="inventory-shell">
-      {drawerPart && <SerialDrawer partId={drawerPart.id} partName={drawerPart.name} partNumber={drawerPart.number} onClose={closeDrawer} />}
+      {drawerPart && (
+        <SerialDrawer
+          partId={drawerPart.id}
+          partName={drawerPart.name}
+          partNumber={drawerPart.number}
+          initialStatusFilter={drawerPart.status}
+          onClose={closeDrawer}
+        />
+      )}
+      {reservedDrawerPart && (
+        <ReservedSerialDrawer
+          partId={reservedDrawerPart.id}
+          partName={reservedDrawerPart.name}
+          partNumber={reservedDrawerPart.number}
+          reservedCount={reservedDrawerPart.reserved}
+          onClose={closeReservedDrawer}
+        />
+      )}
 
       <section className="selector-row">
         <div className="segment-tabs" role="group" aria-label="Inventory segment">
@@ -205,7 +229,7 @@ function InventoryTab() {
         </div>
         <div className="action-right">
           <button className="icon-btn blue" type="button" aria-label="Export inventory CSV" title="Export all inventory with serials"
-            onClick={() => exportCSV(sortedRows, emptySerials)}>
+            onClick={() => void exportCSV(sortedRows)}>
             <Download aria-hidden="true" />
           </button>
           <button className="icon-btn" type="button" aria-label="Refresh inventory" onClick={() => void loadInventory(page)}>
@@ -265,16 +289,17 @@ function InventoryTab() {
                 <th>{renderHeaderButton("Part name", "partName")}</th>
                 <th>{renderHeaderButton("Part no.", "partNumber")}</th>
                 <th>{renderHeaderButton("Category", "category")}</th>
-                <th className="num">{renderHeaderButton("In stock", "inStock")}</th>
-                <th className="num">{renderHeaderButton("Reserved", "committed")}</th>
-                <th className="num">{renderHeaderButton("Available", "available")}</th>
-                <th>{renderHeaderButton("Last stock-in date", "lastStockInAt")}</th>
-                <th>{renderHeaderButton("Last stock-out date", "lastStockOutAt")}</th>
+                {showStockInColumns && <th className="num">{renderHeaderButton("In stock", "inStock")}</th>}
+                {showStockInColumns && <th className="num">{renderHeaderButton("Reserved", "reserved")}</th>}
+                {showStockInColumns && <th className="num">{renderHeaderButton("Available", "available")}</th>}
+                {showStockInColumns && <th>{renderHeaderButton("Last stock-in date", "lastStockInAt")}</th>}
+                {showStockOutColumns && <th className="num">{renderHeaderButton("Stocked out", "stockedOut")}</th>}
+                {showStockOutColumns && <th>{renderHeaderButton("Last stock-out date", "lastStockOutAt")}</th>}
               </tr>
             </thead>
             <tbody>
               {state.loading && Array.from({ length: 6 }).map((_, i) => (
-                <tr key={`sk-${i}`} className="skeleton-row"><td /><td colSpan={8}><div className="skeleton-line" /></td></tr>
+                <tr key={`sk-${i}`} className="skeleton-row"><td /><td colSpan={visibleColumnCount - 1}><div className="skeleton-line" /></td></tr>
               ))}
               {!state.loading && sortedRows.map((row) => {
                 const isSelected = selectedIds.includes(row.partId);
@@ -291,20 +316,47 @@ function InventoryTab() {
                     </td>
                     <td>{row.partNumber}</td>
                     <td className="capitalize">{toCapitalized(row.category)}</td>
-                    <td className="num">
-                      <button type="button" className="row-link-btn num-link-btn" onClick={() => setFocusedRowId(row.partId)}>{formatQty(row.inStock)}</button>
-                    </td>
-                    <td className="num">
-                      <button type="button" className="row-link-btn num-link-btn" onClick={() => setFocusedRowId(row.partId)}>{formatQty(row.committed)}</button>
-                    </td>
-                    <td className={row.available < 0 ? "num negative" : "num"}>{formatQty(row.available)}</td>
-                    <td>{formatDate(row.lastStockInAt)}</td>
-                    <td>{formatDate(row.lastStockOutAt)}</td>
+                    {showStockInColumns && (
+                      <td className="num">
+                        <button type="button" className="row-link-btn num-link-btn"
+                          onClick={() => setDrawerPart({ id: row.partId, name: row.partName, number: row.partNumber, status: "in_stock" })}>
+                          {formatQty(row.inStock)}
+                        </button>
+                      </td>
+                    )}
+                    {showStockInColumns && (
+                      <td className="num">
+                        <button
+                          type="button"
+                          className="row-link-btn num-link-btn"
+                          onClick={() => setReservedDrawerPart({ id: row.partId, name: row.partName, number: row.partNumber, reserved: row.reserved })}
+                        >
+                          {formatQty(row.reserved)}
+                        </button>
+                      </td>
+                    )}
+                    {showStockInColumns && (
+                      <td className={row.available < 0 ? "num negative" : "num"}>
+                        <button type="button" className="row-link-btn num-link-btn" onClick={() => setFocusedRowId(row.partId)}>
+                          {formatQty(row.available)}
+                        </button>
+                      </td>
+                    )}
+                    {showStockInColumns && <td>{formatDate(row.lastStockInAt)}</td>}
+                    {showStockOutColumns && (
+                      <td className="num">
+                        <button type="button" className="row-link-btn num-link-btn"
+                          onClick={() => setDrawerPart({ id: row.partId, name: row.partName, number: row.partNumber, status: "transferred" })}>
+                          {formatQty(row.stockedOut)}
+                        </button>
+                      </td>
+                    )}
+                    {showStockOutColumns && <td>{formatDate(row.lastStockOutAt)}</td>}
                   </tr>
                 );
               })}
               {!state.loading && sortedRows.length === 0 && (
-                <tr><td colSpan={9} className="empty-row">No project inventory data found for current filters.</td></tr>
+                <tr><td colSpan={visibleColumnCount} className="empty-row">No project inventory data found for current filters.</td></tr>
               )}
             </tbody>
             <tfoot>
@@ -313,10 +365,12 @@ function InventoryTab() {
                 <td colSpan={3} style={{ padding: "10px 12px", fontSize: 12, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   {sortedRows.length} items
                 </td>
-                <td className="num" style={{ padding: "10px 12px", fontSize: 14, fontWeight: 700, color: "#15803d" }}>{totals.inStock.toLocaleString()}</td>
-                <td className="num" style={{ padding: "10px 12px", fontSize: 14, fontWeight: 700, color: "#b45309" }}>{totals.committed.toLocaleString()}</td>
-                <td className="num" style={{ padding: "10px 12px", fontSize: 14, fontWeight: 700, color: "#1d4ed8" }}>{totals.available.toLocaleString()}</td>
-                <td colSpan={2} />
+                {showStockInColumns && <td className="num" style={{ padding: "10px 12px", fontSize: 14, fontWeight: 700, color: "#15803d" }}>{totals.inStock.toLocaleString()}</td>}
+                {showStockInColumns && <td className="num" style={{ padding: "10px 12px", fontSize: 14, fontWeight: 700, color: "#b45309" }}>{totals.reserved.toLocaleString()}</td>}
+                {showStockInColumns && <td className="num" style={{ padding: "10px 12px", fontSize: 14, fontWeight: 700, color: "#1d4ed8" }}>{totals.available.toLocaleString()}</td>}
+                {showStockInColumns && <td />}
+                {showStockOutColumns && <td className="num" style={{ padding: "10px 12px", fontSize: 14, fontWeight: 700, color: "#1d4ed8" }}>{totals.stockedOut.toLocaleString()}</td>}
+                {showStockOutColumns && <td />}
               </tr>
             </tfoot>
           </table>
@@ -331,9 +385,11 @@ function InventoryTab() {
       {state.source !== "demo" && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", fontSize: 13, color: "#6b7a8d" }}>
           <span>
-            Page {page + 1} · showing {sortedRows.length} of {PAGE_SIZE} per page
+            {state.total != null
+              ? `${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, state.total)} of ${state.total} parts`
+              : `Page ${page + 1}`}
           </span>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <button
               type="button"
               onClick={() => setPage((p) => Math.max(0, p - 1))}
@@ -342,11 +398,17 @@ function InventoryTab() {
             >
               ← Prev
             </button>
+            {state.total != null && (
+              <span style={{ fontSize: 12, color: "#9ca3af" }}>
+                {page + 1} / {Math.ceil(state.total / PAGE_SIZE)}
+              </span>
+            )}
             <button
               type="button"
               onClick={() => setPage((p) => p + 1)}
-              disabled={sortedRows.length < PAGE_SIZE || state.loading}
-              style={{ border: "1px solid #d1d5db", background: "#fff", borderRadius: "var(--radius)", padding: "5px 14px", fontSize: 13, fontWeight: 600, cursor: sortedRows.length < PAGE_SIZE ? "not-allowed" : "pointer", opacity: sortedRows.length < PAGE_SIZE ? 0.4 : 1 }}
+              disabled={state.total != null ? (page + 1) * PAGE_SIZE >= state.total : sortedRows.length < PAGE_SIZE}
+              style={{ border: "1px solid #d1d5db", background: "#fff", borderRadius: "var(--radius)", padding: "5px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                opacity: (state.total != null ? (page + 1) * PAGE_SIZE >= state.total : sortedRows.length < PAGE_SIZE) ? 0.4 : 1 }}
             >
               Next →
             </button>

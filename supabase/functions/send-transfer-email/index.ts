@@ -24,6 +24,7 @@ const SMTP_DATA_ACK_TIMEOUT_MS = 45000;
 const SMTP_TOTAL_TIMEOUT_MS = 90000;
 const SMTP_ATTACHMENT_RETRY_COUNT = 2;
 const SMTP_RETRY_DELAY_MS = 500;
+const DUPLICATE_EMAIL_COOLDOWN_MS = 10 * 60 * 1000;
 
 function corsForRequest(req: Request) {
   const requestedHeaders = req.headers.get("Access-Control-Request-Headers");
@@ -571,6 +572,7 @@ Deno.serve(async (req) => {
   let transfer_id: string | undefined;
   let include_attachment = true;
   let pdf_base64: string | null = null;
+  let force_send = false;
   try {
     const body = await req.text();
     if (body) {
@@ -578,6 +580,7 @@ Deno.serve(async (req) => {
       transfer_id = parsed?.transfer_id;
       if (typeof parsed?.include_attachment === "boolean") include_attachment = parsed.include_attachment;
       if (typeof parsed?.pdf_base64 === "string" && parsed.pdf_base64.length > 0) pdf_base64 = parsed.pdf_base64;
+      if (typeof parsed?.force_send === "boolean") force_send = parsed.force_send;
     }
   } catch {
     return jsonResp({ ok: false, reason: "Invalid JSON" }, 400, cors);
@@ -623,6 +626,8 @@ Deno.serve(async (req) => {
   if (emails.length === 0) {
     return jsonResp({ ok: false, skipped: true, reason: "No valid contact_emails on destination site", fix: "Edit the destination site in Config > Sites and add contact emails." }, 200, cors);
   }
+  const primaryEmail = emails[0];
+  let dedupeKey: string | null = null;
 
   const source = asOne(transfer.source_site);
   const requester = asOne(transfer.requested_by_profile);
@@ -684,6 +689,54 @@ Deno.serve(async (req) => {
       ok: false,
       reason: `Serial validation failed: ${reasons.join("; ")}.${sampleHint}`,
     }, 409, cors);
+  }
+
+  if (!force_send) {
+    const cooldownStart = new Date(Date.now() - DUPLICATE_EMAIL_COOLDOWN_MS).toISOString();
+    try {
+      const { data: recentSent, error: dedupeErr } = await adminClient
+        .from("transfer_emails")
+        .select("id,sent_at")
+        .eq("transfer_id", transfer.id)
+        .eq("recipient_email", primaryEmail)
+        .eq("status", "sent")
+        .gte("sent_at", cooldownStart)
+        .order("sent_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!dedupeErr && recentSent?.id) {
+        return jsonResp({
+          ok: true,
+          skipped: true,
+          sent_to: primaryEmail,
+          transfer_no: transfer.transfer_no,
+          reason: "Email already sent recently; skipped duplicate send.",
+        }, 200, cors);
+      }
+    } catch (err) {
+      console.warn("[send-transfer-email] dedupe check failed:", err);
+    }
+
+    const cooldownBucket = Math.floor(Date.now() / DUPLICATE_EMAIL_COOLDOWN_MS);
+    dedupeKey = `send-transfer-email:${transfer.id}:${primaryEmail}:${cooldownBucket}`;
+    const { error: lockErr } = await adminClient
+      .from("idempotency_keys")
+      .insert({ key: dedupeKey, user_id: user.id, response: null });
+
+    if (lockErr) {
+      const code = (lockErr as { code?: string } | null)?.code;
+      if (code === "23505") {
+        return jsonResp({
+          ok: true,
+          skipped: true,
+          sent_to: primaryEmail,
+          transfer_no: transfer.transfer_no,
+          reason: "Another email request was already processed recently; skipped duplicate send.",
+        }, 200, cors);
+      }
+      console.warn("[send-transfer-email] idempotency lock failed:", lockErr);
+    }
   }
 
   const token = generateToken();
@@ -854,8 +907,23 @@ Deno.serve(async (req) => {
 
   const emailContent = buildEmailContent(Boolean(attachment));
 
+  // Write to transfer_emails BEFORE sending — this is the retry queue record.
+  // If the process crashes after this point, the pg_cron retry worker will pick it up.
+  const { data: emailRecord } = await adminClient
+    .from("transfer_emails")
+    .insert({
+      transfer_id: transfer.id,
+      recipient_email: primaryEmail,
+      status: "pending",
+      attempt_count: 1,
+      last_attempted_at: new Date().toISOString(),
+      next_attempt_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // retry in 5 min if this crashes
+    })
+    .select("id")
+    .single();
+
   const sendOpts = {
-    to: emails[0],
+    to: primaryEmail,
     from: brandName,
     subject: `${transfer.invoice_ref ?? transfer.transfer_no} dispatched to ${dest?.site_name ?? "your site"}`,
     text: emailContent.plainText,
@@ -898,10 +966,28 @@ Deno.serve(async (req) => {
 
   if (!result.ok) {
     console.error("[send-transfer-email] SMTP error:", result.error);
+    if (dedupeKey) {
+      await adminClient.from("idempotency_keys").delete().eq("key", dedupeKey);
+    }
+    if (emailRecord?.id) {
+      await adminClient.from("transfer_emails").update({
+        status: "failed",
+        error_detail: result.error ?? "SMTP send failed",
+        next_attempt_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      }).eq("id", emailRecord.id);
+    }
     return jsonResp({ ok: false, reason: "SMTP send failed", error: result.error }, 500, cors);
   }
 
+  if (emailRecord?.id) {
+    await adminClient.from("transfer_emails").update({
+      status: "sent",
+      sent_at: new Date().toISOString(),
+      error_detail: null,
+    }).eq("id", emailRecord.id);
+  }
+
   const packingListAttached = Boolean(attachment);
-  console.log(`[send-transfer-email] sent to ${emails[0]} for ${transfer.transfer_no}${packingListAttached ? " (with packing list)" : ""}`);
-  return jsonResp({ ok: true, sent_to: emails[0], transfer_no: transfer.transfer_no, packing_list_attached: packingListAttached, pdf_error: pdfError ?? null, smtp_attachment_error: smtpAttachmentError ?? null }, 200, cors);
+  console.log(`[send-transfer-email] sent to ${primaryEmail} for ${transfer.transfer_no}${packingListAttached ? " (with packing list)" : ""}`);
+  return jsonResp({ ok: true, sent_to: primaryEmail, transfer_no: transfer.transfer_no, packing_list_attached: packingListAttached, pdf_error: pdfError ?? null, smtp_attachment_error: smtpAttachmentError ?? null }, 200, cors);
 });

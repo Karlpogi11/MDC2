@@ -60,5 +60,11 @@ export function friendlyError(raw: unknown, fallback = "Something went wrong. Pl
   if (m.includes("not found in parts list"))
     return msg; // already user-friendly
 
+  // RPC application errors — raised via RAISE EXCEPTION in PL/pgSQL.
+  // These are intentional, user-facing messages — pass them through as-is.
+  // Supabase wraps them as: { message: "...", code: "P0001" }
+  if (msg.length > 0 && msg.length < 300 && !m.includes("syntax") && !m.includes("pg_") && !m.includes("internal"))
+    return msg;
+
   return fallback;
 }

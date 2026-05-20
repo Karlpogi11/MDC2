@@ -93,7 +93,10 @@ export function TransfersPage() {
     mutationFn: async ({ id, status }: { id: string; status: TransferStatus }) => {
       const client = getSupabaseClient();
       if (!client) throw new Error("Not configured");
-      const { error } = await client.from("transfers").update({ status }).eq("id", id);
+      const { error } = await client.rpc("transition_transfer_status", {
+        p_transfer_id: id,
+        p_new_status: status,
+      });
       if (error) throw new Error(friendlyError(error));
     },
     onMutate: async ({ id, status }) => {
@@ -120,13 +123,22 @@ export function TransfersPage() {
           <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#1a2a3a" }}>
             Transfers {!loading && <span style={{ fontSize: 14, fontWeight: 400, color: "#6b7a8d" }}>({filtered.length})</span>}
           </h1>
-          <button
-            type="button"
-            onClick={() => navigate("/transfers/new")}
-            style={{ background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
-          >
-            New transfer
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => navigate("/transfers/templates")}
+              style={{ background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+            >
+              Templates
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("/transfers/new")}
+              style={{ background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+            >
+              New transfer
+            </button>
+          </div>
         </div>
 
         {/* Status filter tabs */}

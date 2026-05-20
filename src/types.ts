@@ -5,7 +5,8 @@ export type InventoryRow = {
   category: string;
   partType: "product" | "material" | "unknown";
   inStock: number;
-  committed: number;
+  stockedOut: number;
+  reserved: number;
   available: number;
   lastStockInAt: string | null;
   lastStockOutAt: string | null;
@@ -16,4 +17,5 @@ export type InventorySource = "supabase" | "demo";
 export type InventoryQueryResult = {
   rows: InventoryRow[];
   source: InventorySource;
+  total?: number;
 };

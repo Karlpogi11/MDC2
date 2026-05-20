@@ -3,12 +3,13 @@ import { useTableResize } from "@/components/ResizableColumns";
 import { DangerAction } from "@/components/DangerAction";
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowRight, Package, CheckCircle, Truck, Check, X, FileText } from "lucide-react";
+import { ArrowLeft, ArrowRight, Package, CheckCircle, Truck, Check, X, FileText, ScanLine } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { AppLayout } from "@/components/AppLayout";
 import { toCapitalized } from "@/lib/format";
 import { useBranding } from "@/lib/useBranding";
+import { BarcodeScanner } from "@/components/BarcodeScanner";
 
 type TransferStatus = "draft" | "packed" | "in_transit" | "received" | "cancelled";
 
@@ -29,7 +30,7 @@ type TransferDetail = {
   items: {
     id: string;
     qty: number;
-    part: { part_number: string; part_name: string; category: string | null } | null;
+    part: { id: string; part_number: string; part_name: string; category: string | null } | null;
     serial: { serial_number: string; status: string } | null;
   }[];
 };
@@ -87,11 +88,81 @@ export function TransferDetailPage() {
   const [showReceiptConfirm, setShowReceiptConfirm] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [showActionMenu, setShowActionMenu] = useState(false);
-  const autoEmailRetryRef = useRef<Set<string>>(new Set());
   const actionMenuRef = useRef<HTMLDivElement | null>(null);
 
   // Partial receipt: track which items are confirmed received
   const [receivedItems, setReceivedItems] = useState<Set<string>>(new Set());
+
+  // Inline serial assignment (draft only)
+  const [serialInputs, setSerialInputs] = useState<Record<string, string>>({});
+  const [serialSaving, setSerialSaving] = useState<Record<string, boolean>>({});
+  const [serialErrors, setSerialErrors] = useState<Record<string, string>>({});
+
+  async function assignSerial(itemId: string, partId: string, value: string) {
+    const sn = value.trim();
+    if (!sn) return;
+    const client = getSupabaseClient();
+    if (!client) return;
+    setSerialSaving(p => ({ ...p, [itemId]: true }));
+    setSerialErrors(p => ({ ...p, [itemId]: "" }));
+
+    const { data: serial, error } = await client
+      .from("serial_numbers")
+      .select("id, part_id, status")
+      .eq("serial_number", sn)
+      .maybeSingle();
+
+    if (error || !serial) {
+      setSerialErrors(p => ({ ...p, [itemId]: "Serial not found" }));
+      setSerialSaving(p => ({ ...p, [itemId]: false }));
+      return;
+    }
+    if (serial.status !== "in_stock") {
+      setSerialErrors(p => ({ ...p, [itemId]: `Not available (${serial.status})` }));
+      setSerialSaving(p => ({ ...p, [itemId]: false }));
+      return;
+    }
+    if (serial.part_id !== partId) {
+      setSerialErrors(p => ({ ...p, [itemId]: "Serial belongs to a different part" }));
+      setSerialSaving(p => ({ ...p, [itemId]: false }));
+      return;
+    }
+
+    // Check not already assigned to another active transfer (draft/packed/in_transit)
+    const { data: conflict } = await client
+      .from("transfer_items")
+      .select("transfer_id, transfers!inner(transfer_no, status)")
+      .eq("serial_id", serial.id)
+      .neq("id", itemId)
+      .in("transfers.status", ["draft", "packed", "in_transit"])
+      .maybeSingle();
+
+    if (conflict) {
+      const t = conflict.transfers as any;
+      setSerialErrors(p => ({ ...p, [itemId]: `Already on transfer ${t?.transfer_no ?? ""} (${t?.status ?? ""})` }));
+      setSerialSaving(p => ({ ...p, [itemId]: false }));
+      return;
+    }
+
+    const { error: updateErr } = await client
+      .from("transfer_items")
+      .update({ serial_id: serial.id })
+      .eq("id", itemId);
+
+    if (updateErr) {
+      setSerialErrors(p => ({ ...p, [itemId]: "Save failed" }));
+    } else {
+      setSerialInputs(p => ({ ...p, [itemId]: "" }));
+      await load(true);
+    }
+    setSerialSaving(p => ({ ...p, [itemId]: false }));
+  }
+
+  // Pre-pack scan verification
+  const [scanMode, setScanMode] = useState(false);
+  const [scannedSerials, setScannedSerials] = useState<Set<string>>(new Set());
+  const [scanFeedback, setScanFeedback] = useState<{ serial: string; ok: boolean; msg: string } | null>(null);
+  const [showScanner, setShowScanner] = useState(false);
 
   async function generatePDF() {
     if (!transfer) return;
@@ -170,7 +241,7 @@ export function TransferDetailPage() {
         packed_by_profile:profiles!packed_by(full_name, username),
         items:transfer_items(
           id, qty,
-          part:parts(part_number, part_name, category),
+          part:parts(id, part_number, part_name, category),
           serial:serial_numbers(serial_number, status)
         )
       `)
@@ -211,30 +282,6 @@ export function TransferDetailPage() {
     return () => { void client.removeChannel(channel); };
   }, [id]);
 
-  // Heal path: if a transfer is already in transit but has no receipt token,
-  // the email likely failed previously. Auto-retry once per transfer view.
-  useEffect(() => {
-    if (!transfer || !canAdvance) return;
-    if (transfer.status !== "in_transit" || transfer.receipt_token) return;
-    if (autoEmailRetryRef.current.has(transfer.id)) return;
-    autoEmailRetryRef.current.add(transfer.id);
-
-    void (async () => {
-      setSendingEmail(true);
-      const result = await invokeTransferEmail(transfer.id, { attempts: 1, includeAttachment: true });
-      if (!result.ok) {
-        const isMissingEmail = (result.detail ?? "").includes("contact_emails") || (result.detail ?? "").includes("No valid");
-        setActionError(
-          isMissingEmail
-            ? "Transfer is in transit, but no email sent — destination site has no contact email. Add one in Config → Sites."
-            : `Transfer is in transit, but email retry failed: ${result.detail ?? "Unknown error"}`
-        );
-      } else {
-        await load(true);
-      }
-      setSendingEmail(false);
-    })();
-  }, [transfer, canAdvance]);
 
   useEffect(() => {
     if (!showActionMenu) return;
@@ -250,7 +297,7 @@ export function TransferDetailPage() {
 
   async function invokeTransferEmail(
     transferId: string,
-    options?: { attempts?: number; includeAttachment?: boolean; allowAttachmentFallback?: boolean; pdfBase64?: string | null },
+    options?: { attempts?: number; includeAttachment?: boolean; allowAttachmentFallback?: boolean; pdfBase64?: string | null; forceSend?: boolean },
   ): Promise<{ ok: boolean; detail?: string; packingListAttached?: boolean; pdfError?: string | null; smtpAttachmentError?: string | null }> {
     const client = getSupabaseClient();
     if (!client) return { ok: false, detail: "Supabase not configured." };
@@ -275,7 +322,12 @@ export function TransferDetailPage() {
             pdf_error?: string | null;
             smtp_attachment_error?: string | null;
           }>("send-transfer-email", {
-            body: { transfer_id: transferId, include_attachment: includeAttachmentInAttempt, ...(options?.pdfBase64 ? { pdf_base64: options.pdfBase64 } : {}) },
+            body: {
+              transfer_id: transferId,
+              include_attachment: includeAttachmentInAttempt,
+              ...(options?.pdfBase64 ? { pdf_base64: options.pdfBase64 } : {}),
+              ...(options?.forceSend ? { force_send: true } : {}),
+            },
           });
           const { data: emailResult, error: emailErr } = await invokeResult;
 
@@ -358,7 +410,7 @@ export function TransferDetailPage() {
     const pdfBase64 = await generateAndUploadPDF();
     setActionError(null);
     setActionNotice(null);
-    const result = await invokeTransferEmail(transferId, { attempts: 1, includeAttachment: true, allowAttachmentFallback: false, pdfBase64 });
+    const result = await invokeTransferEmail(transferId, { attempts: 1, includeAttachment: true, allowAttachmentFallback: false, pdfBase64, forceSend: true });
     if (!result.ok) {
       const isMissingEmail = (result.detail ?? "").includes("contact_emails") || (result.detail ?? "").includes("No valid");
       setActionError(
@@ -375,6 +427,20 @@ export function TransferDetailPage() {
       );
     }
     setSendingEmail(false);
+  }
+
+  function handleScan(value: string) {
+    if (!transfer) return;
+    const serial = value.trim().toUpperCase();
+    const match = transfer.items.find(i => i.serial?.serial_number?.toUpperCase() === serial);
+    if (match) {
+      setScannedSerials(prev => new Set([...prev, serial]));
+      setScanFeedback({ serial, ok: true, msg: `✓ ${serial} — on this transfer` });
+    } else {
+      setScanFeedback({ serial, ok: false, msg: `✗ ${serial} — NOT on this transfer` });
+    }
+    setShowScanner(false);
+    setTimeout(() => setScanFeedback(null), 4000);
   }
 
   async function advanceStatus(courier?: string, awb?: string) {
@@ -499,7 +565,13 @@ export function TransferDetailPage() {
                 <DangerAction label="Cancel transfer" confirmLabel="Yes, cancel" description="This cannot be undone."
                   onConfirm={() => void cancelTransfer()} busy={cancelling} />
               )}
-              {["packed", "received"].includes(transfer.status) && (
+              {transfer.status === "draft" && (
+                <button type="button" onClick={() => setScanMode(v => !v)}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, background: scanMode ? "#1a2a3a" : "#fff", color: scanMode ? "#fff" : "var(--blue)", border: "1px solid var(--blue)", borderRadius: "var(--radius)", padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                  <ScanLine size={14} /> {scanMode ? "Exit Scan Mode" : "Verify Serials"}
+                </button>
+              )}
+              {["received"].includes(transfer.status) && (
                 <button type="button" onClick={() => void generatePDF()} disabled={generatingPDF}
                   style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", color: "var(--blue)", border: "1px solid var(--blue)", borderRadius: "var(--radius)", padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: generatingPDF ? "not-allowed" : "pointer", opacity: generatingPDF ? 0.7 : 1 }}>
                   <FileText size={14} /> {generatingPDF ? "Generating…" : "Packing List PDF"}
@@ -540,6 +612,19 @@ export function TransferDetailPage() {
                   onClick={() => {
                     if (NEXT_STATUS[transfer.status] === "in_transit") {
                       setTrackingCourier(""); setTrackingAwb(""); setShowTrackingModal(true);
+                    } else if (NEXT_STATUS[transfer.status] === "packed") {
+                      if (transfer.items.length === 0) {
+                        setActionError("Cannot pack: transfer has no items."); return;
+                      }
+                      const missing = transfer.items.filter(i => !i.serial);
+                      if (missing.length > 0) {
+                        const errs: Record<string, string> = {};
+                        missing.forEach(i => { errs[i.id] = "Serial required before packing"; });
+                        setSerialErrors(p => ({ ...p, ...errs }));
+                        setActionError(`${missing.length} item${missing.length > 1 ? "s are" : " is"} missing a serial — assign all serials before packing.`);
+                        return;
+                      }
+                      void advanceStatus();
                     } else {
                       void advanceStatus();
                     }
@@ -568,6 +653,11 @@ export function TransferDetailPage() {
         {actionNotice && (
           <div role="status" style={{ marginBottom: 16, padding: "10px 14px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "var(--radius)", color: "#166534", fontSize: 13 }}>
             {actionNotice}
+          </div>
+        )}
+        {canAdvance && transfer.status === "in_transit" && !transfer.receipt_token && (
+          <div role="status" style={{ marginBottom: 16, padding: "10px 14px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "var(--radius)", color: "#92400e", fontSize: 13 }}>
+            This transfer does not have a receipt email token yet. Use More → Resend Email when you're ready.
           </div>
         )}
 
@@ -602,6 +692,48 @@ export function TransferDetailPage() {
           </div>
         </div>
 
+        {/* Pre-pack scan verification panel */}
+        {scanMode && transfer.status === "draft" && (
+          <div style={{ background: "#f0f7ff", border: "1px solid #bfdbfe", borderRadius: "var(--radius)", padding: "14px 18px", marginBottom: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <ScanLine size={16} color="var(--blue)" />
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a" }}>
+                  Scan Verification — {scannedSerials.size}/{transfer.items.filter(i => i.serial).length} verified
+                </span>
+              </div>
+              <button type="button" onClick={() => setShowScanner(true)}
+                style={{ background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                Scan Serial
+              </button>
+            </div>
+
+            {scanFeedback && (
+              <div style={{ marginBottom: 10, padding: "8px 12px", borderRadius: "var(--radius)", background: scanFeedback.ok ? "#dcfce7" : "#fee2e2", color: scanFeedback.ok ? "#15803d" : "#b91c1c", fontSize: 13, fontWeight: 600, fontFamily: "monospace" }}>
+                {scanFeedback.msg}
+              </div>
+            )}
+
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {transfer.items.filter(i => i.serial).map(item => {
+                const sn = item.serial!.serial_number.toUpperCase();
+                const verified = scannedSerials.has(sn);
+                return (
+                  <span key={item.id} style={{ fontSize: 11, fontFamily: "monospace", fontWeight: 600, padding: "3px 8px", borderRadius: "var(--radius-sm)", background: verified ? "#dcfce7" : "#f3f4f6", color: verified ? "#15803d" : "#6b7a8d", border: `1px solid ${verified ? "#bbf7d0" : "#e5e7eb"}` }}>
+                    {verified ? "✓ " : ""}{item.serial!.serial_number}
+                  </span>
+                );
+              })}
+            </div>
+
+            {scannedSerials.size > 0 && scannedSerials.size === transfer.items.filter(i => i.serial).length && (
+              <div style={{ marginTop: 10, fontSize: 13, fontWeight: 700, color: "#15803d" }}>
+                ✓ All serials verified — safe to mark as packed.
+              </div>
+            )}
+          </div>
+        )}
+
         <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: 16 }}>
           {/* Items table */}
           <div className="table-card">
@@ -615,7 +747,7 @@ export function TransferDetailPage() {
                 <thead>
                   <tr>
                     {transfer.status === "in_transit" && <th style={{ width: 40 }}></th>}
-                    <th>Serial / Part</th>
+                    <th>Serial</th>
                     <th>Description</th>
                     <th>Category</th>
                     <th className="num">Qty</th>
@@ -640,10 +772,31 @@ export function TransferDetailPage() {
                         </td>
                       )}
                       <td style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--blue)", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {item.serial?.serial_number ?? item.part?.part_number ?? "—"}
+                        {item.serial?.serial_number
+                          ? item.serial.serial_number
+                          : transfer.status === "draft" && item.part
+                            ? (
+                              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                                <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                                  <input
+                                    value={serialInputs[item.id] ?? ""}
+                                    onChange={e => setSerialInputs(p => ({ ...p, [item.id]: e.target.value }))}
+                                    onKeyDown={e => { if (e.key === "Enter") void assignSerial(item.id, item.part!.id, serialInputs[item.id] ?? ""); }}
+                                    onBlur={e => { if (e.target.value.trim()) void assignSerial(item.id, item.part!.id, e.target.value); }}
+                                    placeholder="Enter serial number"
+                                    disabled={serialSaving[item.id]}
+                                    style={{ width: 140, border: `1px solid ${serialErrors[item.id] ? "#fca5a5" : "#d1d5db"}`, borderRadius: "var(--radius-sm)", padding: "3px 6px", fontSize: 12, fontFamily: "monospace", outline: "none", background: serialSaving[item.id] ? "#f9fafb" : "#fff" }}
+                                  />
+                                  {serialSaving[item.id] && <span style={{ fontSize: 11, color: "#9ca3af" }}>…</span>}
+                                </div>
+                                {serialErrors[item.id] && <span style={{ fontSize: 11, color: "#b91c1c" }}>{serialErrors[item.id]}</span>}
+                              </div>
+                            )
+                          : item.part?.part_number ?? "—"}
                       </td>
                       <td title={item.part?.part_name ?? ""} style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {item.part?.part_name ?? "—"}
+                        <div>{item.part?.part_name ?? "—"}</div>
+                        {item.part?.part_number && <div style={{ fontSize: 11, fontFamily: "monospace", color: "#9ca3af" }}>{item.part.part_number}</div>}
                       </td>
                       <td className="capitalize" style={{ overflow: "hidden", textOverflow: "ellipsis", color: "#6b7a8d" }}>
                         {toCapitalized(item.part?.category) || "—"}
@@ -775,6 +928,12 @@ export function TransferDetailPage() {
             </div>
           </div>
         </>
+      )}
+      {showScanner && (
+        <BarcodeScanner
+          onScan={handleScan}
+          onClose={() => setShowScanner(false)}
+        />
       )}
     </AppLayout>
   );

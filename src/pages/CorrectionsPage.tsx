@@ -415,7 +415,7 @@ export function CorrectionsPage() {
         {/* Search bar — full width, prominent */}
         <form onSubmit={(e) => void handleSearch(e)} style={{ marginBottom: 24 }}>
           <div style={{ display: "flex", gap: 0, border: `1px solid ${result ? BLUE : BORDER}`, borderRadius: 8, overflow: "hidden", boxShadow: result ? `0 0 0 3px rgba(37,99,235,.1)` : "none", transition: "box-shadow .15s" }}>
-            <div style={{ display: "flex", alignItems: "center", paddingLeft: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 40, flexShrink: 0 }}>
               <Search size={15} color={MUTED} />
             </div>
             <input

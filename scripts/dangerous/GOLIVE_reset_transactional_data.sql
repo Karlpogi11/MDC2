@@ -8,12 +8,33 @@
 -- ║  DO NOT run this without explicit sign-off from the project lead.        ║
 -- ║  There is NO undo. Take a full database backup first.                    ║
 -- ║                                                                          ║
--- ║  Preserved: sites, parts, profiles, app_config, feature_flags           ║
--- ║  Destroyed: all serials, transfers, stock-in, analytics, audit logs      ║
+-- ║  WHAT THIS WIPES:                                                        ║
+-- ║    audit_logs, serial_part_reassignments, serial_corrections,            ║
+-- ║    packing_lists, transfer_items, transfers, stock_in_items,             ║
+-- ║    stock_in_batches, serial_numbers, analytics_rows, analytics_uploads   ║
+-- ║                                                                          ║
+-- ║  WHAT IS PRESERVED:                                                      ║
+-- ║    sites, parts, profiles, app_config, feature_flags                     ║
+-- ║                                                                          ║
+-- ║  APPROVAL REQUIRED: project lead must comment "APPROVED FOR GO-LIVE"    ║
+-- ║  in the deployment ticket before this script is executed.                ║
 -- ╚══════════════════════════════════════════════════════════════════════════╝
 
--- Confirm you have read the warning above before proceeding.
--- Recommended: run `select count(*) from serial_numbers;` first to verify scope.
+-- This DO block forces the runner to see the warning in the output log.
+-- It does NOT prevent execution — that requires human review of the notice.
+do $$
+begin
+  raise notice '==========================================================';
+  raise notice 'GOLIVE RESET: You are about to wipe ALL transactional data.';
+  raise notice 'Wiping: serial_numbers, transfers, stock_in_batches,';
+  raise notice '        transfer_items, packing_lists, serial_corrections,';
+  raise notice '        analytics_uploads, analytics_rows, audit_logs.';
+  raise notice 'Preserved: sites, parts, profiles, app_config.';
+  raise notice 'This is IRREVERSIBLE. Ensure a backup exists.';
+  raise notice 'Approval required from project lead before running.';
+  raise notice '==========================================================';
+end;
+$$;
 
 -- Order matters: child tables first (FK constraints)
 truncate table
