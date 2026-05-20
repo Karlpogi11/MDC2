@@ -993,3 +993,8 @@ th .col-resize-handle:active::after {
 .analytics-trend-datepicker-popper.react-datepicker-popper {
   z-index: 90 !important;
 }
+
+@keyframes dot-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}

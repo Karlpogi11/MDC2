@@ -383,13 +383,25 @@ export function TransferDetailPage() {
     if (!next) return;
     setAdvancing(true); setActionError(null);
     const client = getSupabaseClient()!;
-    const update: Record<string, unknown> = { status: next };
-    if (next === "packed") { update.packed_by = actorId; update.packed_at = new Date().toISOString(); }
-    if (next === "in_transit") {
-      if (courier?.trim()) update.courier = courier.trim();
-      if (awb?.trim()) update.awb = awb.trim();
+
+    // Update tracking fields before transitioning (packed_by, courier, awb)
+    if (next === "packed") {
+      await client.from("transfers").update({ packed_by: actorId, packed_at: new Date().toISOString() }).eq("id", transfer.id);
     }
-    const { error: err } = await client.from("transfers").update(update).eq("id", transfer.id);
+    if (next === "in_transit") {
+      const trackingUpdate: Record<string, unknown> = {};
+      if (courier?.trim()) trackingUpdate.courier = courier.trim();
+      if (awb?.trim()) trackingUpdate.awb = awb.trim();
+      if (Object.keys(trackingUpdate).length) {
+        await client.from("transfers").update(trackingUpdate).eq("id", transfer.id);
+      }
+    }
+
+    // Use state machine RPC — enforces valid transitions server-side
+    const { error: err } = await client.rpc("transition_transfer_status", {
+      p_transfer_id: transfer.id,
+      p_new_status: next,
+    });
     if (err) { setActionError(friendlyError(err)); setAdvancing(false); return; }
 
     // When dispatched (in_transit), generate PDF first so email attachment uses the canonical layout
@@ -435,7 +447,10 @@ export function TransferDetailPage() {
     if (!transfer) return;
     setCancelling(true); setActionError(null);
     const client = getSupabaseClient()!;
-    const { error: err } = await client.from("transfers").update({ status: "cancelled" }).eq("id", transfer.id);
+    const { error: err } = await client.rpc("transition_transfer_status", {
+      p_transfer_id: transfer.id,
+      p_new_status: "cancelled",
+    });
     if (err) setActionError(friendlyError(err));
     else await load(true);
     setCancelling(false);
@@ -731,7 +746,10 @@ export function TransferDetailPage() {
                 onClick={() => { setShowReceiptConfirm(false); void (async () => {
                   setAdvancing(true); setActionError(null);
                   const client = getSupabaseClient()!;
-                  const { error: err } = await client.from("transfers").update({ status: "received" }).eq("id", transfer.id);
+                  const { error: err } = await client.rpc("transition_transfer_status", {
+                    p_transfer_id: transfer.id,
+                    p_new_status: "received",
+                  });
                   if (err) { setActionError(friendlyError(err)); setAdvancing(false); return; }
                   const destId = transfer.destination_site ? await getDestSiteId(client, transfer.destination_site.site_code) : undefined;
                   if (destId) {

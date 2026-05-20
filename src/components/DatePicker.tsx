@@ -1,38 +1,13 @@
-import ReactDatePicker from "react-datepicker";
-import "react-datepicker/dist/react-datepicker.css";
 import { Calendar } from "lucide-react";
 
 type Props = {
-  value: string;           // ISO date string "YYYY-MM-DD" or ""
+  value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   label?: string;
-  popperPlacement?:
-    | "top"
-    | "top-start"
-    | "top-end"
-    | "bottom"
-    | "bottom-start"
-    | "bottom-end"
-    | "right"
-    | "right-start"
-    | "right-end"
-    | "left"
-    | "left-start"
-    | "left-end";
-  popperClassName?: string;
 };
 
-export function DatePicker({
-  value,
-  onChange,
-  placeholder = "Select date",
-  label,
-  popperPlacement = "bottom-start",
-  popperClassName,
-}: Props) {
-  const selected = value ? new Date(value + "T00:00:00") : null;
-
+export function DatePicker({ value, onChange, placeholder = "Select date", label }: Props) {
   return (
     <div>
       {label && (
@@ -41,34 +16,26 @@ export function DatePicker({
         </label>
       )}
       <div style={{ position: "relative", display: "inline-block" }}>
-        <ReactDatePicker
-          selected={selected}
-          onChange={(date) => onChange(date ? date.toISOString().slice(0, 10) : "")}
-          placeholderText={placeholder}
-          dateFormat="MMM dd, yyyy"
-          isClearable
-          showPopperArrow={false}
-          popperPlacement={popperPlacement}
-          popperClassName={popperClassName}
-          customInput={
-            <input
-              readOnly
-              style={{
-                border: "1px solid #e2e8f0",
-                borderRadius: 6,
-                padding: "7px 32px 7px 10px",
-                fontSize: 13,
-                fontFamily: "inherit",
-                background: "#fff",
-                outline: "none",
-                width: 148,
-                cursor: "pointer",
-                color: selected ? "#0f172a" : "#94a3b8",
-                height: 34,
-                boxSizing: "border-box",
-              }}
-            />
-          }
+        <input
+          type="date"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          style={{
+            border: "1px solid #e2e8f0",
+            borderRadius: 6,
+            padding: "7px 32px 7px 10px",
+            fontSize: 13,
+            fontFamily: "inherit",
+            background: "#fff",
+            outline: "none",
+            width: 148,
+            cursor: "pointer",
+            color: value ? "#0f172a" : "#94a3b8",
+            height: 34,
+            boxSizing: "border-box",
+            appearance: "none",
+          }}
+          placeholder={placeholder}
         />
         <Calendar
           size={14}

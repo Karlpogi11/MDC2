@@ -138,7 +138,7 @@ function toInventoryRows(
   return Array.from(byPart.values()).sort((a, b) => a.partName.localeCompare(b.partName));
 }
 
-export async function fetchInventoryRows(): Promise<InventoryQueryResult> {
+export async function fetchInventoryRows(page = 0, pageSize = 50): Promise<InventoryQueryResult> {
   if (!isSupabaseConfigured) {
     return { rows: demoInventoryRows, source: "demo" };
   }
@@ -151,7 +151,8 @@ export async function fetchInventoryRows(): Promise<InventoryQueryResult> {
   const { data: snapshotRows, error: snapshotError } = await client
     .from("inventory_snapshot")
     .select("*")
-    .order("part_name", { ascending: true });
+    .order("part_name", { ascending: true })
+    .range(page * pageSize, (page + 1) * pageSize - 1);
 
   if (!snapshotError && snapshotRows) {
     return {

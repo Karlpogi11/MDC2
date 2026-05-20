@@ -26,8 +26,20 @@ Deno.serve(async (req) => {
     const { data: { user }, error: userErr } = await userClient.auth.getUser();
     if (userErr || !user) return new Response("Unauthorized", { status: 401 });
 
-    const { filePath, fileName } = await req.json() as { filePath: string; fileName: string };
+    const { filePath, fileName, idempotencyKey } = await req.json() as { filePath: string; fileName: string; idempotencyKey?: string };
     if (!filePath || !fileName) return new Response("Missing filePath or fileName", { status: 400 });
+
+    // Rate limiting: 10 imports per 60s per user
+    const { data: allowed } = await client.rpc("check_rate_limit", {
+      p_user_id: user.id, p_endpoint: "import-stockin", p_limit: 10, p_window_s: 60,
+    });
+    if (!allowed) return new Response(JSON.stringify({ error: "Rate limit exceeded. Try again in a minute." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+    // Idempotency: return cached response if key already processed
+    if (idempotencyKey) {
+      const { data: existing } = await client.from("idempotency_keys").select("response").eq("key", idempotencyKey).maybeSingle();
+      if (existing?.response) return new Response(JSON.stringify(existing.response), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     // Download file from storage
     const { data: fileData, error: dlErr } = await client.storage
@@ -35,8 +47,13 @@ Deno.serve(async (req) => {
       .download(filePath);
     if (dlErr || !fileData) throw new Error(`Storage download failed: ${dlErr?.message}`);
 
+    // Compute SHA-256 for duplicate detection
+    const fileBytes = await fileData.arrayBuffer();
+    const hashBuffer = await crypto.subtle.digest("SHA-256", fileBytes);
+    const fileHash = Array.from(new Uint8Array(hashBuffer)).map((b) => b.toString(16).padStart(2, "0")).join("");
+
     const ext = fileName.split(".").pop()?.toLowerCase();
-    const text = await fileData.text();
+    const text = new TextDecoder().decode(fileBytes);
 
     // Parse rows — CSV only for now; xlsx support requires a separate parser
     let rows: { serial: string; part_number: string; part_name?: string }[] = [];
@@ -78,6 +95,7 @@ Deno.serve(async (req) => {
       .insert({
         source_type: ext === "csv" ? "csv" : "xlsx",
         source_file_name: fileName,
+        file_hash: fileHash,
         imported_by: user.id,
         total_rows: rows.length,
         success_rows: 0,
@@ -147,13 +165,20 @@ Deno.serve(async (req) => {
       failed_rows: failedRows.length,
     }).eq("id", batch.id);
 
+    const responseBody = {
+      batchId: batch.id,
+      totalRows: rows.length,
+      successRows: successCount,
+      failedRows,
+    };
+
+    // Cache response for idempotency replay
+    if (idempotencyKey) {
+      await client.from("idempotency_keys").upsert({ key: idempotencyKey, user_id: user.id, response: responseBody });
+    }
+
     return new Response(
-      JSON.stringify({
-        batchId: batch.id,
-        totalRows: rows.length,
-        successRows: successCount,
-        failedRows,
-      }),
+      JSON.stringify(responseBody),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {
