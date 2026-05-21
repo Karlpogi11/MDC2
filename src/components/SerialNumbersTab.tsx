@@ -104,19 +104,19 @@ export function SerialNumbersTab() {
             placeholder="Search serial number…"
             value={search}
             onChange={(e) => handleSearch(e.target.value)}
-            style={{ border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "7px 12px", fontSize: 13, width: 260, outline: "none" }}
+            style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 12px", fontSize: 13, width: 260, outline: "none" }}
           />
           <select
             value={statusFilter}
             onChange={(e) => handleStatusFilter(e.target.value)}
-            style={{ border: "1px solid #d1d5db", padding: "7px 10px", fontSize: 13, color: "#374151", background: "#fff", cursor: "pointer" }}
+            style={{ border: "1px solid var(--line)", padding: "7px 10px", fontSize: 13, color: "var(--text)", background: "var(--bg-surface)", cursor: "pointer" }}
           >
             <option value="">All statuses</option>
             <option value="in_stock">In Stock</option>
             <option value="in_transit">In Transit</option>
             <option value="transferred">Transferred</option>
           </select>
-          <strong style={{ marginLeft: 8, fontSize: 13, color: "#6b7a8d" }}>
+          <strong style={{ marginLeft: 8, fontSize: 13, color: "var(--muted)" }}>
             {loading && serials.length === 0 ? "Loading…" : `${serials.length} serials`}
           </strong>
         </div>
@@ -182,3 +182,4 @@ export function SerialNumbersTab() {
     </main>
   );
 }
+

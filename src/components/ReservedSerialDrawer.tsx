@@ -24,8 +24,8 @@ type ReservedItemRow = {
 };
 
 const TRANSFER_STATUS_STYLE: Record<ReservedItemRow["transferStatus"], { bg: string; color: string; label: string }> = {
-  draft: { bg: "#f3f4f6", color: "#6b7a8d", label: "Draft" },
-  packed: { bg: "#dbeafe", color: "#1d4ed8", label: "Packed" },
+  draft: { bg: "#f3f4f6", color: "var(--muted)", label: "Draft" },
+  packed: { bg: "#dbeafe", color: "var(--blue)", label: "Packed" },
 };
 
 const RESERVED_DRAWER_CACHE = new Map<string, ReservedItemRow[]>();
@@ -145,18 +145,18 @@ export function ReservedSerialDrawer({ partId, partName, partNumber, reservedCou
   return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 100 }} />
-      <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 620, background: "#fff", zIndex: 101, display: "flex", flexDirection: "column", boxShadow: "-4px 0 24px rgba(0,0,0,0.15)" }}>
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--line)", background: "#f7f7f7", flexShrink: 0 }}>
+      <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 620, background: "var(--bg-surface)", zIndex: 101, display: "flex", flexDirection: "column", boxShadow: "-4px 0 24px rgba(0,0,0,0.15)" }}>
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--line)", background: "var(--bg-surface-elevated)", flexShrink: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
               <h2 style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 700, color: "var(--text)" }}>Reserved Items</h2>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 12, color: "#374151", fontWeight: 600 }}>{partName}</span>
-                <span style={{ fontSize: 12, fontFamily: "monospace", color: "var(--blue)", background: "#eff6ff", padding: "1px 6px", borderRadius: "var(--radius-sm)", display: "inline-block" }}>{partNumber}</span>
-                <span style={{ fontSize: 11, color: "#6b7a8d" }}>{reservedCount} reserved total</span>
+                <span style={{ fontSize: 12, color: "var(--text)", fontWeight: 600 }}>{partName}</span>
+                <span style={{ fontSize: 12, fontFamily: "monospace", color: "var(--blue)", background: "var(--bg-surface-elevated)", padding: "1px 6px", borderRadius: "var(--radius-sm)", display: "inline-block" }}>{partNumber}</span>
+                <span style={{ fontSize: 11, color: "var(--muted)" }}>{reservedCount} reserved total</span>
               </div>
             </div>
-            <button type="button" onClick={onClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#6b7a8d", padding: 4 }}>
+            <button type="button" onClick={onClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--muted)", padding: 4 }}>
               <X size={20} />
             </button>
           </div>
@@ -176,9 +176,9 @@ export function ReservedSerialDrawer({ partId, partName, partNumber, reservedCou
         </div>
 
         <div style={{ flex: 1, overflowY: "auto" }}>
-          {loading && <div style={{ padding: 32, textAlign: "center", color: "#9ca3af", fontSize: 13 }}>Loading reserved items...</div>}
+          {loading && <div style={{ padding: 32, textAlign: "center", color: "var(--muted)", fontSize: 13 }}>Loading reserved items...</div>}
           {!loading && filteredRows.length === 0 && (
-            <div style={{ padding: 32, textAlign: "center", color: "#9ca3af", fontSize: 13 }}>
+            <div style={{ padding: 32, textAlign: "center", color: "var(--muted)", fontSize: 13 }}>
               {search ? `No reserved items matching "${search}"` : "No reserved items found for draft/packed transfers."}
             </div>
           )}
@@ -190,20 +190,20 @@ export function ReservedSerialDrawer({ partId, partName, partNumber, reservedCou
                   <div style={{ fontFamily: row.serialNumber ? "monospace" : undefined, fontWeight: 600, fontSize: 12, color: row.serialNumber ? "var(--blue)" : "#374151", marginBottom: 2 }}>
                     {row.serialNumber ?? "No serial assigned"}
                   </div>
-                  <div style={{ fontSize: 11, color: "#9ca3af" }}>
+                  <div style={{ fontSize: 11, color: "var(--muted)" }}>
                     {row.serialNumber ? `Stocked in ${formatDate(row.stockInAt)}` : `Qty ${row.qty}`}
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#111827" }}>{row.transferNo}</div>
-                  <div style={{ fontSize: 11, color: "#9ca3af" }}>{formatDate(row.transferAt)}</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>{row.transferNo}</div>
+                  <div style={{ fontSize: 11, color: "var(--muted)" }}>{formatDate(row.transferAt)}</div>
                 </div>
                 <div>
                   <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: "var(--radius-pill)", background: meta.bg, color: meta.color, whiteSpace: "nowrap" }}>
                     {meta.label}
                   </span>
                 </div>
-                <div style={{ fontSize: 12, color: "#374151" }}>
+                <div style={{ fontSize: 12, color: "var(--text)" }}>
                   {row.destinationSiteName ?? "—"}
                 </div>
               </div>
@@ -211,7 +211,7 @@ export function ReservedSerialDrawer({ partId, partName, partNumber, reservedCou
           })}
         </div>
 
-        <div style={{ padding: "10px 20px", borderTop: "1px solid var(--line)", background: "#f7f7f7", flexShrink: 0, fontSize: 12, color: "#6b7a8d", display: "flex", justifyContent: "space-between", gap: 12 }}>
+        <div style={{ padding: "10px 20px", borderTop: "1px solid var(--line)", background: "var(--bg-surface-elevated)", flexShrink: 0, fontSize: 12, color: "var(--muted)", display: "flex", justifyContent: "space-between", gap: 12 }}>
           <span>{!loading && `Showing ${filteredRows.length} rows (${filteredQty} qty)`}</span>
           {!loading && <span>Serialized: {serializedReservedQty} | Non-serialized: {nonSerializedReservedQty} | Total: {reservedCount}</span>}
         </div>
@@ -219,3 +219,5 @@ export function ReservedSerialDrawer({ partId, partName, partNumber, reservedCou
     </>
   );
 }
+
+

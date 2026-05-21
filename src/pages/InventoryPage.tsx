@@ -1,6 +1,6 @@
 import { friendlyError } from "@/lib/friendlyError";
 import { useExportInventory } from "@/hooks/useExportInventory";
-import { useEffect, useMemo, useState, useCallback, type ReactElement } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef, type ReactElement } from "react";
 import { useTableResize } from "@/components/ResizableColumns";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { demoInventoryRows } from "../data/demoInventory";
 import { fetchInventoryRows } from "../services/inventory";
+import { getSupabaseClient } from "@/lib/supabase";
 import type { InventoryRow, InventorySource } from "../types";
 import { useRealtimeTable } from "@/lib/useRealtimeTable";
 import { useFeatureFlag } from "@/lib/useFeatureFlag";
@@ -78,6 +79,7 @@ function InventoryTab() {
   const [focusedRowId, setFocusedRowId] = useState<string | null>(null);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
   const [drawerPart, setDrawerPart] = useState<{ id: string; name: string; number: string; status?: string } | null>(null);
+  const [serialLookup, setSerialLookup] = useState<string | null>(null);
   const [reservedDrawerPart, setReservedDrawerPart] = useState<{ id: string; name: string; number: string; reserved: number } | null>(null);
   const closeDrawer = useCallback(() => setDrawerPart(null), []);
   const closeReservedDrawer = useCallback(() => setReservedDrawerPart(null), []);
@@ -85,18 +87,64 @@ function InventoryTab() {
   const realtimeEnabled = useFeatureFlag("enable_realtime");
   const realtimeStatus = useRealtimeTable(["serial_numbers", "transfers", "transfer_items"], () => void loadInventory(page), realtimeEnabled);
 
-  const loadInventory = async (p = page) => {
+  // Cache all rows in memory — filter client-side for instant search
+  const allRowsRef = useRef<InventoryRow[]>([]);
+
+  const loadInventory = async (p = page, searchOverride?: string) => {
+    const q = (searchOverride !== undefined ? searchOverride : search).trim();
     setState((prev) => ({ ...prev, loading: true, error: null }));
     try {
-      const result = await fetchInventoryRows(p, PAGE_SIZE, { segment, search });
-      setState({ rows: result.rows, source: result.source, loading: false, error: null, total: result.total ?? null });
+      // Only hit DB when no search (full load) or on explicit refresh
+      // For search: filter the cached allRows client-side
+      if (q && allRowsRef.current.length > 0) {
+        const ql = q.toLowerCase();
+        const filtered = allRowsRef.current.filter((r) =>
+          r.partName.toLowerCase().includes(ql) ||
+          r.partNumber.toLowerCase().includes(ql) ||
+          r.category.toLowerCase().includes(ql)
+        );
+        setState((prev) => ({ ...prev, rows: filtered, loading: false, error: null, total: filtered.length }));
+        if (q.length >= 6 && !q.includes(" ") && filtered.length <= 2) setSerialLookup(q);
+        return;
+      }
+      const result = await fetchInventoryRows(0, 5000, { segment });
+      if (!q) allRowsRef.current = result.rows; // cache on full load
+      const filtered = q
+        ? result.rows.filter((r) => {
+            const ql = q.toLowerCase();
+            return r.partName.toLowerCase().includes(ql) || r.partNumber.toLowerCase().includes(ql) || r.category.toLowerCase().includes(ql);
+          })
+        : result.rows;
+      setState({ rows: filtered, source: result.source, loading: false, error: null, total: filtered.length });
+      if (q.length >= 6 && !q.includes(" ") && filtered.length <= 2) setSerialLookup(q);
+      else if (!q) setSerialLookup(null);
     } catch (error) {
       const reason = error instanceof Error ? friendlyError(error) : "Failed to load inventory";
       setState({ rows: demoInventoryRows, source: "demo", loading: false, error: `Unable to load project inventory (${reason}).`, total: null });
     }
   };
 
-  useEffect(() => { void loadInventory(page); }, [page, segment, search]);
+  useEffect(() => { void loadInventory(page); }, [page, segment]);
+
+  // Client-side filter on search change — instant, no DB
+  useEffect(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) {
+      if (allRowsRef.current.length > 0) {
+        setState((prev) => ({ ...prev, rows: allRowsRef.current, total: allRowsRef.current.length }));
+        setSerialLookup(null);
+      }
+      return;
+    }
+    if (allRowsRef.current.length === 0) return; // not loaded yet
+    const filtered = allRowsRef.current.filter((r) =>
+      r.partName.toLowerCase().includes(q) ||
+      r.partNumber.toLowerCase().includes(q) ||
+      r.category.toLowerCase().includes(q)
+    );
+    setState((prev) => ({ ...prev, rows: filtered, total: filtered.length }));
+    if (q.length >= 6 && !q.includes(" ") && filtered.length <= 2) setSerialLookup(search.trim());
+  }, [search]);
 
   const sortedRows = useMemo(() => {
     const rows = [...state.rows];
@@ -185,6 +233,9 @@ function InventoryTab() {
 
   return (
     <main className="inventory-shell">
+      {serialLookup && (
+        <SerialLookupDrawer serialNumber={serialLookup} onClose={() => setSerialLookup(null)} />
+      )}
       {drawerPart && (
         <SerialDrawer
           partId={drawerPart.id}
@@ -218,21 +269,32 @@ function InventoryTab() {
 
       <section className="action-row">
         <div className="action-left">
-          <input
-            aria-label="Search inventory"
-            placeholder="Search part name, number, or category…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "7px 12px", fontSize: 13, width: 300, outline: "none" }}
-          />
-          <strong style={{ fontSize: 13, color: "#6b7a8d" }}>{sortedRows.length} items</strong>
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <div style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", overflow: "hidden" }}>
+              <input
+                aria-label="Search inventory"
+                placeholder="Search part, category, or serial…"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); if (!e.target.value) { setSerialLookup(null); setPage(() => 0); } }}
+                onKeyDown={(e) => { if (e.key === "Enter" && search.trim()) setSerialLookup(search.trim()); }}
+                style={{ border: "none", borderRadius: 0, padding: "7px 12px", fontSize: 13, width: 280, outline: "none", background: "var(--bg-surface)", color: "var(--text)" }}
+              />
+            </div>
+            {search && (
+              <button type="button" className="clear-btn" onClick={() => { setSearch(""); setSerialLookup(null); void loadInventory(0, ""); }}
+                aria-label="Clear search">
+                ×
+              </button>
+            )}
+          </div>
+          <strong style={{ fontSize: 13, color: "var(--muted)" }}>{sortedRows.length} items</strong>
         </div>
         <div className="action-right">
           <button className="icon-btn blue" type="button" aria-label="Export inventory CSV" title="Export all inventory with serials"
             onClick={() => void exportCSV(sortedRows)}>
             <Download aria-hidden="true" />
           </button>
-          <button className="icon-btn" type="button" aria-label="Refresh inventory" onClick={() => void loadInventory(page)}>
+          <button className="icon-btn blue" type="button" aria-label="Refresh inventory" title="Refresh" onClick={() => void loadInventory(page)}>
             <RefreshCw aria-hidden="true" />
           </button>
           {realtimeEnabled && (
@@ -360,16 +422,16 @@ function InventoryTab() {
               )}
             </tbody>
             <tfoot>
-              <tr style={{ background: "#f8fafc", borderTop: "2px solid #e2e8f0" }}>
+              <tr style={{ borderTop: "1px solid var(--line)" }}>
                 <td />
-                <td colSpan={3} style={{ padding: "10px 12px", fontSize: 12, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                <td colSpan={3} style={{ padding: "10px 12px", fontSize: 13, fontWeight: 600, color: "var(--muted)" }}>
                   {sortedRows.length} items
                 </td>
-                {showStockInColumns && <td className="num" style={{ padding: "10px 12px", fontSize: 14, fontWeight: 700, color: "#15803d" }}>{totals.inStock.toLocaleString()}</td>}
-                {showStockInColumns && <td className="num" style={{ padding: "10px 12px", fontSize: 14, fontWeight: 700, color: "#b45309" }}>{totals.reserved.toLocaleString()}</td>}
-                {showStockInColumns && <td className="num" style={{ padding: "10px 12px", fontSize: 14, fontWeight: 700, color: "#1d4ed8" }}>{totals.available.toLocaleString()}</td>}
+                {showStockInColumns && <td className="num" style={{ padding: "10px 12px", fontSize: 13, fontWeight: 600, color: "var(--muted)" }}>{totals.inStock.toLocaleString()}</td>}
+                {showStockInColumns && <td className="num" style={{ padding: "10px 12px", fontSize: 13, fontWeight: 600, color: "var(--muted)" }}>{totals.reserved.toLocaleString()}</td>}
+                {showStockInColumns && <td className="num" style={{ padding: "10px 12px", fontSize: 13, fontWeight: 600, color: "var(--muted)" }}>{totals.available.toLocaleString()}</td>}
                 {showStockInColumns && <td />}
-                {showStockOutColumns && <td className="num" style={{ padding: "10px 12px", fontSize: 14, fontWeight: 700, color: "#1d4ed8" }}>{totals.stockedOut.toLocaleString()}</td>}
+                {showStockOutColumns && <td className="num" style={{ padding: "10px 12px", fontSize: 13, fontWeight: 600, color: "var(--muted)" }}>{totals.stockedOut.toLocaleString()}</td>}
                 {showStockOutColumns && <td />}
               </tr>
             </tfoot>
@@ -383,7 +445,7 @@ function InventoryTab() {
 
       {/* Pagination controls */}
       {state.source !== "demo" && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", fontSize: 13, color: "#6b7a8d" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", fontSize: 13, color: "var(--muted)" }}>
           <span>
             {state.total != null
               ? `${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, state.total)} of ${state.total} parts`
@@ -394,12 +456,12 @@ function InventoryTab() {
               type="button"
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page === 0 || state.loading}
-              style={{ border: "1px solid #d1d5db", background: "#fff", borderRadius: "var(--radius)", padding: "5px 14px", fontSize: 13, fontWeight: 600, cursor: page === 0 ? "not-allowed" : "pointer", opacity: page === 0 ? 0.4 : 1 }}
+              style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "5px 14px", fontSize: 13, fontWeight: 600, cursor: page === 0 ? "not-allowed" : "pointer", opacity: page === 0 ? 0.4 : 1 }}
             >
               ← Prev
             </button>
             {state.total != null && (
-              <span style={{ fontSize: 12, color: "#9ca3af" }}>
+              <span style={{ fontSize: 12, color: "var(--muted)" }}>
                 {page + 1} / {Math.ceil(state.total / PAGE_SIZE)}
               </span>
             )}
@@ -407,7 +469,7 @@ function InventoryTab() {
               type="button"
               onClick={() => setPage((p) => p + 1)}
               disabled={state.total != null ? (page + 1) * PAGE_SIZE >= state.total : sortedRows.length < PAGE_SIZE}
-              style={{ border: "1px solid #d1d5db", background: "#fff", borderRadius: "var(--radius)", padding: "5px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer",
+              style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "5px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer",
                 opacity: (state.total != null ? (page + 1) * PAGE_SIZE >= state.total : sortedRows.length < PAGE_SIZE) ? 0.4 : 1 }}
             >
               Next →
@@ -419,13 +481,116 @@ function InventoryTab() {
   );
 }
 
+// ─── Serial Lookup Drawer ─────────────────────────────────────────────────────
+
+function DrawerRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div style={{ display: "flex", gap: 12, padding: "8px 0" }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", width: 100, flexShrink: 0, paddingTop: 1 }}>{label}</div>
+      <div style={{ fontSize: 13, color: "var(--text)", fontFamily: mono ? "monospace" : "inherit", flex: 1, wordBreak: "break-all" }}>{value}</div>
+    </div>
+  );
+}
+
+function SerialLookupDrawer({ serialNumber, onClose }: { serialNumber: string; onClose: () => void }) {
+  const [data, setData] = useState<any | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+
+  useEffect(() => {
+    void load();
+  }, [serialNumber]);
+
+  async function load() {
+    const client = getSupabaseClient();
+    if (!client) { setLoading(false); return; }
+    setLoading(true); setNotFound(false);
+
+    // Query 1: serial + part + site
+    const { data: row } = await client
+      .from("serial_numbers")
+      .select("id, serial_number, status, stock_in_at, parts(part_name, part_number, category), sites!current_site_id(site_name, site_code)")
+      .eq("serial_number", serialNumber)
+      .maybeSingle();
+
+    if (!row) { setNotFound(true); setLoading(false); return; }
+
+    // Query 2: transfer history via transfer_items
+    const { data: items } = await client
+      .from("transfer_items")
+      .select("transfers(transfer_no, status, created_at, sites!destination_site_id(site_name))")
+      .eq("serial_id", (row as any).id ?? "")
+      .limit(20);
+
+    setData({ ...row, transfer_items: items ?? [] });
+    setLoading(false);
+  }
+
+  const part = data ? (Array.isArray(data.parts) ? data.parts[0] : data.parts) : null;
+  const site = data ? (Array.isArray(data.sites) ? data.sites[0] : data.sites) : null;
+  const transfers = data ? (data.transfer_items ?? []).map((ti: any) => {
+    const t = Array.isArray(ti.transfers) ? ti.transfers[0] : ti.transfers;
+    const dest = t ? (Array.isArray(t.sites) ? t.sites[0] : t.sites) : null;
+    return { ...t, dest_name: dest?.site_name ?? "—" };
+  }) : [];
+
+  const STATUS_COLOR: Record<string, string> = {
+    in_stock: "var(--text)", transferred: "var(--muted)", transit: "var(--muted)", in_transit: "var(--muted)", void: "var(--negative)",
+  };
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", zIndex: 200 }} />
+      <aside style={{
+        position: "fixed", top: 0, right: 0, bottom: 0, width: 360,
+        background: "var(--bg-surface)", borderLeft: "1px solid var(--line)",
+        zIndex: 201, display: "flex", flexDirection: "column", overflowY: "auto",
+      }}>
+        {/* Header */}
+        <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>Serial Lookup</div>
+          <button type="button" onClick={onClose} style={{ border: "none", background: "transparent", cursor: "pointer", color: "var(--muted)", fontSize: 20, lineHeight: 1, padding: 4 }}>×</button>
+        </div>
+        <div className="blue-rule" style={{ margin: 0 }} />
+
+        <div style={{ padding: "16px 20px", flex: 1 }}>
+          {loading && <div style={{ fontSize: 13, color: "var(--muted)" }}>Loading…</div>}
+          {notFound && <div style={{ fontSize: 13, color: "var(--muted)" }}>Serial not found in inventory.</div>}
+          {data && (
+            <div>
+              <DrawerRow label="Serial" value={serialNumber} mono />
+              <DrawerRow label="Status" value={data.status?.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())} />
+              {part && <DrawerRow label="Part Name" value={part.part_name} />}
+              {part && <DrawerRow label="Part #" value={part.part_number} mono />}
+              <DrawerRow label="Location" value={site ? `${site.site_name}${site.site_code ? ` (${site.site_code})` : ""}` : "DC"} />
+              <DrawerRow label="Stocked In" value={data.stock_in_at ? new Date(data.stock_in_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "2-digit" }) : "—"} />
+            </div>
+          )}
+          {transfers.length > 0 && (
+            <div style={{ marginTop: 20 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Transfer History</div>
+              {transfers.map((t: any, i: number) => (
+                <div key={i} style={{ padding: "8px 0", borderBottom: "1px solid var(--line)" }}>
+                  <div style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 600, color: "var(--text)" }}>{t.transfer_no}</div>
+                  <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>→ {t.dest_name} · {t.status}</div>
+                  <div style={{ fontSize: 11, color: "var(--muted)" }}>{t.created_at ? new Date(t.created_at).toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }) : ""}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </aside>
+    </>
+  );
+}
+
 export function InventoryPage(): ReactElement {
   const [activeTab, setActiveTab] = useState("Inventory");
 
   return (
     <AppLayout>
       <nav className="sub-nav" aria-label="Inventory pages">
-        {["Inventory", "Import History", "Serial numbers"].map((item) => (
+        {["Inventory", "By Site", "Import History", "Serial numbers"].map((item) => (
           <button key={item} className={item === activeTab ? "sub-tab active" : "sub-tab"} type="button" onClick={() => setActiveTab(item)}>
             {item}
           </button>
@@ -433,8 +598,133 @@ export function InventoryPage(): ReactElement {
       </nav>
 
       {activeTab === "Inventory" && <InventoryTab />}
+      {activeTab === "By Site" && <SiteInventoryTab />}
       {activeTab === "Import History" && <main className="inventory-shell"><ImportHistoryTab /></main>}
       {activeTab === "Serial numbers" && <SerialNumbersTab />}
     </AppLayout>
   );
 }
+
+// ─── Site Inventory Tab ───────────────────────────────────────────────────────
+
+type SiteRow = {
+  site_id: string;
+  site_name: string;
+  site_code: string;
+  part_name: string;
+  part_number: string;
+  qty: number;
+};
+
+function SiteInventoryTab() {
+  const [sites, setSites] = useState<{ id: string; site_name: string; site_code: string }[]>([]);
+  const [selectedSite, setSelectedSite] = useState<string>("all");
+  const [rows, setRows] = useState<SiteRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const tableRef = useTableResize();
+
+  useEffect(() => {
+    void loadSites();
+  }, []);
+
+  useEffect(() => {
+    void loadSiteInventory(selectedSite);
+  }, [selectedSite]);
+
+  async function loadSites() {
+    const client = getSupabaseClient();
+    if (!client) return;
+    const { data } = await client.from("sites").select("id, site_name, site_code").eq("is_active", true).order("site_name");
+    setSites(data ?? []);
+  }
+
+  async function loadSiteInventory(siteId: string) {
+    const client = getSupabaseClient();
+    if (!client) { setRows([]); return; }
+    setLoading(true); setError(null);
+    try {
+      let query = client
+        .from("serial_numbers")
+        .select("current_site_id, parts(part_name, part_number), sites!current_site_id(site_name, site_code)")
+        .eq("status", "transferred")
+        .not("current_site_id", "is", null)
+        .limit(5000);
+
+      if (siteId !== "all") query = query.eq("current_site_id", siteId);
+
+      const { data, error: err } = await query;
+      if (err) throw new Error(err.message);
+
+      // Aggregate by site + part
+      const map = new Map<string, SiteRow>();
+      for (const r of (data ?? []) as any[]) {
+        const site = Array.isArray(r.sites) ? r.sites[0] : r.sites;
+        const part = Array.isArray(r.parts) ? r.parts[0] : r.parts;
+        if (!site || !part) continue;
+        const key = `${r.current_site_id}::${part.part_number}`;
+        if (!map.has(key)) {
+          map.set(key, { site_id: r.current_site_id, site_name: site.site_name, site_code: site.site_code, part_name: part.part_name, part_number: part.part_number, qty: 0 });
+        }
+        map.get(key)!.qty++;
+      }
+      setRows(Array.from(map.values()).sort((a, b) => a.site_name.localeCompare(b.site_name) || a.part_name.localeCompare(b.part_name)));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load site inventory");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <main className="inventory-shell">
+      <section className="selector-row">
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <label style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>Site:</label>
+          <select
+            value={selectedSite}
+            onChange={(e) => setSelectedSite(e.target.value)}
+            style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "6px 10px", fontSize: 13, background: "var(--bg-surface)", color: "var(--text)" }}
+          >
+            <option value="all">All Sites</option>
+            {sites.map((s) => (
+              <option key={s.id} value={s.id}>{s.site_name} ({s.site_code})</option>
+            ))}
+          </select>
+          <span style={{ fontSize: 13, color: "var(--muted)" }}>{rows.length} part types</span>
+        </div>
+      </section>
+      <div className="blue-rule" />
+      {error && <section className="error-banner" role="alert">{error}</section>}
+      <section className="table-card">
+        <div className="table-scroll">
+          <table ref={tableRef}>
+            <thead>
+              <tr>
+                <th>Site</th>
+                <th>Code</th>
+                <th>Part Name</th>
+                <th>Part #</th>
+                <th className="num">Qty at Site</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading && <tr><td colSpan={5} className="empty-row">Loading…</td></tr>}
+              {!loading && rows.length === 0 && <tr><td colSpan={5} className="empty-row">No transferred inventory found for this site.</td></tr>}
+              {!loading && rows.map((r, i) => (
+                <tr key={i}>
+                  <td style={{ fontWeight: 600 }}>{r.site_name}</td>
+                  <td style={{ color: "var(--muted)", fontSize: 12 }}>{r.site_code}</td>
+                  <td>{r.part_name}</td>
+                  <td style={{ fontFamily: "monospace", fontSize: 12 }}>{r.part_number}</td>
+                  <td className="num" style={{ fontWeight: 700 }}>{r.qty}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  );
+}
+

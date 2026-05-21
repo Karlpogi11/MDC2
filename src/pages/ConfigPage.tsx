@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, type FormEvent, type ChangeEvent } from "react";
-import { Upload, Save, Check } from "lucide-react";
+import { Upload, Save, Check, Moon, Sun } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { getSupabaseClient } from "@/lib/supabase";
 import { notifyBrandingUpdated } from "@/lib/useBranding";
 import { AppLayout } from "@/components/AppLayout";
 import { PartsTab } from "@/components/PartsTab";
 import { SitesTab } from "@/components/SitesTab";
+import { getTheme, applyTheme, type Theme } from "@/lib/theme";
 
 type ConfigMap = Record<string, string | null>;
 
@@ -112,7 +113,7 @@ export function ConfigPage() {
   return (
     <AppLayout>
       <main style={{ maxWidth: 900, margin: "0 auto", padding: "28px 24px" }}>
-        <h1 style={{ margin: "0 0 20px", fontSize: 20, fontWeight: 700, color: "#1a2a3a" }}>Configuration</h1>
+        <h1 style={{ margin: "0 0 20px", fontSize: 20, fontWeight: 700, color: "var(--text)" }}>Configuration</h1>
 
         {/* Tab bar */}
         <div style={{ display: "flex", gap: 2, borderBottom: "2px solid #e5e7eb", marginBottom: 24 }}>
@@ -131,14 +132,14 @@ export function ConfigPage() {
         </div>
 
         {error && (
-          <div role="alert" style={{ marginBottom: 20, padding: "10px 14px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "var(--radius)", color: "#b91c1c", fontSize: 13 }}>
+          <div role="alert" style={{ marginBottom: 20, padding: "10px 14px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", color: "var(--negative)", fontSize: 13 }}>
             {error}
           </div>
         )}
 
         {/* Branding tab */}
         {tab === "branding" && (
-          loading ? <p style={{ color: "#6b7a8d", fontSize: 14 }}>Loading…</p> :
+          loading ? <p style={{ color: "var(--muted)", fontSize: 14 }}>Loading…</p> :
           <div style={{ display: "grid", gap: 20 }}>
             <Section title="Logo & Favicon" description="Upload your brand assets.">
               <Field label="Logo" hint="PNG, JPG, SVG or WebP · max 2MB · recommended 200×48px">
@@ -148,14 +149,14 @@ export function ConfigPage() {
                       src={val("brand_logo_url")}
                       alt="Logo"
                       onError={(e) => { (e.target as HTMLImageElement).style.outline = "2px solid #ef4444"; }}
-                      style={{ height: 40, maxWidth: 160, objectFit: "contain", border: "1px solid #e5e7eb", borderRadius: "var(--radius)", padding: 4, background: "#fff" }}
+                      style={{ height: 40, maxWidth: 160, objectFit: "contain", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: 4, background: "var(--bg-surface)" }}
                     />
                   ) : (
                     <div style={{ width: 120, height: 40, border: "1px dashed #d1d5db", borderRadius: "var(--radius)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <span style={{ fontSize: 11, color: "#9ca3af" }}>No logo</span>
+                      <span style={{ fontSize: 11, color: "var(--muted)" }}>No logo</span>
                     </div>
                   )}
-                  <label style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "8px 14px", fontSize: 13, fontWeight: 600, color: "#374151", cursor: "pointer" }}>
+                  <label style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "8px 14px", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
                     <Upload size={14} />{uploadingLogo ? "Uploading…" : "Upload logo"}
                     <input ref={logoInputRef} type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" style={{ display: "none" }} onChange={(e) => void handleLogoUpload(e, "brand_logo_url")} disabled={uploadingLogo} />
                   </label>
@@ -166,16 +167,7 @@ export function ConfigPage() {
                 value={val("brand_name")} onChange={(v) => setConfig((c) => ({ ...c, brand_name: v }))}
                 onSave={(e) => void handleSave(e, "brand_name")} saving={saving === "brand_name"} saved={saved === "brand_name"} />
             </Section>
-            <Section title="Colors" description="Primary and accent colors.">
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                <ColorField label="Primary color" value={val("brand_primary_color") || "#0b4fa8"}
-                  onChange={(v) => setConfig((c) => ({ ...c, brand_primary_color: v }))}
-                  onSave={(e) => void handleSave(e, "brand_primary_color")} saving={saving === "brand_primary_color"} saved={saved === "brand_primary_color"} />
-                <ColorField label="Accent color" value={val("brand_accent_color") || "#d9f32b"}
-                  onChange={(v) => setConfig((c) => ({ ...c, brand_accent_color: v }))}
-                  onSave={(e) => void handleSave(e, "brand_accent_color")} saving={saving === "brand_accent_color"} saved={saved === "brand_accent_color"} />
-              </div>
-            </Section>
+            <AppearanceSection />
           </div>
         )}
 
@@ -184,7 +176,7 @@ export function ConfigPage() {
 
         {/* System tab */}
         {tab === "system" && (
-          loading ? <p style={{ color: "#6b7a8d", fontSize: 14 }}>Loading…</p> :
+          loading ? <p style={{ color: "var(--muted)", fontSize: 14 }}>Loading…</p> :
           <Section title="System" description="Operational settings visible to all users.">
             <ConfigTextField label="Support email" hint="Shown on the login page and error screens."
               value={val("support_email")} onChange={(v) => setConfig((c) => ({ ...c, support_email: v }))}
@@ -218,10 +210,10 @@ export function ConfigPage() {
 
 function Section({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
   return (
-    <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: "var(--radius)", overflow: "hidden" }}>
+    <div style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", overflow: "hidden" }}>
       <div style={{ padding: "14px 20px", borderBottom: "1px solid #f3f4f6" }}>
-        <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>{title}</h2>
-        <p style={{ margin: "2px 0 0", fontSize: 12, color: "#6b7a8d" }}>{description}</p>
+        <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text)" }}>{title}</h2>
+        <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--muted)" }}>{description}</p>
       </div>
       <div style={{ padding: "20px", display: "grid", gap: 20 }}>{children}</div>
     </div>
@@ -231,9 +223,9 @@ function Section({ title, description, children }: { title: string; description:
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div>
-      <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", marginBottom: 6 }}>{label}</div>
       {children}
-      {hint && <p style={{ margin: "6px 0 0", fontSize: 11, color: "#9ca3af" }}>{hint}</p>}
+      {hint && <p style={{ margin: "6px 0 0", fontSize: 11, color: "var(--muted)" }}>{hint}</p>}
     </div>
   );
 }
@@ -243,8 +235,8 @@ function ConfigTextField({ label, hint, value, onChange, onSave, saving, saved, 
   onSave: (e: FormEvent) => void; saving: boolean; saved: boolean; type?: string; multiline?: boolean;
 }) {
   const inputStyle: React.CSSProperties = {
-    width: "100%", border: "1px solid #d1d5db", borderRadius: "var(--radius)",
-    padding: "9px 12px", fontSize: 13, color: "#111827", background: "#fff",
+    width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)",
+    padding: "9px 12px", fontSize: 13, color: "var(--text)", background: "var(--bg-surface)",
     outline: "none", boxSizing: "border-box", resize: multiline ? "vertical" : undefined,
     minHeight: multiline ? 72 : undefined,
   };
@@ -272,9 +264,9 @@ function ColorField({ label, value, onChange, onSave, saving, saved }: {
     <Field label={label}>
       <form onSubmit={onSave} style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <input type="color" value={value} onChange={(e) => onChange(e.target.value)}
-          style={{ width: 40, height: 36, border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: 2, cursor: "pointer", background: "#fff" }} />
+          style={{ width: 40, height: 36, border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: 2, cursor: "pointer", background: "var(--bg-surface)" }} />
         <input type="text" value={value} onChange={(e) => onChange(e.target.value)}
-          style={{ flex: 1, border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "9px 12px", fontSize: 13, color: "#111827", outline: "none" }} />
+          style={{ flex: 1, border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "9px 12px", fontSize: 13, color: "var(--text)", outline: "none" }} />
         <button type="submit" disabled={saving}
           style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 6, background: saved ? "#16a34a" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1, transition: "background 200ms" }}>
           {saved ? <Check size={14} /> : <Save size={14} />}
@@ -331,11 +323,11 @@ function DigestTab({ actorId }: { actorId: string }) {
           <Field label="Recipients" hint="One email per line or comma-separated.">
             <textarea value={recipients} onChange={(e) => setRecipients(e.target.value)} rows={3}
               placeholder="admin@company.com&#10;manager@company.com"
-              style={{ width: "100%", border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "9px 12px", fontSize: 13, outline: "none", resize: "vertical", boxSizing: "border-box" }} />
+              style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "9px 12px", fontSize: 13, outline: "none", resize: "vertical", boxSizing: "border-box" }} />
           </Field>
           <Field label="Cron schedule" hint="Default: Monday 8AM. Use crontab.guru to build expressions.">
             <input type="text" value={schedule} onChange={(e) => setSchedule(e.target.value)}
-              style={{ border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "9px 12px", fontSize: 13, fontFamily: "monospace", outline: "none", width: 200 }} />
+              style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "9px 12px", fontSize: 13, fontFamily: "monospace", outline: "none", width: 200 }} />
           </Field>
           <div>
             <button type="submit" disabled={saving}
@@ -350,11 +342,11 @@ function DigestTab({ actorId }: { actorId: string }) {
           {jobs.map((j) => (
             <div key={j.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #f3f4f6" }}>
               <div>
-                <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#111827", fontFamily: "monospace" }}>{j.schedule}</p>
-                <p style={{ margin: "2px 0 0", fontSize: 12, color: "#6b7a8d" }}>{(j.recipients ?? []).join(", ")}</p>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--text)", fontFamily: "monospace" }}>{j.schedule}</p>
+                <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--muted)" }}>{(j.recipients ?? []).join(", ")}</p>
               </div>
               <button type="button" onClick={() => void toggleJob(j.id, !j.is_active)}
-                style={{ fontSize: 12, fontWeight: 600, padding: "4px 12px", borderRadius: 8, border: "1px solid #d1d5db", background: j.is_active ? "#dcfce7" : "#f3f4f6", color: j.is_active ? "#15803d" : "#6b7a8d", cursor: "pointer" }}>
+                style={{ fontSize: 12, fontWeight: 600, padding: "4px 12px", borderRadius: "var(--radius)", border: "1px solid var(--line)", background: j.is_active ? "#dcfce7" : "#f3f4f6", color: j.is_active ? "#15803d" : "#6b7a8d", cursor: "pointer" }}>
                 {j.is_active ? "Active" : "Paused"}
               </button>
             </div>
@@ -411,11 +403,11 @@ function WebhooksTab({ actorId }: { actorId: string }) {
         <form onSubmit={(e) => void handleSave(e)} style={{ display: "grid", gap: 16 }}>
           <Field label="Endpoint URL" hint="Must be HTTPS.">
             <input type="url" required value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://your-system.com/webhook"
-              style={{ width: "100%", border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "9px 12px", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+              style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "9px 12px", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
           </Field>
           <Field label="Signing secret" hint="Used to compute X-MDC-Signature HMAC header.">
             <input type="text" required value={secret} onChange={(e) => setSecret(e.target.value)} placeholder="whsec_..."
-              style={{ width: "100%", border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "9px 12px", fontSize: 13, fontFamily: "monospace", outline: "none", boxSizing: "border-box" }} />
+              style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "9px 12px", fontSize: 13, fontFamily: "monospace", outline: "none", boxSizing: "border-box" }} />
           </Field>
           <Field label="Events" hint="Comma-separated event names.">
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
@@ -425,7 +417,7 @@ function WebhooksTab({ actorId }: { actorId: string }) {
                     const list = prev.split(",").map((e) => e.trim()).filter(Boolean);
                     return list.includes(ev) ? list.filter((e) => e !== ev).join(",") : [...list, ev].join(",");
                   })}
-                  style={{ fontSize: 11, padding: "3px 10px", borderRadius: 8, border: "1px solid #d1d5db", cursor: "pointer",
+                  style={{ fontSize: 11, padding: "3px 10px", borderRadius: "var(--radius)", border: "1px solid var(--line)", cursor: "pointer",
                     background: events.includes(ev) ? "var(--blue)" : "#fff",
                     color: events.includes(ev) ? "#fff" : "#374151" }}>
                   {ev}
@@ -447,10 +439,10 @@ function WebhooksTab({ actorId }: { actorId: string }) {
             <div key={w.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "10px 0", borderBottom: "1px solid #f3f4f6", gap: 12 }}>
               <div style={{ minWidth: 0 }}>
                 <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--blue)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.url}</p>
-                <p style={{ margin: "2px 0 0", fontSize: 11, color: "#9ca3af" }}>{(w.events ?? []).join(", ")}</p>
+                <p style={{ margin: "2px 0 0", fontSize: 11, color: "var(--muted)" }}>{(w.events ?? []).join(", ")}</p>
               </div>
               <button type="button" onClick={() => void toggleWebhook(w.id, !w.is_active)}
-                style={{ flexShrink: 0, fontSize: 12, fontWeight: 600, padding: "4px 12px", borderRadius: 8, border: "1px solid #d1d5db", background: w.is_active ? "#dcfce7" : "#f3f4f6", color: w.is_active ? "#15803d" : "#6b7a8d", cursor: "pointer" }}>
+                style={{ flexShrink: 0, fontSize: 12, fontWeight: 600, padding: "4px 12px", borderRadius: "var(--radius)", border: "1px solid var(--line)", background: w.is_active ? "#dcfce7" : "#f3f4f6", color: w.is_active ? "#15803d" : "#6b7a8d", cursor: "pointer" }}>
                 {w.is_active ? "Active" : "Paused"}
               </button>
             </div>
@@ -469,7 +461,7 @@ function DangerZoneTab({ role }: { role: string | null }) {
 
   if (role !== "system_admin") {
     return (
-      <div style={{ padding: 32, textAlign: "center", color: "#b91c1c", fontSize: 14 }}>
+      <div style={{ padding: 32, textAlign: "center", color: "var(--negative)", fontSize: 14 }}>
         Only <strong>system_admin</strong> can access this section.
       </div>
     );
@@ -503,31 +495,31 @@ function DangerZoneTab({ role }: { role: string | null }) {
   if (done) {
     return (
       <div style={{ padding: 32, textAlign: "center" }}>
-        <p style={{ fontSize: 16, fontWeight: 700, color: "#15803d" }}>✓ Test data cleared.</p>
-        <p style={{ fontSize: 13, color: "#6b7a8d" }}>Sites, parts, and user accounts are intact. You're ready for go-live.</p>
+        <p style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>✓ Test data cleared.</p>
+        <p style={{ fontSize: 13, color: "var(--muted)" }}>Sites, parts, and user accounts are intact. You're ready for go-live.</p>
       </div>
     );
   }
 
   return (
     <div style={{ display: "grid", gap: 20 }}>
-      <div style={{ background: "#fff", border: "2px solid #fca5a5", borderRadius: "var(--radius)", overflow: "hidden" }}>
-        <div style={{ padding: "14px 20px", borderBottom: "1px solid #fecaca", background: "#fef2f2" }}>
-          <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#b91c1c" }}>Go-Live Data Reset</h2>
-          <p style={{ margin: "2px 0 0", fontSize: 12, color: "#b91c1c" }}>
+      <div style={{ background: "var(--bg-surface)", border: "2px solid #fca5a5", borderRadius: "var(--radius)", overflow: "hidden" }}>
+        <div style={{ padding: "14px 20px", borderBottom: "1px solid #fecaca", background: "var(--bg-surface-elevated)" }}>
+          <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--negative)" }}>Go-Live Data Reset</h2>
+          <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--negative)" }}>
             Permanently deletes all test/sample transactional data. Cannot be undone.
           </p>
         </div>
         <div style={{ padding: 20 }}>
-          <p style={{ margin: "0 0 12px", fontSize: 13, color: "#374151" }}>
+          <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--text)" }}>
             <strong>Will delete:</strong> all serials, transfers, stock-in batches, corrections, audit logs, analytics data.
           </p>
-          <p style={{ margin: "0 0 16px", fontSize: 13, color: "#374151" }}>
+          <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--text)" }}>
             <strong>Will keep:</strong> sites, parts list, user accounts, branding, config.
           </p>
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 6 }}>
-              Type <code style={{ background: "#f3f4f6", padding: "1px 6px", borderRadius: 4 }}>RESET</code> to confirm
+            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 6 }}>
+              Type <code style={{ background: "var(--bg-surface-elevated)", padding: "1px 6px", borderRadius: "var(--radius)" }}>RESET</code> to confirm
             </label>
             <input
               type="text"
@@ -537,7 +529,7 @@ function DangerZoneTab({ role }: { role: string | null }) {
               style={{ border: "1px solid #fca5a5", borderRadius: "var(--radius)", padding: "9px 12px", fontSize: 13, fontFamily: "monospace", outline: "none", width: 200 }}
             />
           </div>
-          {err && <p style={{ margin: "0 0 12px", fontSize: 13, color: "#b91c1c" }}>{err}</p>}
+          {err && <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--negative)" }}>{err}</p>}
           <button
             type="button"
             disabled={confirm !== "RESET" || running}
@@ -556,3 +548,39 @@ function DangerZoneTab({ role }: { role: string | null }) {
     </div>
   );
 }
+
+function AppearanceSection() {
+  const [theme, setTheme] = useState<Theme>(getTheme);
+
+  const toggle = (t: Theme) => {
+    setTheme(t);
+    applyTheme(t);
+  };
+
+  return (
+    <Section title="Appearance" description="Choose the interface theme for this device.">
+      <div style={{ display: "flex", gap: 12 }}>
+        {(["light", "dark"] as Theme[]).map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => toggle(t)}
+            style={{
+              display: "flex", alignItems: "center", gap: 8,
+              padding: "10px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer",
+              border: `2px solid ${theme === t ? "var(--blue)" : "var(--line)"}`,
+              background: theme === t ? "var(--blue)" : "var(--bg-surface)",
+              color: theme === t ? "#fff" : "var(--text)",
+            }}
+          >
+            {t === "light" ? <Sun size={15} /> : <Moon size={15} />}
+            {t === "light" ? "Light" : "Dark"}
+          </button>
+        ))}
+      </div>
+    </Section>
+  );
+}
+
+
+

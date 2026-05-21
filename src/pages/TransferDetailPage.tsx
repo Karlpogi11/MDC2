@@ -38,11 +38,11 @@ type TransferDetail = {
 const STATUS_ORDER: TransferStatus[] = ["draft", "packed", "in_transit", "received"];
 
 const STATUS_META: Record<TransferStatus, { label: string; icon: React.ReactNode; color: string; bg: string }> = {
-  draft:      { label: "Draft",      icon: <Package size={16} />,      color: "#6b7a8d", bg: "#f3f4f6" },
-  packed:     { label: "Packed",     icon: <Package size={16} />,      color: "#1d4ed8", bg: "#dbeafe" },
-  in_transit: { label: "In Transit", icon: <Truck size={16} />,        color: "#a16207", bg: "#fef9c3" },
-  received:   { label: "Received",   icon: <CheckCircle size={16} />,  color: "#15803d", bg: "#dcfce7" },
-  cancelled:  { label: "Cancelled",  icon: <X size={16} />,            color: "#b91c1c", bg: "#fee2e2" },
+  draft:      { label: "Draft",      icon: <Package size={16} />,      color: "var(--muted)", bg: "#f3f4f6" },
+  packed:     { label: "Packed",     icon: <Package size={16} />,      color: "var(--blue)", bg: "#dbeafe" },
+  in_transit: { label: "In Transit", icon: <Truck size={16} />,        color: "var(--muted)", bg: "#fef9c3" },
+  received:   { label: "Received",   icon: <CheckCircle size={16} />,  color: "var(--text)", bg: "#dcfce7" },
+  cancelled:  { label: "Cancelled",  icon: <X size={16} />,            color: "var(--negative)", bg: "#fee2e2" },
 };
 
 const NEXT_STATUS: Partial<Record<TransferStatus, TransferStatus>> = {
@@ -524,13 +524,13 @@ export function TransferDetailPage() {
 
   if (loading) return (
     <AppLayout>
-      <div style={{ padding: 40, textAlign: "center", color: "#9ca3af" }}>Loading…</div>
+      <div style={{ padding: 40, textAlign: "center", color: "var(--muted)" }}>Loading…</div>
     </AppLayout>
   );
 
   if (loadError || !transfer) return (
     <AppLayout>
-      <div style={{ padding: 40, textAlign: "center", color: "#b91c1c" }}>{loadError ?? "Transfer not found."}</div>
+      <div style={{ padding: 40, textAlign: "center", color: "var(--negative)" }}>{loadError ?? "Transfer not found."}</div>
     </AppLayout>
   );
 
@@ -545,16 +545,16 @@ export function TransferDetailPage() {
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, marginBottom: 20 }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-              <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#1a2a3a", fontFamily: "monospace" }}>
+              <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text)", fontFamily: "monospace" }}>
                 {transfer.transfer_no}
               </h1>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: "var(--radius-pill)", background: meta.bg, color: meta.color }}>
                 {meta.icon} {meta.label}
               </span>
             </div>
-            <p style={{ margin: 0, fontSize: 13, color: "#6b7a8d" }}>
+            <p style={{ margin: 0, fontSize: 13, color: "var(--muted)" }}>
               {transfer.source_site?.site_name ?? "DC"} → {transfer.destination_site?.site_name ?? "—"}
-              {transfer.destination_site?.address && <span style={{ marginLeft: 8, color: "#9ca3af" }}>· {transfer.destination_site.address}</span>}
+              {transfer.destination_site?.address && <span style={{ marginLeft: 8, color: "var(--muted)" }}>· {transfer.destination_site.address}</span>}
             </p>
           </div>
 
@@ -573,7 +573,7 @@ export function TransferDetailPage() {
               )}
               {["received"].includes(transfer.status) && (
                 <button type="button" onClick={() => void generatePDF()} disabled={generatingPDF}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", color: "var(--blue)", border: "1px solid var(--blue)", borderRadius: "var(--radius)", padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: generatingPDF ? "not-allowed" : "pointer", opacity: generatingPDF ? 0.7 : 1 }}>
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--bg-surface)", color: "var(--blue)", border: "1px solid var(--blue)", borderRadius: "var(--radius)", padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: generatingPDF ? "not-allowed" : "pointer", opacity: generatingPDF ? 0.7 : 1 }}>
                   <FileText size={14} /> {generatingPDF ? "Generating…" : "Packing List PDF"}
                 </button>
               )}
@@ -582,24 +582,24 @@ export function TransferDetailPage() {
                   <button
                     type="button"
                     onClick={() => setShowActionMenu((v) => !v)}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "7px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--bg-surface)", color: "var(--text)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
                     aria-haspopup="menu"
                     aria-expanded={showActionMenu}
                   >
                     More
                   </button>
                   {showActionMenu && (
-                    <div role="menu" style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", minWidth: 180, background: "#fff", border: "1px solid #d1d5db", borderRadius: "var(--radius)", boxShadow: "0 6px 16px rgba(0,0,0,0.12)", padding: 6, zIndex: 30 }}>
+                    <div role="menu" style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", minWidth: 180, background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", boxShadow: "0 6px 16px rgba(0,0,0,0.12)", padding: 6, zIndex: 30 }}>
                       <button type="button" onClick={() => { setShowActionMenu(false); void generatePDF(); }} disabled={generatingPDF}
-                        style={{ width: "100%", textAlign: "left", background: "#fff", border: "none", padding: "8px 10px", fontSize: 13, color: "#1f2937", cursor: generatingPDF ? "not-allowed" : "pointer", opacity: generatingPDF ? 0.6 : 1 }}>
+                        style={{ width: "100%", textAlign: "left", background: "var(--bg-surface)", border: "none", padding: "8px 10px", fontSize: 13, color: "var(--text)", cursor: generatingPDF ? "not-allowed" : "pointer", opacity: generatingPDF ? 0.6 : 1 }}>
                         {generatingPDF ? "Generating PDF…" : "Packing List PDF"}
                       </button>
                       <button type="button" onClick={() => void resendTransferEmail(transfer.id)} disabled={sendingEmail}
-                        style={{ width: "100%", textAlign: "left", background: "#fff", border: "none", padding: "8px 10px", fontSize: 13, color: "#1f2937", cursor: sendingEmail ? "not-allowed" : "pointer", opacity: sendingEmail ? 0.6 : 1 }}>
+                        style={{ width: "100%", textAlign: "left", background: "var(--bg-surface)", border: "none", padding: "8px 10px", fontSize: 13, color: "var(--text)", cursor: sendingEmail ? "not-allowed" : "pointer", opacity: sendingEmail ? 0.6 : 1 }}>
                         {sendingEmail ? "Sending…" : "Resend Email"}
                       </button>
                       <a href={`/transfers/${transfer.id}/receive`} target="_blank" rel="noopener noreferrer" onClick={() => setShowActionMenu(false)}
-                        style={{ display: "block", textAlign: "left", padding: "8px 10px", fontSize: 13, color: "#1f2937", textDecoration: "none" }}>
+                        style={{ display: "block", textAlign: "left", padding: "8px 10px", fontSize: 13, color: "var(--text)", textDecoration: "none" }}>
                         Open Receive Page
                       </a>
                     </div>
@@ -646,23 +646,23 @@ export function TransferDetailPage() {
           )}
         </div>
         {actionError && (
-          <div role="alert" style={{ marginBottom: 16, padding: "10px 14px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "var(--radius)", color: "#b91c1c", fontSize: 13 }}>
+          <div role="alert" style={{ marginBottom: 16, padding: "10px 14px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", color: "var(--negative)", fontSize: 13 }}>
             {actionError}
           </div>
         )}
         {actionNotice && (
-          <div role="status" style={{ marginBottom: 16, padding: "10px 14px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "var(--radius)", color: "#166534", fontSize: 13 }}>
+          <div role="status" style={{ marginBottom: 16, padding: "10px 14px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", color: "var(--text)", fontSize: 13 }}>
             {actionNotice}
           </div>
         )}
         {canAdvance && transfer.status === "in_transit" && !transfer.receipt_token && (
-          <div role="status" style={{ marginBottom: 16, padding: "10px 14px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "var(--radius)", color: "#92400e", fontSize: 13 }}>
+          <div role="status" style={{ marginBottom: 16, padding: "10px 14px", background: "#fffbeb", border: "1px solid var(--line)", borderRadius: "var(--radius)", color: "var(--muted)", fontSize: 13 }}>
             This transfer does not have a receipt email token yet. Use More → Resend Email when you're ready.
           </div>
         )}
 
         {/* Status timeline */}
-        <div style={{ background: "#fff", border: "1px solid #d0d0d0", borderRadius: "var(--radius)", padding: "16px 20px", marginBottom: 20 }}>
+        <div style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "16px 20px", marginBottom: 20 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
             {STATUS_ORDER.map((s, i) => {
               const done = i <= currentStep && transfer.status !== "cancelled";
@@ -694,11 +694,11 @@ export function TransferDetailPage() {
 
         {/* Pre-pack scan verification panel */}
         {scanMode && transfer.status === "draft" && (
-          <div style={{ background: "#f0f7ff", border: "1px solid #bfdbfe", borderRadius: "var(--radius)", padding: "14px 18px", marginBottom: 16 }}>
+          <div style={{ background: "#f0f7ff", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "14px 18px", marginBottom: 16 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <ScanLine size={16} color="var(--blue)" />
-                <span style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a" }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>
                   Scan Verification — {scannedSerials.size}/{transfer.items.filter(i => i.serial).length} verified
                 </span>
               </div>
@@ -727,7 +727,7 @@ export function TransferDetailPage() {
             </div>
 
             {scannedSerials.size > 0 && scannedSerials.size === transfer.items.filter(i => i.serial).length && (
-              <div style={{ marginTop: 10, fontSize: 13, fontWeight: 700, color: "#15803d" }}>
+              <div style={{ marginTop: 10, fontSize: 13, fontWeight: 700, color: "var(--text)" }}>
                 ✓ All serials verified — safe to mark as packed.
               </div>
             )}
@@ -787,18 +787,18 @@ export function TransferDetailPage() {
                                     disabled={serialSaving[item.id]}
                                     style={{ width: 140, border: `1px solid ${serialErrors[item.id] ? "#fca5a5" : "#d1d5db"}`, borderRadius: "var(--radius-sm)", padding: "3px 6px", fontSize: 12, fontFamily: "monospace", outline: "none", background: serialSaving[item.id] ? "#f9fafb" : "#fff" }}
                                   />
-                                  {serialSaving[item.id] && <span style={{ fontSize: 11, color: "#9ca3af" }}>…</span>}
+                                  {serialSaving[item.id] && <span style={{ fontSize: 11, color: "var(--muted)" }}>…</span>}
                                 </div>
-                                {serialErrors[item.id] && <span style={{ fontSize: 11, color: "#b91c1c" }}>{serialErrors[item.id]}</span>}
+                                {serialErrors[item.id] && <span style={{ fontSize: 11, color: "var(--negative)" }}>{serialErrors[item.id]}</span>}
                               </div>
                             )
                           : item.part?.part_number ?? "—"}
                       </td>
                       <td title={item.part?.part_name ?? ""} style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
                         <div>{item.part?.part_name ?? "—"}</div>
-                        {item.part?.part_number && <div style={{ fontSize: 11, fontFamily: "monospace", color: "#9ca3af" }}>{item.part.part_number}</div>}
+                        {item.part?.part_number && <div style={{ fontSize: 11, fontFamily: "monospace", color: "var(--muted)" }}>{item.part.part_number}</div>}
                       </td>
-                      <td className="capitalize" style={{ overflow: "hidden", textOverflow: "ellipsis", color: "#6b7a8d" }}>
+                      <td className="capitalize" style={{ overflow: "hidden", textOverflow: "ellipsis", color: "var(--muted)" }}>
                         {toCapitalized(item.part?.category) || "—"}
                       </td>
                       <td className="num">{item.qty}</td>
@@ -841,7 +841,7 @@ export function TransferDetailPage() {
       {/* Tracking number modal */}
       {showTrackingModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-          <div style={{ background: "#fff", borderRadius: 0, width: "100%", maxWidth: 420, padding: 24, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
+          <div style={{ background: "var(--bg-surface)", borderRadius: 0, width: "100%", maxWidth: 420, padding: 24, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
             <h2 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700, color: "var(--text)" }}>Mark as In Transit</h2>
             <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--muted)" }}>Enter tracking details before dispatching.</p>
 
@@ -857,7 +857,7 @@ export function TransferDetailPage() {
 
             <div style={{ marginBottom: 24 }}>
               <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#666", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 5 }}>
-                Tracking Number (AWB) <span style={{ color: "#b91c1c" }}>*</span>
+                Tracking Number (AWB) <span style={{ color: "var(--negative)" }}>*</span>
               </label>
               <input
                 value={trackingAwb}
@@ -866,12 +866,12 @@ export function TransferDetailPage() {
                 autoFocus
                 style={{ width: "100%", border: `1px solid ${trackingAwb.trim() ? "var(--line)" : "#fca5a5"}`, borderRadius: 0, padding: "8px 10px", fontSize: 13, fontFamily: "monospace", outline: "none", boxSizing: "border-box" }}
               />
-              {!trackingAwb.trim() && <p style={{ margin: "4px 0 0", fontSize: 11, color: "#b91c1c" }}>Tracking number is required.</p>}
+              {!trackingAwb.trim() && <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--negative)" }}>Tracking number is required.</p>}
             </div>
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <button type="button" onClick={() => setShowTrackingModal(false)}
-                style={{ border: "1px solid var(--line)", background: "#fff", borderRadius: 0, padding: "7px 16px", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
+                style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: 0, padding: "7px 16px", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
                 Cancel
               </button>
               <button type="button"
@@ -888,7 +888,7 @@ export function TransferDetailPage() {
       {showReceiptConfirm && transfer && (
         <>
           <div onClick={() => setShowReceiptConfirm(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 100 }} />
-          <div role="dialog" aria-modal="true" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", background: "#fff", borderRadius: 0, padding: 28, width: 400, zIndex: 101, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
+          <div role="dialog" aria-modal="true" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", background: "var(--bg-surface)", borderRadius: 0, padding: 28, width: 400, zIndex: 101, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
             <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{orgName}</p>
             <h2 style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700, color: "var(--text)" }}>Confirm Receipt</h2>
             <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--muted)" }}>
@@ -922,7 +922,7 @@ export function TransferDetailPage() {
                 Confirm
               </button>
               <button type="button" onClick={() => setShowReceiptConfirm(false)}
-                style={{ flex: 1, background: "#fff", border: "1px solid var(--line)", borderRadius: 0, padding: "10px 0", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
+                style={{ flex: 1, background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: 0, padding: "10px 0", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
                 Cancel
               </button>
             </div>
@@ -941,8 +941,8 @@ export function TransferDetailPage() {
 
 function InfoCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div style={{ background: "#fff", border: "1px solid #d0d0d0", borderRadius: "var(--radius)", overflow: "hidden" }}>
-      <div style={{ padding: "10px 14px", borderBottom: "1px solid #e5e5e5", background: "#f7f7f7" }}>
+    <div style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", overflow: "hidden" }}>
+      <div style={{ padding: "10px 14px", borderBottom: "1px solid #e5e5e5", background: "var(--bg-surface-elevated)" }}>
         <span style={{ fontSize: 12, fontWeight: 600, color: "#666", textTransform: "uppercase", letterSpacing: "0.04em" }}>{title}</span>
       </div>
       <div style={{ padding: "12px 14px", display: "grid", gap: 8 }}>{children}</div>
@@ -953,8 +953,10 @@ function InfoCard({ title, children }: { title: string; children: React.ReactNod
 function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, fontSize: 12 }}>
-      <span style={{ color: "#9ca3af", whiteSpace: "nowrap" }}>{label}</span>
-      <span style={{ color: "#111827", fontWeight: 600, fontFamily: mono ? "monospace" : undefined, textAlign: "right", overflow: "hidden", textOverflow: "ellipsis" }}>{value}</span>
+      <span style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>{label}</span>
+      <span style={{ color: "var(--text)", fontWeight: 600, fontFamily: mono ? "monospace" : undefined, textAlign: "right", overflow: "hidden", textOverflow: "ellipsis" }}>{value}</span>
     </div>
   );
 }
+
+

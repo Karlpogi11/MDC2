@@ -1,7 +1,6 @@
-import { friendlyError } from "@/lib/friendlyError";
 import { useTableResize } from "@/components/ResizableColumns";
 import { useState, useEffect } from "react";
-import { ClipboardCheck, Download, Upload, CheckCircle, AlertTriangle } from "lucide-react";
+import { ClipboardCheck, Download, Upload, CheckCircle, AlertTriangle, ShieldCheck } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { AppLayout } from "@/components/AppLayout";
@@ -21,6 +20,7 @@ type CountRecord = {
   created_at: string;
   notes: string | null;
   item_count: number;
+  discrepancy_count: number;
 };
 
 function downloadCountSheet(rows: { serial_number: string; part_number: string; part_name: string; status: string }[]) {
@@ -53,6 +53,7 @@ export function PhysicalCountPage() {
   const varianceTableRef = useTableResize();
   const { state: authState } = useAuth();
   const actorId = authState.status === "authenticated" ? authState.user.id : null;
+  const isAdmin = authState.status === "authenticated" && ["system_admin", "dc_admin"].includes(authState.profile.role);
 
   const [counts, setCounts] = useState<CountRecord[]>([]);
   const [loadingCounts, setLoadingCounts] = useState(true);
@@ -62,19 +63,27 @@ export function PhysicalCountPage() {
   const [activeCountId, setActiveCountId] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [detailCountId, setDetailCountId] = useState<string | null>(null);
+  const [detailRows, setDetailRows] = useState<VarianceRow[] | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
 
   async function loadCounts() {
     const client = getSupabaseClient();
     if (!client) return;
     const { data } = await client
       .from("physical_counts")
-      .select("id,status,created_at,notes,physical_count_items(id)")
+      .select("id,status,created_at,notes,physical_count_items(id,variance)")
       .order("created_at", { ascending: false })
       .limit(20);
-    setCounts((data ?? []).map((c: any) => ({
-      id: c.id, status: c.status, created_at: c.created_at, notes: c.notes,
-      item_count: Array.isArray(c.physical_count_items) ? c.physical_count_items.length : 0,
-    })));
+    setCounts((data ?? []).map((c: any) => {
+      const items = Array.isArray(c.physical_count_items) ? c.physical_count_items : [];
+      return {
+        id: c.id, status: c.status, created_at: c.created_at, notes: c.notes,
+        item_count: items.length,
+        discrepancy_count: items.filter((i: any) => i.variance !== "match").length,
+      };
+    }));
     setLoadingCounts(false);
   }
 
@@ -101,7 +110,7 @@ export function PhysicalCountPage() {
   async function handleUploadCount(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !actorId) return;
-    setUploading(true); setSubmitError(null); setVariance(null);
+    setUploading(true); setSubmitError(null); setVariance(null); setActiveCountId(null);
 
     const client = getSupabaseClient();
     if (!client) { setUploading(false); return; }
@@ -113,7 +122,6 @@ export function PhysicalCountPage() {
       setUploading(false); return;
     }
 
-    // Fetch current inventory for comparison
     const serials = uploaded.map((r) => r.serial_number);
     const { data: existing } = await client
       .from("serial_numbers")
@@ -125,7 +133,6 @@ export function PhysicalCountPage() {
       return [r.serial_number, { status: r.status, part_number: part?.part_number ?? "", part_name: part?.part_name ?? "" }];
     }));
 
-    // Build variance
     const rows: VarianceRow[] = uploaded.map((u) => {
       const sys = existingMap.get(u.serial_number);
       if (!sys) return { serial_number: u.serial_number, part_number: "", part_name: "", expected_status: "not_in_system", actual_status: u.actual_status, variance: "surplus" as const };
@@ -133,7 +140,6 @@ export function PhysicalCountPage() {
       return { serial_number: u.serial_number, part_number: sys.part_number, part_name: sys.part_name, expected_status: sys.status, actual_status: u.actual_status, variance: v as VarianceRow["variance"] };
     });
 
-    // Create count record + items
     const { data: count, error: countErr } = await client
       .from("physical_counts")
       .insert({ created_by: actorId, status: "submitted", notes: file.name })
@@ -144,30 +150,89 @@ export function PhysicalCountPage() {
     const items = rows.map((r) => ({
       count_id: count.id,
       serial_number: r.serial_number,
-      part_id: null, // enriched separately if needed
+      part_id: null,
       expected_status: r.expected_status,
       actual_status: r.actual_status,
       variance: r.variance,
     }));
 
-    // Insert in chunks
     for (let i = 0; i < items.length; i += 500) {
       await client.from("physical_count_items").insert(items.slice(i, i + 500));
     }
 
     setVariance(rows);
     setActiveCountId(count.id);
-    setSubmitSuccess(`Count submitted: ${rows.filter((r) => r.variance === "match").length} matched, ${rows.filter((r) => r.variance !== "match").length} discrepancies.`);
+    setSubmitSuccess(`Count submitted: ${rows.filter((r) => r.variance === "match").length} matched, ${rows.filter((r) => r.variance !== "match").length} discrepancies. ${isAdmin ? "You can approve it below." : "Awaiting admin approval."}`);
     setUploading(false);
     void loadCounts();
     e.target.value = "";
   }
 
+  async function handleApprove(countId: string) {
+    if (!actorId || !isAdmin) return;
+    setApprovingId(countId);
+    const client = getSupabaseClient();
+    if (!client) { setApprovingId(null); return; }
+
+    const { data: items, error: itemsErr } = await client
+      .from("physical_count_items")
+      .select("serial_number, expected_status, actual_status, variance")
+      .eq("count_id", countId)
+      .neq("variance", "match");
+
+    if (itemsErr) { setSubmitError(itemsErr.message); setApprovingId(null); return; }
+
+    // Apply status corrections for status_mismatch rows
+    const adjustments = (items ?? []).filter((i: any) => i.variance === "status_mismatch" && i.actual_status);
+    for (const adj of adjustments as any[]) {
+      await client
+        .from("serial_numbers")
+        .update({ status: adj.actual_status })
+        .eq("serial_number", adj.serial_number);
+    }
+
+    const { error: approveErr } = await client
+      .from("physical_counts")
+      .update({ status: "approved", approved_by: actorId, approved_at: new Date().toISOString() })
+      .eq("id", countId);
+
+    if (approveErr) { setSubmitError(approveErr.message); setApprovingId(null); return; }
+
+    setSubmitSuccess(`Count approved. ${adjustments.length} serial status${adjustments.length !== 1 ? "es" : ""} adjusted.`);
+    setApprovingId(null);
+    void loadCounts();
+    if (activeCountId === countId) { setVariance(null); setActiveCountId(null); }
+  }
+
+  async function handleViewDetail(countId: string) {
+    if (detailCountId === countId) { setDetailCountId(null); setDetailRows(null); return; }
+    setDetailCountId(countId); setLoadingDetail(true);
+    const client = getSupabaseClient();
+    if (!client) { setLoadingDetail(false); return; }
+    const { data } = await client
+      .from("physical_count_items")
+      .select("serial_number, expected_status, actual_status, variance")
+      .eq("count_id", countId)
+      .order("variance")
+      .limit(500);
+    setDetailRows((data ?? []).map((r: any) => ({
+      serial_number: r.serial_number, part_number: "", part_name: "",
+      expected_status: r.expected_status, actual_status: r.actual_status, variance: r.variance,
+    })));
+    setLoadingDetail(false);
+  }
+
   const VARIANCE_STYLE: Record<string, { bg: string; color: string; label: string }> = {
-    match:            { bg: "#dcfce7", color: "#15803d", label: "Match" },
-    missing:          { bg: "#fee2e2", color: "#b91c1c", label: "Missing" },
-    surplus:          { bg: "#fef9c3", color: "#a16207", label: "Surplus" },
-    status_mismatch:  { bg: "#dbeafe", color: "#1d4ed8", label: "Status diff" },
+    match:           { bg: "#dcfce7", color: "var(--text)", label: "Match" },
+    missing:         { bg: "#fee2e2", color: "var(--negative)", label: "Missing" },
+    surplus:         { bg: "#fef9c3", color: "var(--muted)", label: "Surplus" },
+    status_mismatch: { bg: "#dbeafe", color: "var(--blue)", label: "Status diff" },
+  };
+
+  const STATUS_STYLE: Record<string, { bg: string; color: string }> = {
+    submitted: { bg: "#dbeafe", color: "var(--blue)" },
+    approved:  { bg: "#dcfce7", color: "var(--text)" },
+    draft:     { bg: "#f3f4f6", color: "var(--muted)" },
   };
 
   return (
@@ -176,11 +241,11 @@ export function PhysicalCountPage() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <ClipboardCheck size={20} color="var(--blue)" />
-            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#1a2a3a" }}>Physical Count</h1>
+            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text)" }}>Physical Count</h1>
           </div>
           <div style={{ display: "flex", gap: 10 }}>
             <button type="button" onClick={() => void handleExportSheet()} disabled={exportingSheet}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "8px 14px", fontSize: 13, fontWeight: 600, color: "#374151", cursor: "pointer" }}>
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "8px 14px", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
               <Download size={14} /> {exportingSheet ? "Exporting…" : "Export count sheet"}
             </button>
             <label style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
@@ -190,27 +255,41 @@ export function PhysicalCountPage() {
           </div>
         </div>
 
-        <div style={{ marginBottom: 16, padding: "12px 16px", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 8, fontSize: 13, color: "#0369a1" }}>
-          <strong>How it works:</strong> Export the count sheet → operators fill in <code>actual_status</code> column → upload the completed CSV → review variance report → submit for admin approval.
+        <div style={{ marginBottom: 16, padding: "12px 16px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", fontSize: 13, color: "var(--muted)" }}>
+          <strong>Flow:</strong> Export count sheet → operators fill <code>actual_status</code> → upload CSV → review variance → <strong>admin approves</strong> → system adjusts serial statuses automatically.
         </div>
 
         {submitError && (
-          <div role="alert" style={{ marginBottom: 16, padding: "10px 14px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "var(--radius)", color: "#b91c1c", fontSize: 13 }}>
+          <div role="alert" style={{ marginBottom: 16, padding: "10px 14px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", color: "var(--negative)", fontSize: 13 }}>
             {submitError}
           </div>
         )}
         {submitSuccess && (
-          <div role="status" style={{ marginBottom: 16, padding: "10px 14px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "var(--radius)", color: "#15803d", fontSize: 13, display: "flex", gap: 8 }}>
+          <div role="status" style={{ marginBottom: 16, padding: "10px 14px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", color: "var(--text)", fontSize: 13, display: "flex", gap: 8 }}>
             <CheckCircle size={16} /> {submitSuccess}
           </div>
         )}
 
-        {/* Variance report */}
-        {variance && (
+        {/* Variance report for just-uploaded count */}
+        {variance && activeCountId && (
           <section className="table-card" style={{ marginBottom: 20 }}>
-            <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>Variance Report</span>
-              <span style={{ fontSize: 12, color: "#6b7a8d" }}>{variance.length} items · {variance.filter((r) => r.variance !== "match").length} discrepancies</span>
+            <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>Variance Report</span>
+                <span style={{ fontSize: 12, color: "var(--muted)" }}>{variance.length} items · {variance.filter((r) => r.variance !== "match").length} discrepancies</span>
+              </div>
+              {isAdmin ? (
+                <button type="button"
+                  onClick={() => void handleApprove(activeCountId)}
+                  disabled={approvingId === activeCountId}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#15803d", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                  <ShieldCheck size={14} /> {approvingId === activeCountId ? "Approving…" : "Approve & Apply Adjustments"}
+                </button>
+              ) : (
+                <span style={{ fontSize: 12, color: "var(--muted)", background: "var(--bg-surface-elevated)", padding: "4px 10px", borderRadius: "var(--radius)" }}>
+                  ⏳ Awaiting admin approval
+                </span>
+              )}
             </div>
             <div className="table-scroll" style={{ maxHeight: 400 }}>
               <table ref={varianceTableRef}>
@@ -230,11 +309,9 @@ export function PhysicalCountPage() {
                       <tr key={i} style={{ background: r.variance !== "match" ? "#fffbeb" : undefined }}>
                         <td style={{ fontFamily: "monospace" }}>{r.serial_number}</td>
                         <td>{r.part_number || "—"}</td>
-                        <td style={{ color: "#6b7a8d" }}>{r.expected_status}</td>
-                        <td style={{ color: "#6b7a8d" }}>{r.actual_status || "—"}</td>
-                        <td>
-                          <span className="status-badge" style={{ background: vs.bg, color: vs.color }}>{vs.label}</span>
-                        </td>
+                        <td style={{ color: "var(--muted)" }}>{r.expected_status}</td>
+                        <td style={{ color: "var(--muted)" }}>{r.actual_status || "—"}</td>
+                        <td><span className="status-badge" style={{ background: vs.bg, color: vs.color }}>{vs.label}</span></td>
                       </tr>
                     );
                   })}
@@ -247,41 +324,100 @@ export function PhysicalCountPage() {
         {/* Count history */}
         <section className="table-card">
           <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)" }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>Count history</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>Count history</span>
           </div>
           <div className="table-scroll">
-          <table ref={tableRef}>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th className="num">Items</th>
-                <th>Status</th>
-                <th>Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loadingCounts && <tr><td colSpan={4} className="empty-row">Loading…</td></tr>}
-              {!loadingCounts && counts.length === 0 && <tr><td colSpan={4} className="empty-row">No counts yet.</td></tr>}
-              {counts.map((c) => (
-                <tr key={c.id}>
-                  <td>{new Date(c.created_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "2-digit" })}</td>
-                  <td className="num">{c.item_count}</td>
-                  <td>
-                    <span className="status-badge" style={{
-                      background: c.status === "approved" ? "#dcfce7" : c.status === "submitted" ? "#dbeafe" : "#f3f4f6",
-                      color: c.status === "approved" ? "#15803d" : c.status === "submitted" ? "#1d4ed8" : "#6b7a8d",
-                    }}>
-                      {c.status}
-                    </span>
-                  </td>
-                  <td style={{ color: "#6b7a8d" }}>{c.notes ?? "—"}</td>
+            <table ref={tableRef}>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th className="num">Items</th>
+                  <th className="num">Discrepancies</th>
+                  <th>Status</th>
+                  <th>Notes</th>
+                  <th />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {loadingCounts && <tr><td colSpan={6} className="empty-row">Loading…</td></tr>}
+                {!loadingCounts && counts.length === 0 && <tr><td colSpan={6} className="empty-row">No counts yet.</td></tr>}
+                {counts.map((c) => {
+                  const ss = STATUS_STYLE[c.status] ?? STATUS_STYLE.draft;
+                  return (
+                    <>
+                      <tr key={c.id}>
+                        <td>{new Date(c.created_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "2-digit" })}</td>
+                        <td className="num">{c.item_count}</td>
+                        <td className="num">
+                          {c.discrepancy_count > 0
+                            ? <span style={{ color: "var(--negative)", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 3 }}><AlertTriangle size={12} />{c.discrepancy_count}</span>
+                            : <span style={{ color: "var(--text)" }}>0</span>}
+                        </td>
+                        <td>
+                          <span className="status-badge" style={{ background: ss.bg, color: ss.color }}>{c.status}</span>
+                        </td>
+                        <td style={{ color: "var(--muted)" }}>{c.notes ?? "—"}</td>
+                        <td>
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <button type="button" onClick={() => void handleViewDetail(c.id)}
+                              style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", padding: "4px 10px", fontSize: 12, fontWeight: 600, color: "var(--text)", cursor: "pointer", borderRadius: "var(--radius)" }}>
+                              {detailCountId === c.id ? "Hide" : "View"}
+                            </button>
+                            {isAdmin && c.status === "submitted" && (
+                              <button type="button" onClick={() => void handleApprove(c.id)} disabled={approvingId === c.id}
+                                style={{ border: "none", background: "#15803d", color: "#fff", padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", borderRadius: "var(--radius)", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                                <ShieldCheck size={12} /> {approvingId === c.id ? "…" : "Approve"}
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      {detailCountId === c.id && (
+                        <tr key={`${c.id}-detail`}>
+                          <td colSpan={6} style={{ padding: 0, background: "var(--bg-surface-elevated)" }}>
+                            {loadingDetail ? (
+                              <div style={{ padding: "12px 16px", fontSize: 13, color: "var(--muted)" }}>Loading…</div>
+                            ) : (
+                              <div style={{ maxHeight: 300, overflowY: "auto" }}>
+                                <table style={{ width: "100%", fontSize: 12 }}>
+                                  <thead>
+                                    <tr style={{ background: "var(--bg-surface-elevated)" }}>
+                                      <th style={{ padding: "6px 12px", textAlign: "left" }}>Serial</th>
+                                      <th style={{ padding: "6px 12px", textAlign: "left" }}>Expected</th>
+                                      <th style={{ padding: "6px 12px", textAlign: "left" }}>Actual</th>
+                                      <th style={{ padding: "6px 12px", textAlign: "left" }}>Variance</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {(detailRows ?? []).map((r, i) => {
+                                      const vs = VARIANCE_STYLE[r.variance];
+                                      return (
+                                        <tr key={i} style={{ borderTop: "1px solid #e5e7eb" }}>
+                                          <td style={{ padding: "5px 12px", fontFamily: "monospace" }}>{r.serial_number}</td>
+                                          <td style={{ padding: "5px 12px", color: "var(--muted)" }}>{r.expected_status}</td>
+                                          <td style={{ padding: "5px 12px", color: "var(--muted)" }}>{r.actual_status || "—"}</td>
+                                          <td style={{ padding: "5px 12px" }}><span className="status-badge" style={{ background: vs.bg, color: vs.color, fontSize: 11 }}>{vs.label}</span></td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </section>
       </main>
     </AppLayout>
   );
 }
+
+
+

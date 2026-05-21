@@ -38,13 +38,13 @@ export function ImportResult({ added, updated = 0, skipped, errors }: Props) {
       {hasErrors && (
         <div>
           {visibleErrors.map((e, i) => (
-            <div key={i} style={{ color: "#991b1b", fontSize: 12, padding: "2px 0", borderTop: i === 0 ? "1px solid #fecaca" : undefined, marginTop: i === 0 ? 6 : 0 }}>
+            <div key={i} style={{ color: "var(--negative)", fontSize: 12, padding: "2px 0", borderTop: i === 0 ? "1px solid #fecaca" : undefined, marginTop: i === 0 ? 6 : 0 }}>
               {e}
             </div>
           ))}
           {errors.length > MAX_VISIBLE && (
             <button type="button" onClick={() => setExpanded((v) => !v)}
-              style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 6, background: "transparent", border: "none", color: "#b91c1c", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}>
+              style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 6, background: "transparent", border: "none", color: "var(--negative)", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}>
               {expanded
                 ? <><ChevronUp size={12} /> Show less</>
                 : <><ChevronDown size={12} /> +{hiddenCount} more errors</>}
@@ -55,3 +55,4 @@ export function ImportResult({ added, updated = 0, skipped, errors }: Props) {
     </div>
   );
 }
+

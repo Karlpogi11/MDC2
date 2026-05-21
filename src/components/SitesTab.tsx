@@ -3,6 +3,7 @@ import { useState, useEffect, type FormEvent } from "react";
 import { Plus, Check, Save, X } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase";
 import { CSVDropZone } from "@/components/CSVDropZone";
+import { useTableResize } from "@/components/ResizableColumns";
 import { ImportResult } from "@/components/ImportResult";
 
 type Site = {
@@ -54,10 +55,11 @@ function parseCSV(text: string): Record<string, string>[] {
 const fieldStyle: React.CSSProperties = {
   width: "100%", border: "1px solid #93c5fd", borderRadius: "var(--radius-sm)",
   padding: "3px 7px", fontSize: 12, outline: "none",
-  boxSizing: "border-box", fontFamily: "inherit", background: "#fff",
+  boxSizing: "border-box", fontFamily: "inherit", background: "var(--bg-surface)",
 };
 
 export function SitesTab() {
+  const tableRef = useTableResize();
   const [sites, setSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(true);
   const [code, setCode] = useState("");
@@ -151,7 +153,7 @@ export function SitesTab() {
   }
 
   const addInputStyle: React.CSSProperties = {
-    border: "1px solid #d0d0d0", borderRadius: "var(--radius)", padding: "8px 10px",
+    border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "8px 10px",
     fontSize: 13, outline: "none", width: "100%", boxSizing: "border-box", fontFamily: "inherit",
   };
 
@@ -161,8 +163,8 @@ export function SitesTab() {
       {importResult && <ImportResult added={importResult.added} skipped={importResult.skipped} errors={importResult.errors} />}
 
       {/* Add form */}
-      <div style={{ background: "#fff", border: "1px solid #d0d0d0", borderRadius: "var(--radius)", overflow: "hidden" }}>
-        <div style={{ padding: "12px 20px", borderBottom: "1px solid #d0d0d0", background: "#f2f2f2", display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", overflow: "hidden" }}>
+        <div style={{ padding: "12px 20px", borderBottom: "1px solid #d0d0d0", background: "var(--bg-surface-elevated)", display: "flex", alignItems: "center", gap: 8 }}>
           <Plus size={15} color="var(--blue)" />
           <h3 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#444" }}>Add site</h3>
         </div>
@@ -191,7 +193,7 @@ export function SitesTab() {
             <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#666", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>Address</label>
             <input value={address} onChange={(e) => setAddress(e.target.value)} style={addInputStyle} placeholder="Full address for packing list" />
           </div>
-          {addError && <p style={{ margin: "0 0 8px", fontSize: 12, color: "#b91c1c" }}>{addError}</p>}
+          {addError && <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--negative)" }}>{addError}</p>}
           <button type="submit" disabled={adding}
             style={{ display: "inline-flex", alignItems: "center", gap: 6, background: addSuccess ? "#16a34a" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
             {addSuccess ? <><Check size={14} /> Saved</> : adding ? "Saving…" : <><Plus size={14} /> Add site</>}
@@ -207,7 +209,7 @@ export function SitesTab() {
           </span>
         </div>
         <div className="table-scroll">
-          <table style={{ tableLayout: "fixed", minWidth: 960 }}>
+          <table ref={tableRef} style={{ tableLayout: "fixed", minWidth: 960 }}>
             <colgroup>
               <col style={{ width: 110 }} />
               <col style={{ width: 180 }} />
@@ -251,7 +253,7 @@ export function SitesTab() {
                       {isEditing
                         ? <input value={editPrefix} onChange={(e) => setEditPrefix(e.target.value)} placeholder="e.g. PODSSR#" style={{ ...fieldStyle, fontFamily: "monospace" }} />
                         : site.invoice_prefix
-                          ? <code style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "var(--radius-sm)", padding: "2px 7px", fontSize: 12 }}>{site.invoice_prefix}</code>
+                          ? <code style={{ background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius-sm)", padding: "2px 7px", fontSize: 12 }}>{site.invoice_prefix}</code>
                           : <span style={{ color: "#aaa" }}>—</span>}
                     </td>
                     <td title={site.address ?? ""} style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -265,9 +267,9 @@ export function SitesTab() {
                             placeholder="email1@co.com, email2@co.com"
                             style={fieldStyle} title="Comma-separated. First = TO, rest = CC" />
                         : (site.contact_emails ?? []).length > 0
-                          ? <span style={{ fontSize: 11, color: "#374151" }} title={(site.contact_emails ?? []).join(", ")}>
+                          ? <span style={{ fontSize: 11, color: "var(--text)" }} title={(site.contact_emails ?? []).join(", ")}>
                               {(site.contact_emails ?? [])[0]}
-                              {(site.contact_emails ?? []).length > 1 && <span style={{ color: "#9ca3af" }}> +{(site.contact_emails ?? []).length - 1}</span>}
+                              {(site.contact_emails ?? []).length > 1 && <span style={{ color: "var(--muted)" }}> +{(site.contact_emails ?? []).length - 1}</span>}
                             </span>
                           : <span style={{ color: "#aaa" }}>—</span>}
                     </td>
@@ -277,7 +279,7 @@ export function SitesTab() {
                             placeholder="e.g. 0001272226"
                             style={{ ...fieldStyle, fontFamily: "monospace" }} />
                         : site.ship_to_code
-                          ? <code style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "var(--radius-sm)", padding: "2px 7px", fontSize: 12 }}>{site.ship_to_code}</code>
+                          ? <code style={{ background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius-sm)", padding: "2px 7px", fontSize: 12 }}>{site.ship_to_code}</code>
                           : <span style={{ color: "#aaa" }}>—</span>}
                     </td>
                     <td>
@@ -308,18 +310,18 @@ export function SitesTab() {
                               <Save size={12} /> {editSaving ? "…" : "Save"}
                             </button>
                             <button type="button" onClick={() => setEditId(null)}
-                              style={{ border: "1px solid #d0d0d0", background: "#fff", borderRadius: "var(--radius)", padding: "4px 8px", fontSize: 12, cursor: "pointer", color: "#666" }}>
+                              style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "4px 8px", fontSize: 12, cursor: "pointer", color: "#666" }}>
                               <X size={12} />
                             </button>
                           </>
                         ) : (
                           <>
                             <button type="button" onClick={() => startEdit(site)}
-                              style={{ border: "1px solid #d0d0d0", background: "#fff", borderRadius: "var(--radius)", padding: "4px 10px", fontSize: 12, fontWeight: 600, color: "#444", cursor: "pointer" }}>
+                              style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "4px 10px", fontSize: 12, fontWeight: 600, color: "#444", cursor: "pointer" }}>
                               Edit
                             </button>
                             <button type="button" onClick={() => void toggleActive(site)}
-                              style={{ border: "1px solid #d0d0d0", background: "#fff", borderRadius: "var(--radius)", padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                              style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer",
                                 color: site.is_active ? "#b91c1c" : "#15803d" }}>
                               {site.is_active ? "Disable" : "Enable"}
                             </button>
@@ -337,3 +339,5 @@ export function SitesTab() {
     </div>
   );
 }
+
+

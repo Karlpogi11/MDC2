@@ -106,13 +106,13 @@ export function UsersPage() {
   }
 
   const inputStyle: React.CSSProperties = {
-    width: "100%", border: "1px solid #d1d5db", borderRadius: "var(--radius)",
-    padding: "9px 12px", fontSize: 13, color: "#111827",
-    background: "#fff", outline: "none", boxSizing: "border-box",
+    width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)",
+    padding: "9px 12px", fontSize: 13, color: "var(--text)",
+    background: "var(--bg-surface)", outline: "none", boxSizing: "border-box",
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f0f2f5" }}>
+    <div style={{ minHeight: "100vh", background: "var(--bg-page)" }}>
       {/* Header */}
       <header style={{
         background: "linear-gradient(180deg, #13294b 0%, #0d1e38 100%)",
@@ -120,54 +120,54 @@ export function UsersPage() {
         borderBottom: "1px solid #0a2f36",
       }}>
         <button type="button" onClick={() => navigate("/")}
-          style={{ background: "transparent", border: "none", color: "#9fb4ba", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+          style={{ background: "transparent", border: "none", color: "var(--muted)", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
           <ArrowLeft size={16} /> Back
         </button>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: "var(--radius)", background: "#0f4c57", color: "var(--nav-active)" }}>
+          <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: "var(--radius)", background: "var(--nav-bg)", color: "var(--nav-active)" }}>
             <Boxes size={17} />
           </span>
           <span style={{ color: "#fff", fontWeight: 700, fontSize: 16 }}>MDC</span>
-          <span style={{ color: "#4a6a7a", fontSize: 14, marginLeft: 4 }}>/ Users</span>
+          <span style={{ color: "var(--muted)", fontSize: 14, marginLeft: 4 }}>/ Users</span>
         </div>
-        <span style={{ marginLeft: "auto", background: "#1e3a5f", color: "#9fb4ba", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: "var(--radius-pill)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+        <span style={{ marginLeft: "auto", background: "var(--bg-surface-elevated)", color: "var(--muted)", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: "var(--radius-pill)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
           System Admin
         </span>
       </header>
 
       <main style={{ maxWidth: 860, margin: "0 auto", padding: "32px 24px" }}>
-        <h1 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#1a2a3a" }}>User Management</h1>
-        <p style={{ margin: "0 0 28px", fontSize: 13, color: "#6b7a8d" }}>
+        <h1 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "var(--text)" }}>User Management</h1>
+        <p style={{ margin: "0 0 28px", fontSize: 13, color: "var(--muted)" }}>
           Invite users and manage their access. Invited users receive an email to set their password.
         </p>
 
         {/* Invite form */}
-        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: "var(--radius)", marginBottom: 24, overflow: "hidden" }}>
+        <div style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", marginBottom: 24, overflow: "hidden" }}>
           <div style={{ padding: "14px 20px", borderBottom: "1px solid #f3f4f6", display: "flex", alignItems: "center", gap: 8 }}>
             <UserPlus size={16} color="var(--blue)" />
-            <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>Invite new user</h2>
+            <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text)" }}>Invite new user</h2>
           </div>
           <form onSubmit={(e) => void handleInvite(e)} style={{ padding: 20 }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
               <div>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 5 }}>
-                  Email <span style={{ color: "#ef4444" }}>*</span>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 5 }}>
+                  Email <span style={{ color: "var(--negative)" }}>*</span>
                 </label>
                 <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} placeholder="user@company.com" />
               </div>
               <div>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 5 }}>
-                  Username <span style={{ color: "#ef4444" }}>*</span>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 5 }}>
+                  Username <span style={{ color: "var(--negative)" }}>*</span>
                 </label>
                 <input type="text" required value={username} onChange={(e) => setUsername(e.target.value)} style={inputStyle} placeholder="e.g. jdoe" />
               </div>
               <div>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 5 }}>Full name</label>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 5 }}>Full name</label>
                 <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} style={inputStyle} placeholder="Juan Dela Cruz" />
               </div>
               <div>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 5 }}>
-                  Role <span style={{ color: "#ef4444" }}>*</span>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 5 }}>
+                  Role <span style={{ color: "var(--negative)" }}>*</span>
                 </label>
                 <select value={role} onChange={(e) => setRole(e.target.value as UserRole)}
                   style={{ ...inputStyle, cursor: "pointer" }}>
@@ -177,12 +177,12 @@ export function UsersPage() {
             </div>
 
             {inviteError && (
-              <div role="alert" style={{ marginBottom: 14, padding: "9px 12px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "var(--radius)", color: "#b91c1c", fontSize: 13 }}>
+              <div role="alert" style={{ marginBottom: 14, padding: "9px 12px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", color: "var(--negative)", fontSize: 13 }}>
                 {inviteError}
               </div>
             )}
             {inviteSuccess && (
-              <div role="status" style={{ marginBottom: 14, padding: "9px 12px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "var(--radius)", color: "#15803d", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
+              <div role="status" style={{ marginBottom: 14, padding: "9px 12px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", color: "var(--text)", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
                 <Check size={14} /> {inviteSuccess}
               </div>
             )}
@@ -198,13 +198,13 @@ export function UsersPage() {
         {/* User list */}
         <div className="table-card">
           <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--line)" }}>
-            <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>
-              All users {!loading && <span style={{ fontWeight: 400, color: "#6b7a8d" }}>({users.length})</span>}
+            <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text)" }}>
+              All users {!loading && <span style={{ fontWeight: 400, color: "var(--muted)" }}>({users.length})</span>}
             </h2>
           </div>
 
           {actionError && (
-            <div role="alert" style={{ margin: "12px 20px 0", padding: "9px 12px", background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", fontSize: 13 }}>
+            <div role="alert" style={{ margin: "12px 20px 0", padding: "9px 12px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", color: "var(--negative)", fontSize: 13 }}>
               {actionError}
             </div>
           )}
@@ -231,12 +231,12 @@ export function UsersPage() {
               {!loading && users.map((user) => (
                 <tr key={user.id} style={{ opacity: user.is_active ? 1 : 0.5 }}>
                   <td style={{ fontWeight: 600 }}>
-                    {user.full_name ?? <span style={{ color: "#9ca3af" }}>—</span>}
+                    {user.full_name ?? <span style={{ color: "var(--muted)" }}>—</span>}
                   </td>
                   <td style={{ fontFamily: "monospace" }}>
-                    {user.username ?? <span style={{ color: "#9ca3af" }}>—</span>}
+                    {user.username ?? <span style={{ color: "var(--muted)" }}>—</span>}
                   </td>
-                  <td style={{ color: "#6b7a8d" }}>{user.email ?? "—"}</td>
+                  <td style={{ color: "var(--muted)" }}>{user.email ?? "—"}</td>
                   <td>
                     <span className="status-badge" style={{
                       background: user.role === "system_admin" ? "#1e3a5f" : user.role === "dc_admin" ? "#dbeafe" : user.role === "dc_operator" ? "#dcfce7" : "#f3f4f6",
@@ -257,7 +257,7 @@ export function UsersPage() {
                         ? <DangerAction label="Deactivate" confirmLabel="Deactivate" description={`Deactivate ${user.full_name ?? user.username ?? "user"}?`}
                             onConfirm={() => void toggleActive(user)} busy={togglingId === user.id} />
                         : <button type="button" disabled={togglingId === user.id} onClick={() => void toggleActive(user)}
-                            style={{ border: "1px solid var(--line)", background: "#fff", color: "#15803d", fontSize: 12, fontWeight: 600, padding: "5px 12px", cursor: "pointer" }}>
+                            style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", color: "var(--text)", fontSize: 12, fontWeight: 600, padding: "5px 12px", cursor: "pointer" }}>
                             {togglingId === user.id ? "…" : "Activate"}
                           </button>
                     )}
@@ -272,3 +272,5 @@ export function UsersPage() {
     </div>
   );
 }
+
+

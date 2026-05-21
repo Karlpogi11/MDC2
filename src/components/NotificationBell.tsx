@@ -48,14 +48,14 @@ export function NotificationBell() {
       {open && (
         <div style={{
           position: "absolute", top: "calc(100% + 8px)", right: 0,
-          width: 340, background: "#fff", border: "1px solid #e5e7eb",
-          borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+          width: 340, background: "var(--bg-surface)", border: "1px solid var(--line)",
+          borderRadius: "var(--radius)", boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
           zIndex: 200, overflow: "hidden",
         }}>
           {/* Header */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid #f3f4f6" }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>
-              Notifications {unreadCount > 0 && <span style={{ fontSize: 11, background: "#ef4444", color: "#fff", borderRadius: 10, padding: "1px 6px", marginLeft: 4 }}>{unreadCount}</span>}
+            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>
+              Notifications {unreadCount > 0 && <span style={{ fontSize: 11, background: "#ef4444", color: "#fff", borderRadius: "var(--radius)", padding: "1px 6px", marginLeft: 4 }}>{unreadCount}</span>}
             </span>
             {unreadCount > 0 && (
               <button type="button" onClick={() => void markAllRead()}
@@ -68,7 +68,7 @@ export function NotificationBell() {
           {/* List */}
           <div style={{ maxHeight: 360, overflowY: "auto" }}>
             {notifications.length === 0 && (
-              <div style={{ padding: "32px 16px", textAlign: "center", color: "#9ca3af", fontSize: 13 }}>
+              <div style={{ padding: "32px 16px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>
                 No notifications yet
               </div>
             )}
@@ -86,9 +86,9 @@ export function NotificationBell() {
                   <span style={{ width: 7, height: 7, background: "var(--blue)", flexShrink: 0, marginTop: 5 }} />
                 )}
                 <div style={{ flex: 1, minWidth: 0, paddingLeft: n.read_at ? 17 : 0 }}>
-                  <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: n.read_at ? 400 : 600, color: "#111827" }}>{n.title}</p>
-                  {n.body && <p style={{ margin: "0 0 4px", fontSize: 12, color: "#6b7a8d" }}>{n.body}</p>}
-                  <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>{timeAgo(n.created_at)}</p>
+                  <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: n.read_at ? 400 : 600, color: "var(--text)" }}>{n.title}</p>
+                  {n.body && <p style={{ margin: "0 0 4px", fontSize: 12, color: "var(--muted)" }}>{n.body}</p>}
+                  <p style={{ margin: 0, fontSize: 11, color: "var(--muted)" }}>{timeAgo(n.created_at)}</p>
                 </div>
               </div>
             ))}
@@ -98,3 +98,5 @@ export function NotificationBell() {
     </div>
   );
 }
+
+

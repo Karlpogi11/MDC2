@@ -22,7 +22,7 @@ insert into public.app_config (key, value) values
   ('brand_logo_url',   null),
   ('brand_favicon_url',null),
   ('brand_primary_color', '#0b4fa8'),
-  ('brand_accent_color',  '#d9f32b'),
+  ('brand_accent_color',  '#0071e3'),
   ('support_email',    null),
   ('login_notice',     null)
 on conflict (key) do nothing;

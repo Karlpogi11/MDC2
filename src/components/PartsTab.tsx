@@ -53,7 +53,7 @@ function parseCSV(text: string): Record<string, string>[] {
 const fieldStyle: React.CSSProperties = {
   width: "100%", border: "1px solid #93c5fd", borderRadius: "var(--radius-sm)",
   padding: "3px 7px", fontSize: 12, outline: "none",
-  boxSizing: "border-box", fontFamily: "inherit", background: "#fff",
+  boxSizing: "border-box", fontFamily: "inherit", background: "var(--bg-surface)",
 };
 
 export function PartsTab() {
@@ -216,7 +216,7 @@ export function PartsTab() {
   );
 
   const addInputStyle: React.CSSProperties = {
-    border: "1px solid #d0d0d0", borderRadius: "var(--radius)", padding: "8px 10px",
+    border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "8px 10px",
     fontSize: 13, outline: "none", width: "100%", boxSizing: "border-box", fontFamily: "inherit",
   };
 
@@ -226,7 +226,7 @@ export function PartsTab() {
 
       {/* Column mapping */}
       {csvRows && (
-        <div style={{ background: "#fff", border: "1px solid #d0d0d0", borderRadius: "var(--radius)", padding: 16 }}>
+        <div style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: 16 }}>
           <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 600, color: "#111" }}>
             Map columns — {csvRows.length} rows detected
           </p>
@@ -242,7 +242,7 @@ export function PartsTab() {
                 <select
                   value={colMap[field] ?? ""}
                   onChange={(e) => setColMap((m) => ({ ...m, [field]: e.target.value }))}
-                  style={{ width: "100%", border: "1px solid #d0d0d0", padding: "7px 10px", fontSize: 13, background: "#fff", outline: "none" }}
+                  style={{ width: "100%", border: "1px solid var(--line)", padding: "7px 10px", fontSize: 13, background: "var(--bg-surface)", outline: "none" }}
                 >
                   <option value="">— skip —</option>
                   {csvHeaders.map((h) => <option key={h} value={h}>{h}</option>)}
@@ -252,29 +252,29 @@ export function PartsTab() {
           </div>
           {/* Preview table — shows exactly what will be imported */}
           {colMap.part_number && colMap.part_name && (
-            <div style={{ marginBottom: 12, border: "1px solid #e5e7eb", overflow: "auto", maxHeight: 220 }}>
+            <div style={{ marginBottom: 12, border: "1px solid var(--line)", overflow: "auto", maxHeight: 220 }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                 <thead>
-                  <tr style={{ background: "#f9fafb", position: "sticky", top: 0 }}>
-                    <th style={{ padding: "6px 10px", textAlign: "left", fontWeight: 600, color: "#6b7a8d", borderBottom: "1px solid #e5e7eb" }}>Part number</th>
-                    <th style={{ padding: "6px 10px", textAlign: "left", fontWeight: 600, color: "#6b7a8d", borderBottom: "1px solid #e5e7eb" }}>Part name</th>
-                    {colMap.category && <th style={{ padding: "6px 10px", textAlign: "left", fontWeight: 600, color: "#6b7a8d", borderBottom: "1px solid #e5e7eb" }}>Category</th>}
+                  <tr style={{ background: "var(--bg-surface-elevated)", position: "sticky", top: 0 }}>
+                    <th style={{ padding: "6px 10px", textAlign: "left", fontWeight: 600, color: "var(--muted)", borderBottom: "1px solid #e5e7eb" }}>Part number</th>
+                    <th style={{ padding: "6px 10px", textAlign: "left", fontWeight: 600, color: "var(--muted)", borderBottom: "1px solid #e5e7eb" }}>Part name</th>
+                    {colMap.category && <th style={{ padding: "6px 10px", textAlign: "left", fontWeight: 600, color: "var(--muted)", borderBottom: "1px solid #e5e7eb" }}>Category</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {csvRows.filter(r => r[colMap.part_number]?.trim() && r[colMap.part_name]?.trim()).slice(0, 10).map((r, i) => (
                     <tr key={i} style={{ borderBottom: "1px solid #f3f4f6" }}>
-                      <td style={{ padding: "5px 10px", fontFamily: "monospace", color: "#0b4fa8" }}>{r[colMap.part_number]}</td>
+                      <td style={{ padding: "5px 10px", fontFamily: "monospace", color: "var(--blue)" }}>{r[colMap.part_number]}</td>
                       <td style={{ padding: "5px 10px", color: "#111" }}>{r[colMap.part_name]}</td>
-                      {colMap.category && <td style={{ padding: "5px 10px", color: "#6b7a8d" }}>{r[colMap.category] || "—"}</td>}
+                      {colMap.category && <td style={{ padding: "5px 10px", color: "var(--muted)" }}>{r[colMap.category] || "—"}</td>}
                     </tr>
                   ))}
                 </tbody>
               </table>
-              <div style={{ padding: "6px 10px", fontSize: 11, color: "#9ca3af", borderTop: "1px solid #f3f4f6" }}>
+              <div style={{ padding: "6px 10px", fontSize: 11, color: "var(--muted)", borderTop: "1px solid #f3f4f6" }}>
                 Showing first 10 of {csvRows.filter(r => r[colMap.part_number]?.trim() && r[colMap.part_name]?.trim()).length} valid rows
                 {csvRows.length - csvRows.filter(r => r[colMap.part_number]?.trim() && r[colMap.part_name]?.trim()).length > 0 &&
-                  <span style={{ color: "#f59e0b", marginLeft: 8 }}>
+                  <span style={{ color: "var(--muted)", marginLeft: 8 }}>
                     · {csvRows.length - csvRows.filter(r => r[colMap.part_number]?.trim() && r[colMap.part_name]?.trim()).length} rows will be skipped (empty part number or name)
                   </span>
                 }
@@ -300,7 +300,7 @@ export function PartsTab() {
               {importing ? "Importing…" : `Import ${csvRows.filter(r => r[colMap.part_number]?.trim() && r[colMap.part_name]?.trim()).length} rows`}
             </button>
             <button type="button" onClick={() => setCsvRows(null)}
-              style={{ background: "#fff", border: "1px solid #d0d0d0", padding: "8px 14px", fontSize: 13, color: "#666", cursor: "pointer" }}>
+              style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", padding: "8px 14px", fontSize: 13, color: "#666", cursor: "pointer" }}>
               Cancel
             </button>
           </div>
@@ -310,8 +310,8 @@ export function PartsTab() {
       {importResult && <ImportResult added={importResult.added} updated={importResult.updated} skipped={importResult.skipped} errors={importResult.errors} />}
 
       {/* Add form */}
-      <div style={{ background: "#fff", border: "1px solid #d0d0d0", borderRadius: "var(--radius)", overflow: "hidden" }}>
-        <div style={{ padding: "12px 20px", borderBottom: "1px solid #d0d0d0", background: "#f2f2f2", display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", overflow: "hidden" }}>
+        <div style={{ padding: "12px 20px", borderBottom: "1px solid #d0d0d0", background: "var(--bg-surface-elevated)", display: "flex", alignItems: "center", gap: 8 }}>
           <Plus size={15} color="var(--blue)" />
           <h3 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#444" }}>Add part</h3>
         </div>
@@ -342,7 +342,7 @@ export function PartsTab() {
               <input type="number" min="0" step="0.01" value={cost} onChange={(e) => setCost(e.target.value)} style={addInputStyle} placeholder="0.00" />
             </div>
           </div>
-          {addError && <p style={{ margin: "0 0 8px", fontSize: 12, color: "#b91c1c" }}>{addError}</p>}
+          {addError && <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--negative)" }}>{addError}</p>}
           <button type="submit" disabled={adding}
             style={{ display: "inline-flex", alignItems: "center", gap: 6, background: addSuccess ? "#16a34a" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
             {addSuccess ? <><Check size={14} /> Saved</> : adding ? "Saving…" : <><Plus size={14} /> Add part</>}
@@ -357,7 +357,7 @@ export function PartsTab() {
             Parts {!loading && <span style={{ fontWeight: 400, color: "#888" }}>({filtered.length})</span>}
           </span>
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search part no. or name…"
-            style={{ border: "1px solid #d0d0d0", borderRadius: "var(--radius)", padding: "5px 10px", fontSize: 12, outline: "none", width: 220, fontFamily: "inherit" }} />
+            style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 10px", fontSize: 12, outline: "none", width: 220, fontFamily: "inherit" }} />
         </div>
         <div className="table-scroll">
           <table ref={tableRef}>
@@ -412,18 +412,18 @@ export function PartsTab() {
                               <Save size={12} /> {saving ? "…" : "Save"}
                             </button>
                             <button type="button" onClick={() => setEditId(null)}
-                              style={{ border: "1px solid #d0d0d0", background: "#fff", borderRadius: "var(--radius)", padding: "4px 8px", fontSize: 12, cursor: "pointer", color: "#666" }}>
+                              style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "4px 8px", fontSize: 12, cursor: "pointer", color: "#666" }}>
                               <X size={12} />
                             </button>
                           </>
                         ) : (
                           <>
                             <button type="button" onClick={() => startEdit(part)}
-                              style={{ border: "1px solid #d0d0d0", background: "#fff", borderRadius: "var(--radius)", padding: "4px 10px", fontSize: 12, fontWeight: 600, color: "#444", cursor: "pointer" }}>
+                              style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "4px 10px", fontSize: 12, fontWeight: 600, color: "#444", cursor: "pointer" }}>
                               Edit
                             </button>
                             <button type="button" onClick={() => void toggleActive(part)}
-                              style={{ border: "1px solid #d0d0d0", background: "#fff", borderRadius: "var(--radius)", padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                              style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer",
                                 color: part.is_active ? "#b91c1c" : "#15803d" }}>
                               {part.is_active ? "Disable" : "Enable"}
                             </button>
@@ -443,4 +443,6 @@ export function PartsTab() {
     </div>
   );
 }
+
+
 

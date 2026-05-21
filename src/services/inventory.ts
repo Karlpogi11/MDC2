@@ -144,22 +144,13 @@ function countReservedByPart(rows: ReservedTransferItemRecord[]): Map<string, nu
   const seenSerialKeys = new Set<string>();
 
   for (const row of rows) {
-    if (!row.part_id) {
-      continue;
-    }
+    // Only count items with a serial assigned — unassigned slots hold nothing real
+    if (!row.part_id || !row.serial_id) continue;
 
-    if (row.serial_id) {
-      const serialKey = `${row.part_id}:${row.serial_id}`;
-      if (seenSerialKeys.has(serialKey)) {
-        continue;
-      }
-      seenSerialKeys.add(serialKey);
-      reservedByPart.set(row.part_id, (reservedByPart.get(row.part_id) ?? 0) + 1);
-      continue;
-    }
-
-    const qty = toPositiveInt(row.qty ?? 1) || 1;
-    reservedByPart.set(row.part_id, (reservedByPart.get(row.part_id) ?? 0) + qty);
+    const serialKey = `${row.part_id}:${row.serial_id}`;
+    if (seenSerialKeys.has(serialKey)) continue;
+    seenSerialKeys.add(serialKey);
+    reservedByPart.set(row.part_id, (reservedByPart.get(row.part_id) ?? 0) + 1);
   }
 
   return reservedByPart;
@@ -294,7 +285,7 @@ function toInventoryRows(
   }
 
   for (const part of byPart.values()) {
-    const reserved = reservedByPart.get(part.partId) ?? 0;
+    const reserved = reservedByPart.get(part.partId) ?? 0; // only serial-assigned items
     part.reserved = reserved;
     part.available = Math.max(part.inStock - reserved, 0);
   }

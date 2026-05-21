@@ -1,8 +1,9 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 
 /**
- * DangerAction — inline confirm pattern for destructive actions.
- * Shows label + description, expands to confirm on first click.
+ * DangerAction — trigger button stays fixed-size; confirm appears in a portal
+ * modal so it never shifts surrounding layout.
  */
 export function DangerAction({
   label,
@@ -19,37 +20,63 @@ export function DangerAction({
 }) {
   const [confirming, setConfirming] = useState(false);
 
-  if (!confirming) {
-    return (
+  return (
+    <>
       <button
         type="button"
         onClick={() => setConfirming(true)}
         disabled={busy}
         style={{
-          border: "1px solid #fecaca", background: "#fff", color: "#b91c1c",
+          border: "1px solid var(--line)", background: "var(--bg-surface)", color: "var(--negative)",
           padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+          borderRadius: "var(--radius)",
         }}
       >
         {label}
       </button>
-    );
-  }
 
-  return (
-    <div style={{
-      display: "inline-flex", alignItems: "center", gap: 8,
-      border: "1px solid #fecaca", background: "#fef2f2", padding: "6px 10px",
-    }}>
-      {description && <span style={{ fontSize: 12, color: "#b91c1c" }}>{description}</span>}
-      <button type="button" onClick={() => { setConfirming(false); onConfirm(); }} disabled={busy}
-        style={{ border: "none", background: "#b91c1c", color: "#fff", padding: "4px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-        {busy ? "…" : confirmLabel}
-      </button>
-      <button type="button" onClick={() => setConfirming(false)}
-        style={{ border: "1px solid #fecaca", background: "#fff", color: "#b91c1c", padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>
-        Cancel
-      </button>
-    </div>
+      {confirming && createPortal(
+        <>
+          <div
+            onClick={() => setConfirming(false)}
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 200 }}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            style={{
+              position: "fixed", top: "50%", left: "50%",
+              transform: "translate(-50%,-50%)",
+              background: "var(--bg-surface)", borderRadius: "var(--radius)",
+              padding: 24, width: 340, zIndex: 201,
+              boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+            }}
+          >
+            {description && (
+              <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--text)" }}>{description}</p>
+            )}
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={() => setConfirming(false)}
+                style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", color: "var(--text)", padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", borderRadius: "var(--radius)" }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => { setConfirming(false); onConfirm(); }}
+                disabled={busy}
+                style={{ border: "none", background: "#b91c1c", color: "#fff", padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", borderRadius: "var(--radius)" }}
+              >
+                {busy ? "…" : confirmLabel}
+              </button>
+            </div>
+          </div>
+        </>,
+        document.body,
+      )}
+    </>
   );
 }
 
@@ -87,15 +114,15 @@ export function DangerZoneCard({
   }
 
   return (
-    <div style={{ background: "#fff", border: "1px solid #fecaca", borderRadius: "var(--radius)", padding: 16 }}>
-      <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 700, color: "#b91c1c" }}>⚠ {title}</p>
-      <p style={{ margin: "0 0 12px", fontSize: 12, color: "#6b7a8d" }}>{description}</p>
+    <div style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: 16 }}>
+      <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 700, color: "var(--negative)" }}>⚠ {title}</p>
+      <p style={{ margin: "0 0 12px", fontSize: 12, color: "var(--muted)" }}>{description}</p>
 
       {done
-        ? <p style={{ margin: 0, fontSize: 13, color: "#15803d", fontWeight: 600 }}>✓ {successMessage}</p>
+        ? <p style={{ margin: 0, fontSize: 13, color: "var(--text)", fontWeight: 600 }}>✓ {successMessage}</p>
         : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {error && <p style={{ margin: 0, fontSize: 12, color: "#b91c1c" }}>{error}</p>}
+            {error && <p style={{ margin: 0, fontSize: 12, color: "var(--negative)" }}>{error}</p>}
             {checks.map((text, i) => (
               <label key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
                 <input type="checkbox" checked={checked[i]}
@@ -119,3 +146,5 @@ export function DangerZoneCard({
     </div>
   );
 }
+
+

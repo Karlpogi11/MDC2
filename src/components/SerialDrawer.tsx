@@ -29,12 +29,12 @@ type Props = {
 };
 
 const STATUS_STYLE: Record<string, { bg: string; color: string; label: string }> = {
-  in_stock:    { bg: "#dcfce7", color: "#15803d", label: "In Stock" },
-  in_transit:  { bg: "#fef9c3", color: "#a16207", label: "In Transit" },
-  transit:     { bg: "#fef9c3", color: "#a16207", label: "In Transit" },
-  transferred: { bg: "#dbeafe", color: "#1d4ed8", label: "Stocked Out" },
-  consumed:    { bg: "#f3f4f6", color: "#6b7a8d", label: "Consumed" },
-  void:        { bg: "#fee2e2", color: "#b91c1c", label: "Void" },
+  in_stock:    { bg: "#dcfce7", color: "var(--text)", label: "In Stock" },
+  in_transit:  { bg: "#fef9c3", color: "var(--muted)", label: "In Transit" },
+  transit:     { bg: "#fef9c3", color: "var(--muted)", label: "In Transit" },
+  transferred: { bg: "#dbeafe", color: "var(--blue)", label: "Stocked Out" },
+  consumed:    { bg: "#f3f4f6", color: "var(--muted)", label: "Consumed" },
+  void:        { bg: "#fee2e2", color: "var(--negative)", label: "Void" },
 };
 
 function fmt(iso: string) {
@@ -139,7 +139,7 @@ function SerialTimeline({ serialId, serialNumber }: { serialId: string; serialNu
             actor: null,
             site: src?.site_name ?? null,
             note: null,
-            color: "#6b7a8d",
+            color: "var(--muted)",
           });
         }
         if (t.packed_at) {
@@ -150,7 +150,7 @@ function SerialTimeline({ serialId, serialNumber }: { serialId: string; serialNu
             actor: null,
             site: src?.site_name ?? null,
             note: `→ ${dest?.site_name ?? "unknown"}`,
-            color: "#1d4ed8",
+            color: "var(--blue)",
           });
         }
         if (t.status === "received") {
@@ -161,7 +161,7 @@ function SerialTimeline({ serialId, serialNumber }: { serialId: string; serialNu
             actor: null,
             site: dest?.site_name ?? null,
             note: t.transfer_no,
-            color: "#7c3aed",
+            color: "var(--muted)",
           });
         }
       }
@@ -176,7 +176,7 @@ function SerialTimeline({ serialId, serialNumber }: { serialId: string; serialNu
           actor: by?.full_name ?? by?.username ?? null,
           site: null,
           note: `${c.old_serial_number} -> ${c.new_serial_number}: ${c.reason}`,
-          color: "#d97706",
+          color: "var(--muted)",
         });
       }
 
@@ -187,8 +187,8 @@ function SerialTimeline({ serialId, serialNumber }: { serialId: string; serialNu
     });
   }, [serialId]);
 
-  if (loading) return <div style={{ padding: 32, textAlign: "center", color: "#9ca3af", fontSize: 13 }}>Loading history...</div>;
-  if (!events.length) return <div style={{ padding: 32, textAlign: "center", color: "#9ca3af", fontSize: 13 }}>No history found.</div>;
+  if (loading) return <div style={{ padding: 32, textAlign: "center", color: "var(--muted)", fontSize: 13 }}>Loading history...</div>;
+  if (!events.length) return <div style={{ padding: 32, textAlign: "center", color: "var(--muted)", fontSize: 13 }}>No history found.</div>;
 
   return (
     <div style={{ padding: "16px 20px" }}>
@@ -204,19 +204,19 @@ function SerialTimeline({ serialId, serialNumber }: { serialId: string; serialNu
               flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
               zIndex: 1, marginTop: 2,
             }}>
-              <div className="circle" style={{ width: 8, height: 8, borderRadius: "50%", background: "#fff" }} />
+              <div className="circle" style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--bg-surface)" }} />
             </div>
 
             {/* Content */}
             <div style={{ flex: 1, paddingBottom: 4 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>{ev.action}</div>
-              <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{ev.action}</div>
+              <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>
                 {fmt(ev.at)}
                 {ev.actor && <span> · {ev.actor}</span>}
-                {ev.site && <span> · <strong style={{ color: "#374151" }}>{ev.site}</strong></span>}
+                {ev.site && <span> · <strong style={{ color: "var(--text)" }}>{ev.site}</strong></span>}
               </div>
               {ev.note && (
-                <div style={{ marginTop: 4, fontSize: 12, color: "#6b7a8d", fontStyle: "italic" }}>{ev.note}</div>
+                <div style={{ marginTop: 4, fontSize: 12, color: "var(--muted)", fontStyle: "italic" }}>{ev.note}</div>
               )}
             </div>
           </div>
@@ -275,16 +275,16 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
   return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 100 }} />
-      <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 560, background: "#fff", zIndex: 101, display: "flex", flexDirection: "column", boxShadow: "-4px 0 24px rgba(0,0,0,0.15)" }}>
+      <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 560, background: "var(--bg-surface)", zIndex: 101, display: "flex", flexDirection: "column", boxShadow: "-4px 0 24px rgba(0,0,0,0.15)" }}>
 
         {/* Header */}
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--line)", background: "#f7f7f7", flexShrink: 0 }}>
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--line)", background: "var(--bg-surface-elevated)", flexShrink: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
               <h2 style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 700, color: "var(--text)" }}>{partName}</h2>
-              <span style={{ fontSize: 12, fontFamily: "monospace", color: "var(--blue)", background: "#eff6ff", padding: "1px 6px", borderRadius: "var(--radius-sm)", display: "inline-block" }}>{partNumber}</span>
+              <span style={{ fontSize: 12, fontFamily: "monospace", color: "var(--blue)", background: "var(--bg-surface-elevated)", padding: "1px 6px", borderRadius: "var(--radius-sm)", display: "inline-block" }}>{partNumber}</span>
             </div>
-            <button type="button" onClick={onClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#6b7a8d", padding: 4 }}>
+            <button type="button" onClick={onClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--muted)", padding: 4 }}>
               <X size={20} />
             </button>
           </div>
@@ -296,7 +296,7 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
                 All ({serials.length})
               </button>
               {Object.entries(counts).map(([status, count]) => {
-                const s = STATUS_STYLE[status] ?? { bg: "#f3f4f6", color: "#6b7a8d", label: status };
+                const s = STATUS_STYLE[status] ?? { bg: "#f3f4f6", color: "var(--muted)", label: status };
                 const active = statusFilter === status;
                 return (
                   <button key={status} type="button" onClick={() => setStatusFilter(status)}
@@ -329,10 +329,10 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
               </div>
             </div>
             <div style={{ flex: 1, overflowY: "auto" }}>
-              {loading && <div style={{ padding: 32, textAlign: "center", color: "#9ca3af", fontSize: 13 }}>Loading serials...</div>}
-              {!loading && filtered.length === 0 && <div style={{ padding: 32, textAlign: "center", color: "#9ca3af", fontSize: 13 }}>{search ? `No serials matching "${search}"` : "No serials found."}</div>}
+              {loading && <div style={{ padding: 32, textAlign: "center", color: "var(--muted)", fontSize: 13 }}>Loading serials...</div>}
+              {!loading && filtered.length === 0 && <div style={{ padding: 32, textAlign: "center", color: "var(--muted)", fontSize: 13 }}>{search ? `No serials matching "${search}"` : "No serials found."}</div>}
               {!loading && filtered.map((serial, i) => {
-                const sm = STATUS_STYLE[serial.status] ?? { bg: "#f3f4f6", color: "#6b7a8d", label: serial.status };
+                const sm = STATUS_STYLE[serial.status] ?? { bg: "#f3f4f6", color: "var(--muted)", label: serial.status };
                 return (
                   <div key={serial.id} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", alignItems: "center", gap: 12, padding: "10px 20px", borderBottom: "1px solid #f3f4f6", background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
                     <div>
@@ -355,8 +355,8 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
                         fontSize: 11,
                         fontWeight: 600,
                         color: "var(--blue)",
-                        background: "#eff6ff",
-                        border: "1px solid #bfdbfe",
+                        background: "var(--bg-surface-elevated)",
+                        border: "1px solid var(--line)",
                         borderRadius: "var(--radius-sm)",
                         padding: "3px 8px",
                         cursor: "pointer",
@@ -369,7 +369,7 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
                 );
               })}
             </div>
-            <div style={{ padding: "10px 20px", borderTop: "1px solid var(--line)", background: "#f7f7f7", flexShrink: 0, fontSize: 12, color: "var(--muted)" }}>
+            <div style={{ padding: "10px 20px", borderTop: "1px solid var(--line)", background: "var(--bg-surface-elevated)", flexShrink: 0, fontSize: 12, color: "var(--muted)" }}>
               {!loading && `Showing ${filtered.length} of ${serials.length} serials`}
             </div>
           </>
@@ -390,7 +390,7 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
             <div style={{ flex: 1, overflowY: "auto" }}>
               {selectedSerial
                 ? <SerialTimeline serialId={selectedSerial.id} serialNumber={selectedSerial.serial_number} />
-                : <div style={{ padding: 32, textAlign: "center", color: "#9ca3af", fontSize: 13 }}>Select a serial above to view its chain of custody.</div>
+                : <div style={{ padding: 32, textAlign: "center", color: "var(--muted)", fontSize: 13 }}>Select a serial above to view its chain of custody.</div>
               }
             </div>
           </>
@@ -399,3 +399,5 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
     </>
   );
 }
+
+

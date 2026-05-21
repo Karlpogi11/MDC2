@@ -21,12 +21,12 @@ export function DatePicker({ value, onChange, placeholder = "Select date", label
           value={value}
           onChange={(e) => onChange(e.target.value)}
           style={{
-            border: "1px solid #e2e8f0",
-            borderRadius: 6,
+            border: "1px solid var(--line)",
+            borderRadius: "var(--radius)",
             padding: "7px 32px 7px 10px",
             fontSize: 13,
             fontFamily: "inherit",
-            background: "#fff",
+            background: "var(--bg-surface)",
             outline: "none",
             width: 148,
             cursor: "pointer",
@@ -46,3 +46,5 @@ export function DatePicker({ value, onChange, placeholder = "Select date", label
     </div>
   );
 }
+
+

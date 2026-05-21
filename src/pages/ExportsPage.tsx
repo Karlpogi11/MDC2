@@ -161,8 +161,8 @@ export function ExportsPage() {
   }
 
   const inputStyle: React.CSSProperties = {
-    border: "1px solid #d0d0d0", borderRadius: "var(--radius)", padding: "8px 10px",
-    fontSize: 13, outline: "none", fontFamily: "inherit", background: "#fff",
+    border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "8px 10px",
+    fontSize: 13, outline: "none", fontFamily: "inherit", background: "var(--bg-surface)",
   };
 
   return (
@@ -170,15 +170,15 @@ export function ExportsPage() {
       <main style={{ maxWidth: 860, margin: "0 auto", padding: "28px 24px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 24 }}>
           <FileDown size={20} color="var(--blue)" />
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#1a2a3a" }}>Exports</h1>
+          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text)" }}>Exports</h1>
         </div>
 
         <div style={{ display: "grid", gap: 20 }}>
           {/* Stocked-in export */}
-          <div style={{ background: "#fff", border: "1px solid #d0d0d0", borderRadius: "var(--radius)", overflow: "hidden" }}>
-            <div style={{ padding: "14px 20px", borderBottom: "1px solid #e5e5e5", background: "#f7f7f7" }}>
-              <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#2d2d2d" }}>Stocked-In Records</h2>
-              <p style={{ margin: "2px 0 0", fontSize: 12, color: "#6b7a8d" }}>All serials imported into DC inventory</p>
+          <div style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", overflow: "hidden" }}>
+            <div style={{ padding: "14px 20px", borderBottom: "1px solid #e5e5e5", background: "var(--bg-surface-elevated)" }}>
+              <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text)" }}>Stocked-In Records</h2>
+              <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--muted)" }}>All serials imported into DC inventory</p>
             </div>
             <div style={{ padding: 20 }}>
               <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
@@ -189,20 +189,20 @@ export function ExportsPage() {
                   <Download size={14} /> {siExporting ? "Exporting…" : "Download CSV"}
                 </button>
                 {siCount !== null && (
-                  <span style={{ fontSize: 13, color: "#15803d", fontWeight: 600 }}>✓ {siCount} rows exported</span>
+                  <span style={{ fontSize: 13, color: "var(--muted)", fontWeight: 600 }}>✓ {siCount} rows exported</span>
                 )}
               </div>
-              <p style={{ margin: "10px 0 0", fontSize: 12, color: "#9ca3af" }}>
+              <p style={{ margin: "10px 0 0", fontSize: 12, color: "var(--muted)" }}>
                 Columns: Serial Number, Part Number, Part Name, Category, Status, Site, Stock-In Date, Import Type
               </p>
             </div>
           </div>
 
           {/* Transferred export */}
-          <div style={{ background: "#fff", border: "1px solid #d0d0d0", borderRadius: "var(--radius)", overflow: "hidden" }}>
-            <div style={{ padding: "14px 20px", borderBottom: "1px solid #e5e5e5", background: "#f7f7f7" }}>
-              <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#2d2d2d" }}>Stocked Out Records</h2>
-              <p style={{ margin: "2px 0 0", fontSize: 12, color: "#6b7a8d" }}>All items sent to destination sites</p>
+          <div style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", overflow: "hidden" }}>
+            <div style={{ padding: "14px 20px", borderBottom: "1px solid #e5e5e5", background: "var(--bg-surface-elevated)" }}>
+              <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text)" }}>Stocked Out Records</h2>
+              <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--muted)" }}>All items sent to destination sites</p>
             </div>
             <div style={{ padding: 20 }}>
               <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
@@ -229,10 +229,10 @@ export function ExportsPage() {
                   <Download size={14} /> {trExporting ? "Exporting…" : "Download CSV"}
                 </button>
                 {trCount !== null && (
-                  <span style={{ fontSize: 13, color: "#15803d", fontWeight: 600 }}>✓ {trCount} rows exported</span>
+                  <span style={{ fontSize: 13, color: "var(--muted)", fontWeight: 600 }}>✓ {trCount} rows exported</span>
                 )}
               </div>
-              <p style={{ margin: "10px 0 0", fontSize: 12, color: "#9ca3af" }}>
+              <p style={{ margin: "10px 0 0", fontSize: 12, color: "var(--muted)" }}>
                 Columns: Transfer #, Serial, Part Number, Part Name, Category, Qty, Destination, Status, Created Date, Packed Date, Requested By
               </p>
             </div>
@@ -242,3 +242,5 @@ export function ExportsPage() {
     </AppLayout>
   );
 }
+
+

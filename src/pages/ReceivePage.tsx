@@ -157,37 +157,37 @@ export function ReceivePage() {
 
   // ── Token / unauthenticated path: standalone page ─────────────────────────
   if (!isLoggedIn || token) {
-    if (loading) return <StandalonePage><p style={{ color: "#9ca3af", fontSize: 14 }}>Loading…</p></StandalonePage>;
+    if (loading) return <StandalonePage><p style={{ color: "var(--muted)", fontSize: 14 }}>Loading…</p></StandalonePage>;
     if (error) return (
       <StandalonePage>
-        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", padding: "14px 18px", color: "#b91c1c", fontSize: 14 }}>{error}</div>
+        <div style={{ background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", padding: "14px 18px", color: "var(--negative)", fontSize: 14 }}>{error}</div>
       </StandalonePage>
     );
     if (done) return (
       <StandalonePage>
         <div style={{ textAlign: "center", padding: "32px 0" }}>
           <CheckCircle size={48} color="#16a34a" style={{ marginBottom: 16 }} />
-          <h2 style={{ margin: "0 0 8px", fontSize: 20, fontWeight: 700, color: "#15803d" }}>Receipt Confirmed</h2>
-          <p style={{ margin: 0, color: "#6b7a8d", fontSize: 14 }}>{invoiceRef || transferNo} has been marked as received.</p>
+          <h2 style={{ margin: "0 0 8px", fontSize: 20, fontWeight: 700, color: "var(--text)" }}>Receipt Confirmed</h2>
+          <p style={{ margin: 0, color: "var(--muted)", fontSize: 14 }}>{invoiceRef || transferNo} has been marked as received.</p>
         </div>
       </StandalonePage>
     );
     return (
       <StandalonePage>
         <div style={{ maxWidth: 420, margin: "0 auto 24px", textAlign: "left" }}>
-          <p style={{ margin: "0 0 4px", fontSize: 12, color: "#9ca3af" }}>Invoice #</p>
-          <p style={{ margin: "0 0 12px", fontFamily: "monospace", fontSize: 15, fontWeight: 700, color: "#1a2a3a" }}>{invoiceRef || transferNo}</p>
-          <p style={{ margin: "0 0 4px", fontSize: 12, color: "#9ca3af" }}>From</p>
-          <p style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 600, color: "#1a2a3a" }}>{sourceSite}</p>
-          <p style={{ margin: "0 0 4px", fontSize: 12, color: "#9ca3af" }}>To</p>
-          <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#1a2a3a" }}>{destSite}</p>
+          <p style={{ margin: "0 0 4px", fontSize: 12, color: "var(--muted)" }}>Invoice #</p>
+          <p style={{ margin: "0 0 12px", fontFamily: "monospace", fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{invoiceRef || transferNo}</p>
+          <p style={{ margin: "0 0 4px", fontSize: 12, color: "var(--muted)" }}>From</p>
+          <p style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 600, color: "var(--text)" }}>{sourceSite}</p>
+          <p style={{ margin: "0 0 4px", fontSize: 12, color: "var(--muted)" }}>To</p>
+          <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "var(--text)" }}>{destSite}</p>
         </div>
 
-        <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", padding: "12px 14px", marginBottom: 24, fontSize: 13, color: "#374151", lineHeight: 1.6, textAlign: "center" }}>
+        <div style={{ background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", padding: "12px 14px", marginBottom: 24, fontSize: 13, color: "var(--text)", lineHeight: 1.6, textAlign: "center" }}>
           Please verify all items against the <strong>packing list</strong> before confirming receipt.
         </div>
 
-        {error && <div role="alert" style={{ marginBottom: 16, padding: "10px 14px", background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", fontSize: 13 }}>{error}</div>}
+        {error && <div role="alert" style={{ marginBottom: 16, padding: "10px 14px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", color: "var(--negative)", fontSize: 13 }}>{error}</div>}
 
         <button type="button" onClick={() => void handleConfirm()} disabled={submitting}
           style={{ width: "100%", padding: "14px", fontSize: 15, fontWeight: 700, background: "#15803d", color: "#fff", border: "none", cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.7 : 1 }}>
@@ -198,11 +198,11 @@ export function ReceivePage() {
   }
 
   // ── Authenticated DC staff path ───────────────────────────────────────────
-  if (loading) return <AppLayout><div style={{ padding: 40, textAlign: "center", color: "#9ca3af" }}>Loading…</div></AppLayout>;
+  if (loading) return <AppLayout><div style={{ padding: 40, textAlign: "center", color: "var(--muted)" }}>Loading…</div></AppLayout>;
   if (error) return (
     <AppLayout>
       <main style={{ maxWidth: 640, margin: "40px auto", padding: "0 24px" }}>
-        <div role="alert" style={{ padding: "14px 18px", background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", fontSize: 13 }}>{error}</div>
+        <div role="alert" style={{ padding: "14px 18px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", color: "var(--negative)", fontSize: 13 }}>{error}</div>
       </main>
     </AppLayout>
   );
@@ -210,8 +210,8 @@ export function ReceivePage() {
     <AppLayout>
       <main style={{ maxWidth: 640, margin: "60px auto", padding: "0 24px", textAlign: "center" }}>
         <CheckCircle size={48} color="#16a34a" style={{ marginBottom: 16 }} />
-        <h1 style={{ margin: "0 0 8px", fontSize: 22, fontWeight: 700, color: "#15803d" }}>Receipt Confirmed</h1>
-        <p style={{ margin: "0 0 28px", color: "#6b7a8d", fontSize: 14 }}>{invoiceRef || transferNo} has been marked as received.</p>
+        <h1 style={{ margin: "0 0 8px", fontSize: 22, fontWeight: 700, color: "var(--text)" }}>Receipt Confirmed</h1>
+        <p style={{ margin: "0 0 28px", color: "var(--muted)", fontSize: 14 }}>{invoiceRef || transferNo} has been marked as received.</p>
       </main>
     </AppLayout>
   );
@@ -223,10 +223,10 @@ export function ReceivePage() {
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
               <Truck size={18} color="var(--blue)" />
-              <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#1a2a3a", fontFamily: "monospace" }}>{invoiceRef || transferNo}</h1>
-              <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: "var(--radius-pill)", background: "#fef9c3", color: "#a16207" }}>In Transit</span>
+              <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text)", fontFamily: "monospace" }}>{invoiceRef || transferNo}</h1>
+              <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: "var(--radius-pill)", background: "var(--bg-surface-elevated)", color: "var(--muted)" }}>In Transit</span>
             </div>
-            <p style={{ margin: 0, fontSize: 13, color: "#6b7a8d" }}>
+            <p style={{ margin: 0, fontSize: 13, color: "var(--muted)" }}>
               {sourceSite} → {destSite} · Confirm items received below
             </p>
           </div>
@@ -242,7 +242,7 @@ export function ReceivePage() {
           </div>
         </div>
 
-        {error && <div role="alert" style={{ marginBottom: 14, padding: "10px 14px", background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", fontSize: 13 }}>{error}</div>}
+        {error && <div role="alert" style={{ marginBottom: 14, padding: "10px 14px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", color: "var(--negative)", fontSize: 13 }}>{error}</div>}
 
         <div className="table-card">
           <div style={{ padding: "10px 14px", borderBottom: "1px solid #d0d0d0" }}>
@@ -253,7 +253,7 @@ export function ReceivePage() {
               <colgroup><col style={{ width: 40 }} /><col style={{ width: 140 }} /><col /><col style={{ width: 110 }} /><col style={{ width: 50 }} /></colgroup>
               <thead><tr><th></th><th>Serial</th><th>Description</th><th>Part #</th><th className="num">Qty</th></tr></thead>
               <tbody>
-                {items.length === 0 && <tr><td colSpan={5} style={{ padding: 20, textAlign: "center", color: "#9ca3af", fontSize: 13 }}>No serialized items.</td></tr>}
+                {items.length === 0 && <tr><td colSpan={5} style={{ padding: 20, textAlign: "center", color: "var(--muted)", fontSize: 13 }}>No serialized items.</td></tr>}
                 {items.map((item) => (
                   <tr key={item.id}
                     onClick={() => setItems((p) => p.map((x) => x.id === item.id ? { ...x, received: !x.received } : x))}
@@ -265,7 +265,7 @@ export function ReceivePage() {
                     </td>
                     <td style={{ fontFamily: "monospace", fontWeight: 600, color: item.received ? "#15803d" : "var(--blue)", overflow: "hidden", textOverflow: "ellipsis" }}>{item.serial_number}</td>
                     <td style={{ overflow: "hidden", textOverflow: "ellipsis" }} title={item.part_name}>{item.part_name}</td>
-                    <td style={{ fontFamily: "monospace", fontSize: 12, color: "#6b7a8d" }}>{item.part_number}</td>
+                    <td style={{ fontFamily: "monospace", fontSize: 12, color: "var(--muted)" }}>{item.part_number}</td>
                     <td className="num">{item.qty}</td>
                   </tr>
                 ))}
@@ -281,18 +281,20 @@ export function ReceivePage() {
 function StandalonePage({ children }: { children: React.ReactNode }) {
   const { brandName } = useBranding();
   return (
-    <div style={{ minHeight: "100vh", background: "#f9fafb", display: "flex", flexDirection: "column", alignItems: "center", padding: "32px 16px", fontFamily: "\"Inter\", \"Segoe UI\", Arial, sans-serif" }}>
+    <div style={{ minHeight: "100vh", background: "var(--bg-surface-elevated)", display: "flex", flexDirection: "column", alignItems: "center", padding: "32px 16px", fontFamily: "\"Inter\", \"Segoe UI\", Arial, sans-serif" }}>
       <div style={{ width: "100%", maxWidth: 480 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 24 }}>
-          <div style={{ width: 32, height: 32, background: "#13294b", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ width: 32, height: 32, background: "var(--nav-bg)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <Truck size={16} color="#fff" />
           </div>
-          <span style={{ fontWeight: 700, fontSize: 14, color: "#1a2a3a" }}>{brandName ?? "MDC Inventory"}</span>
+          <span style={{ fontWeight: 700, fontSize: 14, color: "var(--text)" }}>{brandName ?? "MDC Inventory"}</span>
         </div>
-        <div style={{ background: "#fff", border: "1px solid #e5e7eb", padding: 24 }}>
+        <div style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", padding: 24 }}>
           {children}
         </div>
       </div>
     </div>
   );
 }
+
+

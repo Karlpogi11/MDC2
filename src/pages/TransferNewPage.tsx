@@ -6,6 +6,7 @@ import { getSupabaseClient } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { AppLayout } from "@/components/AppLayout";
 import { PartNumberInput } from "@/components/PartNumberInput";
+import { useSites } from "@/hooks/useSites";
 
 type Site = { id: string; site_name: string; site_code: string };
 type LineItem = {
@@ -45,7 +46,8 @@ export function TransferNewPage() {
   const { state: authState } = useAuth();
   const actorId = authState.status === "authenticated" ? authState.user.id : null;
 
-  const [sites, setSites] = useState<Site[]>([]);
+  const { data: allSites = [] } = useSites();
+  const sites = allSites.filter((s) => !s.is_dc);
   const [destinationId, setDestinationId] = useState("");
   const [lines, setLines] = useState<LineItem[]>(() =>
     prefill && prefill.length > 0
@@ -55,10 +57,6 @@ export function TransferNewPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
-
-  useEffect(() => {
-    fetchSites().then(setSites);
-  }, []);
 
   async function resolveSerial(i: number, sn: string) {
     if (!sn.trim()) return;
@@ -194,8 +192,8 @@ export function TransferNewPage() {
   }
 
   const inputStyle: React.CSSProperties = {
-    border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "8px 10px",
-    fontSize: 13, color: "#111827", background: "#fff", outline: "none", width: "100%", boxSizing: "border-box",
+    border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "8px 10px",
+    fontSize: 13, color: "var(--text)", background: "var(--bg-surface)", outline: "none", width: "100%", boxSizing: "border-box",
   };
 
   return (
@@ -203,27 +201,27 @@ export function TransferNewPage() {
       <main style={{ maxWidth: 960, margin: "0 auto", padding: "32px 24px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
           <div>
-            <h1 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#1a2a3a" }}>Create Transfer</h1>
-            <p style={{ margin: 0, fontSize: 13, color: "#6b7a8d" }}>Select a destination and add serials or parts to transfer from DC.</p>
+            <h1 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "var(--text)" }}>Create Transfer</h1>
+            <p style={{ margin: 0, fontSize: 13, color: "var(--muted)" }}>Select a destination and add serials or parts to transfer from DC.</p>
           </div>
           <button type="button" onClick={() => navigate("/transfers")}
-            style={{ background: "#fff", border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "8px 16px", fontSize: 13, fontWeight: 600, color: "#374151", cursor: "pointer" }}>
+            style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "8px 16px", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
             Cancel
           </button>
         </div>
 
         <form onSubmit={(e) => void handleSubmit(e)}>
           {/* Destination */}
-          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: "var(--radius)", marginBottom: 16, overflow: "hidden" }}>
+          <div style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", marginBottom: 16, overflow: "hidden" }}>
             <div style={{ padding: "12px 20px", borderBottom: "1px solid #f3f4f6" }}>
-              <h2 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#111827" }}>Destination site</h2>
+              <h2 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "var(--text)" }}>Destination site</h2>
             </div>
             <div style={{ padding: "16px 20px" }}>
               <select
                 required
                 value={destinationId}
                 onChange={(e) => setDestinationId(e.target.value)}
-                style={{ border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "9px 12px", fontSize: 13, color: "#111827", background: "#fff", outline: "none", width: 320, cursor: "pointer" }}
+                style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "9px 12px", fontSize: 13, color: "var(--text)", background: "var(--bg-surface)", outline: "none", width: 320, cursor: "pointer" }}
               >
                 <option value="">— Select destination —</option>
                 {sites.map((s) => (
@@ -234,16 +232,16 @@ export function TransferNewPage() {
           </div>
 
           {/* Line items */}
-          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: "var(--radius)", marginBottom: 16, overflow: "hidden" }}>
+          <div style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", marginBottom: 16, overflow: "hidden" }}>
             <div style={{ padding: "12px 20px", borderBottom: "1px solid #f3f4f6", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h2 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#111827" }}>Items</h2>
-              <span style={{ fontSize: 12, color: "#9ca3af" }}>Enter serial number OR part number</span>
+              <h2 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "var(--text)" }}>Items</h2>
+              <span style={{ fontSize: 12, color: "var(--muted)" }}>Enter serial number OR part number</span>
             </div>
             <div style={{ padding: "16px 20px" }}>
               {/* Column headers */}
               <div style={{ display: "grid", gridTemplateColumns: "180px 160px 1fr 64px 32px", gap: 10, marginBottom: 6, paddingBottom: 6, borderBottom: "1px solid #f3f4f6" }}>
                 {["Serial number", "Part number", "Description", "Qty", ""].map((h) => (
-                  <div key={h} style={{ fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</div>
+                  <div key={h} style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</div>
                 ))}
               </div>
 
@@ -262,7 +260,7 @@ export function TransferNewPage() {
                     />
                     {hasSerial && line.part_number ? (
                       <input type="text" readOnly value={line.part_number}
-                        style={{ border: "1px solid #e5e7eb", borderRadius: "var(--radius)", padding: "9px 10px", fontSize: 12, fontFamily: "monospace", background: "#f9fafb", color: "var(--blue)", width: "100%", boxSizing: "border-box" as const, outline: "none" }} />
+                        style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "9px 10px", fontSize: 12, fontFamily: "monospace", background: "var(--bg-surface-elevated)", color: "var(--blue)", width: "100%", boxSizing: "border-box" as const, outline: "none" }} />
                     ) : (
                       <PartNumberInput value={line.part_number}
                         onChange={(pn, part) => { updateLine(i, "part_number", pn); if (part) updateLine(i, "part_name", part.part_name); }}
@@ -271,35 +269,35 @@ export function TransferNewPage() {
                     <input type="text" readOnly
                       value={line.resolving ? "Looking up…" : (line.part_name || "")}
                       placeholder="Auto-filled"
-                      style={{ border: "1px solid #e5e7eb", borderRadius: "var(--radius)", padding: "9px 10px", fontSize: 12, background: "#f9fafb", color: "#374151", outline: "none", width: "100%", boxSizing: "border-box" as const }}
+                      style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "9px 10px", fontSize: 12, background: "var(--bg-surface-elevated)", color: "var(--text)", outline: "none", width: "100%", boxSizing: "border-box" as const }}
                     />
                     {hasSerial ? (
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "#9ca3af", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 6, height: 38 }}>1</div>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "var(--muted)", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", height: 38 }}>1</div>
                     ) : (
                       <input type="number" min={1} value={line.qty}
                         onChange={(e) => updateLine(i, "qty", parseInt(e.target.value) || 1)}
-                        style={{ border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "9px 8px", fontSize: 13, outline: "none", width: "100%", boxSizing: "border-box" as const, textAlign: "center" }} />
+                        style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "9px 8px", fontSize: 13, outline: "none", width: "100%", boxSizing: "border-box" as const, textAlign: "center" }} />
                     )}
                     <button type="button" onClick={() => removeLine(i)}
                       disabled={lines.length === 1}
-                      style={{ border: "1px solid #e5e7eb", borderRadius: "var(--radius)", background: "#fff", color: "#9ca3af", cursor: lines.length === 1 ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", height: 38, width: 32, opacity: lines.length === 1 ? 0.4 : 1, flexShrink: 0 }}>
+                      style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", background: "var(--bg-surface)", color: "var(--muted)", cursor: lines.length === 1 ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", height: 38, width: 32, opacity: lines.length === 1 ? 0.4 : 1, flexShrink: 0 }}>
                       <X size={13} />
                     </button>
                   </div>
-                  {line.error && <p style={{ margin: "3px 0 0", fontSize: 11, color: "#b91c1c" }}>{line.error}</p>}
+                  {line.error && <p style={{ margin: "3px 0 0", fontSize: 11, color: "var(--negative)" }}>{line.error}</p>}
                 </div>
                 );
               })}
 
               <button type="button" onClick={addLine}
-                style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", border: "1px dashed #d1d5db", borderRadius: "var(--radius)", padding: "7px 14px", fontSize: 13, color: "#6b7a8d", cursor: "pointer", marginTop: 8 }}>
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", border: "1px dashed #d1d5db", borderRadius: "var(--radius)", padding: "7px 14px", fontSize: 13, color: "var(--muted)", cursor: "pointer", marginTop: 8 }}>
                 <Plus size={14} /> Add row
               </button>
             </div>
           </div>
 
           {error && (
-            <div role="alert" style={{ marginBottom: 16, padding: "10px 14px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "var(--radius)", color: "#b91c1c", fontSize: 13 }}>
+            <div role="alert" style={{ marginBottom: 16, padding: "10px 14px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", color: "var(--negative)", fontSize: 13 }}>
               {error}
             </div>
           )}
@@ -325,14 +323,14 @@ export function TransferNewPage() {
               aria-labelledby="confirm-transfer-title"
               style={{
               position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
-              background: "#fff", borderRadius: 0, padding: 28, width: 440, zIndex: 101,
+              background: "var(--bg-surface)", borderRadius: 0, padding: 28, width: 440, zIndex: 101,
               boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
             }}>
               <h2 id="confirm-transfer-title" style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700, color: "var(--text)" }}>Confirm Transfer</h2>
               <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--muted)" }}>
                 Please review before creating. This cannot be undone without cancelling the transfer.
               </p>
-              <div style={{ background: "#f7f7f7", border: "1px solid var(--line)", borderRadius: 0, padding: "12px 14px", marginBottom: 16, fontSize: 13 }}>
+              <div style={{ background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: 0, padding: "12px 14px", marginBottom: 16, fontSize: 13 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                   <span style={{ color: "var(--muted)" }}>Destination</span>
                   <strong style={{ color: "var(--text)" }}>{dest?.site_name ?? "—"}</strong>
@@ -356,7 +354,7 @@ export function TransferNewPage() {
                   Confirm
                 </button>
                 <button type="button" onClick={() => setShowConfirm(false)}
-                  style={{ flex: 1, background: "#fff", border: "1px solid var(--line)", borderRadius: 0, padding: "10px 0", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
+                  style={{ flex: 1, background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: 0, padding: "10px 0", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
                   Go back
                 </button>
               </div>
@@ -367,3 +365,6 @@ export function TransferNewPage() {
     </AppLayout>
   );
 }
+
+
+

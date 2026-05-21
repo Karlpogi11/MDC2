@@ -41,10 +41,10 @@ export function CSVDropZone({ onFile, onTemplate, importing, label = "Import CSV
         }}
       >
         <Upload size={22} color={dragging ? "var(--blue)" : "#9ca3af"} style={{ marginBottom: 8 }} />
-        <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 600, color: "#374151" }}>
+        <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
           {importing ? "Importing…" : "Drop CSV here or click to browse"}
         </p>
-        <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>Only .csv files</p>
+        <p style={{ margin: 0, fontSize: 11, color: "var(--muted)" }}>Only .csv files</p>
         <input ref={inputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={handleInput} disabled={importing} />
       </div>
 
@@ -56,3 +56,4 @@ export function CSVDropZone({ onFile, onTemplate, importing, label = "Import CSV
     </div>
   );
 }
+

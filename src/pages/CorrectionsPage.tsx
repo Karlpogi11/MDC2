@@ -29,14 +29,14 @@ type CorrectionRow = {
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 
-const INK    = "#0f172a";
-const MUTED  = "#64748b";
-const BORDER = "#e2e8f0";
-const FAINT  = "#f8fafc";
-const BLUE   = "#2563eb";
-const RED    = "#dc2626";
-const GREEN  = "#16a34a";
-const AMBER  = "#d97706";
+const INK    = "var(--text)";
+const MUTED  = "var(--muted)";
+const BORDER = "var(--line)";
+const FAINT  = "var(--bg-surface-elevated)";
+const BLUE   = "var(--blue)";
+const RED    = "var(--negative)";
+const GREEN  = "var(--text)";
+const AMBER  = "var(--muted)";
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleString("en-US", { month: "short", day: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -165,10 +165,10 @@ function CorrectionModal({ serial, onClose, onDone, actorId }: {
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <div style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 500, boxShadow: "0 32px 80px rgba(0,0,0,.22)" }}>
+      <div style={{ background: "var(--bg-surface)", borderRadius: "var(--radius)", width: "100%", maxWidth: 500, boxShadow: "0 32px 80px rgba(0,0,0,.22)" }}>
 
         {/* Header */}
-        <div style={{ padding: "20px 24px 16px", borderBottom: `1px solid ${BORDER}`, borderTop: "3px solid #d97706", borderRadius: "12px 12px 0 0" }}>
+        <div style={{ padding: "20px 24px 16px", borderBottom: `1px solid ${BORDER}`, borderTop: "3px solid #d97706", borderRadius: "var(--radius) var(--radius) 0 0" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
             <ClipboardCheck size={13} color={MUTED} />
             <div style={{ fontSize: 15, fontWeight: 700, color: INK, letterSpacing: "-0.01em" }}>Correct Record</div>
@@ -178,10 +178,10 @@ function CorrectionModal({ serial, onClose, onDone, actorId }: {
             {serial.part?.part_number && <code style={{ fontFamily: "monospace", color: MUTED, marginRight: 6 }}>{serial.part.part_number}</code>}
             {serial.part?.part_name}
           </div>
-          <div style={{ display: "flex", gap: 0, marginTop: 14, border: `1px solid ${BORDER}`, borderRadius: 6, overflow: "hidden", width: "fit-content" }}>
+          <div style={{ display: "flex", gap: 0, marginTop: 14, border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", overflow: "hidden", width: "fit-content" }}>
             {(["serial", "part"] as const).map((m) => (
               <button key={m} type="button" onClick={() => setMode(m)}
-                style={{ border: "none", padding: "6px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer", background: mode === m ? INK : "#fff", color: mode === m ? "#fff" : MUTED }}>
+                style={{ border: "none", borderRadius: 0, padding: "6px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer", background: mode === m ? INK : "var(--bg-surface-elevated)", color: mode === m ? "var(--nav-active)" : MUTED }}>
                 {m === "serial" ? "Wrong serial number" : "Wrong part number"}
               </button>
             ))}
@@ -193,14 +193,14 @@ function CorrectionModal({ serial, onClose, onDone, actorId }: {
           {mode === "serial" ? (
             <>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 28px 1fr", marginBottom: 12 }}>
-                <div style={{ padding: "12px 14px", background: serialChanged ? "#fef2f2" : FAINT, borderRadius: "8px 0 0 8px", border: `1px solid ${serialChanged ? "#fecaca" : BORDER}` }}>
+                <div style={{ padding: "12px 14px", background: serialChanged ? "var(--bg-surface-elevated)" : FAINT, borderRadius: "var(--radius) 0 0 var(--radius)", border: `1px solid ${serialChanged ? "var(--line)" : BORDER}` }}>
                   <div style={{ fontSize: 10, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 5 }}>Current serial</div>
-                  <code style={{ fontSize: 13, fontWeight: 700, color: RED, textDecoration: serialChanged ? "line-through" : "none", opacity: serialChanged ? 0.5 : 1, wordBreak: "break-all" }}>{serial.serial_number}</code>
+                  <code style={{ fontSize: 13, fontWeight: 700, color: MUTED, textDecoration: serialChanged ? "line-through" : "none", opacity: serialChanged ? 0.5 : 1, wordBreak: "break-all" }}>{serial.serial_number}</code>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "center", background: FAINT, borderTop: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}` }}>
                   <ArrowRight size={12} color={serialChanged ? BLUE : "#cbd5e1"} />
                 </div>
-                <div style={{ padding: "12px 14px", background: isBlocked ? "#fef2f2" : conflictChecked && !conflict ? "#f0fdf4" : FAINT, borderRadius: "0 8px 8px 0", border: `1px solid ${isBlocked ? "#fecaca" : conflictChecked && !conflict ? "#bbf7d0" : BORDER}`, transition: "all .15s" }}>
+                <div style={{ padding: "12px 14px", background: isBlocked ? "var(--bg-surface-elevated)" : conflictChecked && !conflict ? "var(--bg-surface-elevated)" : FAINT, borderRadius: "0 var(--radius) var(--radius) 0", border: `1px solid ${isBlocked ? "var(--line)" : conflictChecked && !conflict ? "var(--line)" : BORDER}`, transition: "all .15s" }}>
                   <div style={{ fontSize: 10, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 5 }}>Correct serial</div>
                   <input ref={inputRef} value={newSerial} onChange={(e) => setNewSerial(e.target.value)} placeholder="Type correct serial…"
                     style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 700, color: isBlocked ? RED : conflictChecked && !conflict ? GREEN : serialChanged ? INK : MUTED, background: "transparent", border: "none", outline: "none", width: "100%", padding: 0 }} />
@@ -210,23 +210,23 @@ function CorrectionModal({ serial, onClose, onDone, actorId }: {
                 <div style={{ marginBottom: 16, fontSize: 12, display: "flex", alignItems: "flex-start", gap: 6 }}>
                   {checking && <span style={{ color: MUTED }}>Checking…</span>}
                   {!checking && conflictChecked && !conflict && <><Check size={12} color={GREEN} /><span style={{ color: GREEN }}>Available — not in system.</span></>}
-                  {!checking && conflict?.status === "voided" && <><AlertTriangle size={12} color={AMBER} /><span style={{ color: "#92400e" }}>Previously voided — will be reactivated on approval.</span></>}
-                  {!checking && isBlocked && <><AlertTriangle size={12} color={RED} /><span style={{ color: RED }}>Already {conflict!.status === "in_stock" ? "in stock" : `on ${conflict!.transfer_no}`} · <code style={{ fontFamily: "monospace" }}>{conflict!.part_number}</code>{conflict!.part_name ? ` ${conflict!.part_name}` : ""}. Cannot use an active serial.</span></>}
+                  {!checking && conflict?.status === "voided" && <><AlertTriangle size={12} color={AMBER} /><span style={{ color: "var(--muted)" }}>Previously voided — will be reactivated on approval.</span></>}
+                  {!checking && isBlocked && <><AlertTriangle size={12} color={RED} /><span style={{ color: MUTED }}>Already {conflict!.status === "in_stock" ? "in stock" : `on ${conflict!.transfer_no}`} · <code style={{ fontFamily: "monospace" }}>{conflict!.part_number}</code>{conflict!.part_name ? ` ${conflict!.part_name}` : ""}. Cannot use an active serial.</span></>}
                 </div>
               )}
             </>
           ) : (
             <>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 28px 1fr", marginBottom: 12 }}>
-                <div style={{ padding: "12px 14px", background: newPart ? "#fef2f2" : FAINT, borderRadius: "8px 0 0 8px", border: `1px solid ${newPart ? "#fecaca" : BORDER}` }}>
+                <div style={{ padding: "12px 14px", background: newPart ? "var(--bg-surface-elevated)" : FAINT, borderRadius: "var(--radius) 0 0 var(--radius)", border: `1px solid ${newPart ? "var(--line)" : BORDER}` }}>
                   <div style={{ fontSize: 10, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 5 }}>Current part</div>
-                  <code style={{ fontSize: 12, fontWeight: 700, color: RED, textDecoration: newPart ? "line-through" : "none", opacity: newPart ? 0.5 : 1 }}>{serial.part?.part_number ?? "—"}</code>
+                  <code style={{ fontSize: 12, fontWeight: 700, color: MUTED, textDecoration: newPart ? "line-through" : "none", opacity: newPart ? 0.5 : 1 }}>{serial.part?.part_number ?? "—"}</code>
                   {serial.part?.part_name && <div style={{ fontSize: 11, color: MUTED, marginTop: 2, textDecoration: newPart ? "line-through" : "none", opacity: newPart ? 0.5 : 1 }}>{serial.part.part_name}</div>}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "center", background: FAINT, borderTop: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}` }}>
                   <ArrowRight size={12} color={newPart ? BLUE : "#cbd5e1"} />
                 </div>
-                <div style={{ padding: "12px 14px", background: newPart ? "#f0fdf4" : FAINT, borderRadius: "0 8px 8px 0", border: `1px solid ${newPart ? "#bbf7d0" : BORDER}`, transition: "all .15s" }}>
+                <div style={{ padding: "12px 14px", background: newPart ? "var(--bg-surface-elevated)" : FAINT, borderRadius: "0 var(--radius) var(--radius) 0", border: `1px solid ${newPart ? "var(--line)" : BORDER}`, transition: "all .15s" }}>
                   <div style={{ fontSize: 10, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 5 }}>Correct part</div>
                   {newPart ? (
                     <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 4 }}>
@@ -245,12 +245,12 @@ function CorrectionModal({ serial, onClose, onDone, actorId }: {
                 </div>
               </div>
               {!newPart && partQuery.trim() && (
-                <div style={{ border: `1px solid ${BORDER}`, borderRadius: 6, overflow: "hidden", marginBottom: 12 }}>
+                <div style={{ border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", overflow: "hidden", marginBottom: 12 }}>
                   {partSearching && <div style={{ padding: "10px 14px", fontSize: 12, color: MUTED }}>Searching…</div>}
                   {!partSearching && !partResults.length && <div style={{ padding: "10px 14px", fontSize: 12, color: MUTED }}>No parts found.</div>}
                   {partResults.map((p) => (
                     <button key={p.id} type="button" onClick={() => { setNewPart(p); setPartQuery(""); }}
-                      style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "9px 14px", border: "none", borderBottom: `1px solid ${FAINT}`, background: "#fff", cursor: "pointer", textAlign: "left" }}>
+                      style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "9px 14px", border: "none", borderBottom: `1px solid ${FAINT}`, background: "var(--bg-surface)", cursor: "pointer", textAlign: "left" }}>
                       <code style={{ fontSize: 12, fontWeight: 700, color: BLUE, flexShrink: 0 }}>{p.part_number}</code>
                       <span style={{ fontSize: 12, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.part_name}</span>
                     </button>
@@ -262,24 +262,24 @@ function CorrectionModal({ serial, onClose, onDone, actorId }: {
 
           <div style={{ marginBottom: 20 }}>
             <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
-              Reason <span style={{ color: RED }}>*</span>
-              <span style={{ color: "#94a3b8", fontWeight: 400, textTransform: "none", marginLeft: 4 }}>required for audit trail</span>
+              Reason <span style={{ color: MUTED }}>*</span>
+              <span style={{ color: "var(--muted)", fontWeight: 400, textTransform: "none", marginLeft: 4 }}>required for audit trail</span>
             </label>
             <textarea required value={reason} onChange={(e) => setReason(e.target.value)}
               placeholder={mode === "serial" ? "e.g. Wrong serial scanned during packing — physical unit confirmed correct" : "e.g. Unit stocked under wrong part — physical label confirmed correct part number"}
               rows={2}
-              style={{ width: "100%", border: `1px solid ${BORDER}`, borderRadius: 6, padding: "8px 10px", fontSize: 13, fontFamily: "inherit", outline: "none", resize: "none", boxSizing: "border-box", color: INK }} />
+              style={{ width: "100%", border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", padding: "8px 10px", fontSize: 13, fontFamily: "inherit", outline: "none", resize: "none", boxSizing: "border-box", color: INK }} />
           </div>
 
-          {error && <div style={{ marginBottom: 12, fontSize: 12, color: RED }}>{error}</div>}
+          {error && <div style={{ marginBottom: 12, fontSize: 12, color: MUTED }}>{error}</div>}
 
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button type="button" onClick={onClose}
-                style={{ border: `1px solid ${BORDER}`, background: "#fff", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 500, cursor: "pointer", color: MUTED }}>
+                style={{ border: `1px solid ${BORDER}`, background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "8px 16px", fontSize: 13, fontWeight: 500, cursor: "pointer", color: MUTED }}>
                 Cancel
               </button>
               <button type="submit" disabled={!canSubmit || submitting}
-                style={{ border: "none", background: canSubmit ? BLUE : "#e2e8f0", borderRadius: 6, padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: canSubmit ? "pointer" : "not-allowed", color: canSubmit ? "#fff" : "#94a3b8" }}>
+                style={{ border: "none", background: canSubmit ? BLUE : "#e2e8f0", borderRadius: "var(--radius)", padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: canSubmit ? "pointer" : "not-allowed", color: canSubmit ? "#fff" : "#94a3b8" }}>
                 {submitting ? "Submitting…" : "Submit for approval"}
               </button>
             </div>
@@ -407,14 +407,14 @@ export function CorrectionsPage() {
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <ClipboardCheck size={16} color={INK} />
             <span style={{ fontSize: 17, fontWeight: 700, color: INK, letterSpacing: "-0.02em" }}>Serial Corrections</span>
-            <span style={{ fontSize: 11, fontWeight: 500, color: MUTED, border: `1px solid ${BORDER}`, borderRadius: 4, padding: "1px 7px" }}>DC Admin only</span>
+            <span style={{ fontSize: 11, fontWeight: 500, color: MUTED, border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", padding: "1px 7px" }}>DC Admin only</span>
           </div>
           <span style={{ fontSize: 11, color: MUTED }}>All changes are audited and require peer approval.</span>
         </div>
 
         {/* Search bar — full width, prominent */}
         <form onSubmit={(e) => void handleSearch(e)} style={{ marginBottom: 24 }}>
-          <div style={{ display: "flex", gap: 0, border: `1px solid ${result ? BLUE : BORDER}`, borderRadius: 8, overflow: "hidden", boxShadow: result ? `0 0 0 3px rgba(37,99,235,.1)` : "none", transition: "box-shadow .15s" }}>
+          <div style={{ display: "flex", gap: 0, border: `1px solid ${result ? BLUE : BORDER}`, borderRadius: "var(--radius)", overflow: "hidden", boxShadow: result ? `0 0 0 3px rgba(37,99,235,.1)` : "none", transition: "box-shadow .15s" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 40, flexShrink: 0 }}>
               <Search size={15} color={MUTED} />
             </div>
@@ -422,19 +422,19 @@ export function CorrectionsPage() {
               value={query}
               onChange={(e) => { setQuery(e.target.value); setResult(null); setNotFound(false); }}
               placeholder="Search serial number to correct…"
-              style={{ flex: 1, border: "none", outline: "none", padding: "11px 12px", fontSize: 14, fontFamily: "monospace", color: INK, background: "#fff" }}
+              style={{ flex: 1, border: "none", borderRadius: 0, outline: "none", padding: "11px 12px", fontSize: 14, fontFamily: "monospace", color: INK, background: "var(--bg-surface)" }}
             />
             <button type="submit" disabled={searching || !query.trim()}
-              style={{ border: "none", background: BLUE, color: "#fff", padding: "0 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+              style={{ border: "none", borderRadius: 0, background: BLUE, color: "#fff", padding: "0 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
               {searching ? "Searching…" : "Find"}
             </button>
           </div>
-          {notFound && <div style={{ marginTop: 8, fontSize: 12, color: RED }}>Serial "{query.trim()}" not found in inventory.</div>}
+          {notFound && <div style={{ marginTop: 8, fontSize: 12, color: MUTED }}>Serial "{query.trim()}" not found in inventory.</div>}
         </form>
 
         {/* Result card — inline, no nested boxes */}
         {result && !successMsg && (
-          <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "16px 20px", marginBottom: 24, display: "flex", alignItems: "center", gap: 20 }}>
+          <div style={{ background: "var(--bg-surface)", border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", padding: "16px 20px", marginBottom: 24, display: "flex", alignItems: "center", gap: 20 }}>
             <div style={{ flex: 1, display: "flex", gap: 32, alignItems: "center", flexWrap: "wrap" }}>
               <div>
                 <div style={{ fontSize: 10, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 3 }}>Serial</div>
@@ -456,43 +456,43 @@ export function CorrectionsPage() {
               )}
             </div>
             <button type="button" onClick={() => setCorrecting(true)}
-              style={{ border: "none", background: BLUE, color: "#fff", borderRadius: 6, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
+              style={{ border: "none", background: BLUE, color: "#fff", borderRadius: "var(--radius)", padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
               Correct serial
             </button>
           </div>
         )}
 
         {successMsg && (
-          <div style={{ background: "#f0fdf4", border: `1px solid #bbf7d0`, borderRadius: 10, padding: "14px 20px", marginBottom: 24, display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: GREEN }}>
+          <div style={{ background: "var(--bg-surface-elevated)", border: `1px solid var(--line)`, borderRadius: "var(--radius)", padding: "14px 20px", marginBottom: 24, display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: GREEN }}>
             <Check size={15} /> {successMsg}
           </div>
         )}
 
         {/* Pending approvals */}
         {pending.length > 0 && (
-          <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 10, marginBottom: 20, overflow: "hidden" }}>
+          <div style={{ background: "var(--bg-surface)", border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", marginBottom: 20, overflow: "hidden" }}>
             <div style={{ padding: "12px 20px", borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", gap: 8 }}>
               <Clock size={13} color={AMBER} />
               <span style={{ fontSize: 13, fontWeight: 600, color: INK }}>Pending approval</span>
-              <span style={{ fontSize: 11, fontWeight: 600, background: FAINT, color: MUTED, border: `1px solid ${BORDER}`, padding: "1px 8px", borderRadius: 4 }}>{pending.length}</span>
+              <span style={{ fontSize: 11, fontWeight: 600, background: FAINT, color: MUTED, border: `1px solid ${BORDER}`, padding: "1px 8px", borderRadius: "var(--radius)" }}>{pending.length}</span>
             </div>
             {approveError && (
-              <div style={{ padding: "10px 20px", background: "#fef2f2", borderBottom: `1px solid #fecaca`, fontSize: 12, color: RED }}>
+              <div style={{ padding: "10px 20px", background: "var(--bg-surface-elevated)", borderBottom: `1px solid var(--line)`, fontSize: 12, color: MUTED }}>
                 {approveError}
               </div>
             )}
             {pending.map((req) => (
               <div key={req.id} style={{ padding: "12px 20px", borderBottom: `1px solid ${FAINT}`, display: "flex", alignItems: "center", gap: 16 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: MUTED, border: `1px solid ${BORDER}`, borderRadius: 4, padding: "1px 6px", flexShrink: 0 }}>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: MUTED, border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", padding: "1px 6px", flexShrink: 0 }}>
                     {req.type === "part_reassignment" ? "Part" : "Serial"}
                   </span>
                   {req.type === "part_reassignment" ? (
-                    <><code style={{ fontSize: 12, fontWeight: 700, color: RED }}>{req.payload.serial_number}</code>
+                    <><code style={{ fontSize: 12, fontWeight: 700, color: MUTED }}>{req.payload.serial_number}</code>
                     <ArrowRight size={12} color={MUTED} />
                     <code style={{ fontSize: 12, fontWeight: 700, color: GREEN }}>{req.payload.new_part_number}</code></>
                   ) : (
-                    <><code style={{ fontSize: 12, fontWeight: 700, color: RED }}>{req.payload.old_serial_number}</code>
+                    <><code style={{ fontSize: 12, fontWeight: 700, color: MUTED }}>{req.payload.old_serial_number}</code>
                     <ArrowRight size={12} color={MUTED} />
                     <code style={{ fontSize: 12, fontWeight: 700, color: GREEN }}>{req.payload.new_serial_number}</code></>
                   )}
@@ -500,7 +500,7 @@ export function CorrectionsPage() {
                 </div>
                 <span style={{ fontSize: 11, color: MUTED, flexShrink: 0 }}>by {req.requester?.full_name ?? req.requester?.username ?? "—"}</span>
                 <button type="button" onClick={() => void handleApprove(req)} disabled={approvingId === req.id}
-                  style={{ fontSize: 12, fontWeight: 600, padding: "5px 14px", borderRadius: 6, border: "none", background: BLUE, color: "#fff", cursor: approvingId === req.id ? "not-allowed" : "pointer", opacity: approvingId === req.id ? 0.5 : 1, flexShrink: 0 }}>
+                  style={{ fontSize: 12, fontWeight: 600, padding: "5px 14px", borderRadius: "var(--radius)", border: "none", background: BLUE, color: "#fff", cursor: approvingId === req.id ? "not-allowed" : "pointer", opacity: approvingId === req.id ? 0.5 : 1, flexShrink: 0 }}>
                   {approvingId === req.id ? "…" : "Approve"}
                 </button>
                 <DangerAction label="Reject" confirmLabel="Reject" description="Reject this correction?"
@@ -511,7 +511,7 @@ export function CorrectionsPage() {
         )}
 
         {/* Correction history */}
-        <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 10, overflow: "hidden" }}>
+        <div style={{ background: "var(--bg-surface)", border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", overflow: "hidden" }}>
           <div style={{ padding: "12px 20px", borderBottom: `1px solid ${BORDER}` }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: INK }}>Correction history</span>
           </div>
@@ -532,7 +532,7 @@ export function CorrectionsPage() {
                 {!historyLoading && !history.length && <tr><td colSpan={6} className="empty-row">No corrections yet.</td></tr>}
                 {history.map((row) => (
                   <tr key={row.id}>
-                    <td style={{ fontFamily: "monospace", color: RED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={row.old_serial_number}>{row.old_serial_number}</td>
+                    <td style={{ fontFamily: "monospace", color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={row.old_serial_number}>{row.old_serial_number}</td>
                     <td style={{ fontFamily: "monospace", color: GREEN, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={row.new_serial_number}>{row.new_serial_number}</td>
                     <td style={{ fontFamily: "monospace", color: BLUE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.transfer?.transfer_no ?? "—"}</td>
                     <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: MUTED }} title={row.reason}>{row.reason}</td>
@@ -563,3 +563,7 @@ export function CorrectionsPage() {
     </AppLayout>
   );
 }
+
+
+
+

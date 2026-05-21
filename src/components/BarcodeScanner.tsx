@@ -69,12 +69,12 @@ export function BarcodeScanner({ onScan, onClose }: Props) {
         </div>
 
         {/* Viewfinder */}
-        <div style={{ position: "relative", borderRadius: 12, overflow: "hidden", background: "#000" }}>
+        <div style={{ position: "relative", borderRadius: "var(--radius)", overflow: "hidden", background: "#000" }}>
           <video ref={videoRef} style={{ width: "100%", display: "block" }} />
           {/* Scan line overlay */}
           <div style={{
             position: "absolute", inset: 0, pointerEvents: "none",
-            border: "2px solid rgba(255,255,255,0.3)", borderRadius: 12,
+            border: "2px solid rgba(255,255,255,0.3)", borderRadius: "var(--radius)",
           }}>
             <div style={{
               position: "absolute", left: "10%", right: "10%", top: "50%",
@@ -86,7 +86,7 @@ export function BarcodeScanner({ onScan, onClose }: Props) {
         </div>
 
         {error && (
-          <div style={{ marginTop: 12, padding: "10px 14px", background: "#fef2f2", borderRadius: 8, color: "#b91c1c", fontSize: 13 }}>
+          <div style={{ marginTop: 12, padding: "10px 14px", background: "var(--bg-surface-elevated)", borderRadius: "var(--radius)", color: "var(--negative)", fontSize: 13 }}>
             {error}
           </div>
         )}
@@ -105,3 +105,6 @@ export function BarcodeScanner({ onScan, onClose }: Props) {
     </div>
   );
 }
+
+
+

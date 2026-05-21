@@ -14,13 +14,13 @@ export function RoleGuard({ allow, requireMfa, children }: Props) {
   if (state.status === "loading" || state.status === "connecting") {
     const isConnecting = state.status === "connecting";
     return (
-      <div style={{ position: "fixed", inset: 0, background: "#f9fafb", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
+      <div style={{ position: "fixed", inset: 0, background: "var(--bg-surface-elevated)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
         <div className="circle" style={{ width: 40, height: 40, border: "3px solid #e5e7eb", borderTopColor: isConnecting ? "#ef4444" : "var(--blue)", animation: "spin 0.8s linear infinite", marginBottom: 16 }} />
-        <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#374151" }}>
+        <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "var(--text)" }}>
           {isConnecting ? "Connection lost" : "Loading…"}
         </p>
         {isConnecting && (
-          <p style={{ margin: "6px 0 0", fontSize: 13, color: "#9ca3af" }}>
+          <p style={{ margin: "6px 0 0", fontSize: 13, color: "var(--muted)" }}>
             Waiting for database connection…
           </p>
         )}
@@ -35,10 +35,10 @@ export function RoleGuard({ allow, requireMfa, children }: Props) {
 
   if (!allow.includes(state.profile.role)) {
     return (
-      <div style={{ position: "fixed", inset: 0, background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ position: "fixed", inset: 0, background: "var(--bg-surface-elevated)", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ textAlign: "center" }}>
-          <p style={{ fontSize: 15, fontWeight: 700, color: "#111827", margin: "0 0 4px" }}>Access denied</p>
-          <p style={{ fontSize: 13, color: "#6b7a8d", margin: 0 }}>
+          <p style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", margin: "0 0 4px" }}>Access denied</p>
+          <p style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>
             Your role <strong>{state.profile.role}</strong> does not have permission to view this page.
           </p>
         </div>
@@ -50,9 +50,9 @@ export function RoleGuard({ allow, requireMfa, children }: Props) {
   const shouldEnforceMfa = requireMfa ?? state.profile.role === "dc_admin";
   if (shouldEnforceMfa && state.aal !== "aal2") {
     return (
-      <div style={{ position: "fixed", inset: 0, background: "#f9fafb", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
-        <p style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 700, color: "#111827" }}>MFA required</p>
-        <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7a8d", textAlign: "center", maxWidth: 320 }}>
+      <div style={{ position: "fixed", inset: 0, background: "var(--bg-surface-elevated)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
+        <p style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 700, color: "var(--text)" }}>MFA required</p>
+        <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--muted)", textAlign: "center", maxWidth: 320 }}>
           Admin accounts must have two-factor authentication enabled and verified.
         </p>
         <a href="/login?mfa=setup" style={{ padding: "8px 20px", background: "var(--blue)", color: "#fff", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
@@ -64,3 +64,5 @@ export function RoleGuard({ allow, requireMfa, children }: Props) {
 
   return <>{children}</>;
 }
+
+

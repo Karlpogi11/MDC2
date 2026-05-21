@@ -20,12 +20,18 @@ type Transfer = {
   item_count: number;
 };
 
+function getAgeDays(transfer: Transfer): number | null {
+  if (transfer.status !== "in_transit") return null;
+  const from = transfer.packed_at ?? transfer.created_at;
+  return Math.floor((Date.now() - new Date(from).getTime()) / 86400000);
+}
+
 const STATUS_STYLE: Record<TransferStatus, { bg: string; color: string; label: string }> = {
-  draft:      { bg: "#f3f4f6", color: "#6b7a8d", label: "Draft" },
-  packed:     { bg: "#dbeafe", color: "#1d4ed8", label: "Packed" },
-  in_transit: { bg: "#fef9c3", color: "#a16207", label: "In Transit" },
-  received:   { bg: "#dcfce7", color: "#15803d", label: "Received" },
-  cancelled:  { bg: "#fee2e2", color: "#b91c1c", label: "Cancelled" },
+  draft:      { bg: "#f3f4f6", color: "var(--muted)", label: "Draft" },
+  packed:     { bg: "#dbeafe", color: "var(--blue)", label: "Packed" },
+  in_transit: { bg: "#fef9c3", color: "var(--muted)", label: "In Transit" },
+  received:   { bg: "#dcfce7", color: "var(--text)", label: "Received" },
+  cancelled:  { bg: "#fee2e2", color: "var(--negative)", label: "Cancelled" },
 };
 
 async function fetchTransfers(): Promise<Transfer[]> {
@@ -71,7 +77,7 @@ export function TransfersPage() {
   const { data: transfers = [], isLoading: loading, error } = useQuery({
     queryKey: ["transfers"],
     queryFn: fetchTransfers,
-    staleTime: 0,
+    staleTime: 30_000,
     refetchOnWindowFocus: true,
   });
 
@@ -120,14 +126,14 @@ export function TransfersPage() {
     <AppLayout>
       <main style={{ maxWidth: 960, margin: "0 auto", padding: "32px 24px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#1a2a3a" }}>
-            Transfers {!loading && <span style={{ fontSize: 14, fontWeight: 400, color: "#6b7a8d" }}>({filtered.length})</span>}
+          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text)" }}>
+            Transfers {!loading && <span style={{ fontSize: 14, fontWeight: 400, color: "var(--muted)" }}>({filtered.length})</span>}
           </h1>
           <div style={{ display: "flex", gap: 8 }}>
             <button
               type="button"
               onClick={() => navigate("/transfers/templates")}
-              style={{ background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+              style={{ background: "var(--bg-surface)", color: "var(--text)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
             >
               Templates
             </button>
@@ -170,6 +176,7 @@ export function TransfersPage() {
                 <th>Destination</th>
                 <th className="num">Items</th>
                 <th>Status</th>
+                <th>Age</th>
                 <th>Requested by</th>
                 <th>Date</th>
                 <th />
@@ -177,18 +184,18 @@ export function TransfersPage() {
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={7} className="empty-row">Loading…</td></tr>
+                <tr><td colSpan={8} className="empty-row">Loading…</td></tr>
               )}
               {fetchError && (
-                <tr><td colSpan={7} className="empty-row" style={{ color: "#b91c1c" }}>
+                <tr><td colSpan={8} className="empty-row" style={{ color: "var(--negative)" }}>
                   Failed to load transfers: {fetchError}
                 </td></tr>
               )}
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="empty-row">
+                  <td colSpan={8} className="empty-row">
                     <FileText size={28} color="#d1d5db" style={{ marginBottom: 8 }} />
-                    <p style={{ margin: "0 0 10px", color: "#9ca3af" }}>No transfers found.</p>
+                    <p style={{ margin: "0 0 10px", color: "var(--muted)" }}>No transfers found.</p>
                     <button type="button" onClick={() => navigate("/transfers/new")}
                       style={{ background: "var(--blue)", color: "#fff", border: "none", padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                       Create first transfer
@@ -205,8 +212,8 @@ export function TransfersPage() {
                     </td>
                     <td>
                       {t.destination_site
-                        ? <><span style={{ fontWeight: 600 }}>{t.destination_site.site_name}</span> <span style={{ color: "#9ca3af", fontSize: 11 }}>{t.destination_site.site_code}</span></>
-                        : <span style={{ color: "#9ca3af" }}>—</span>}
+                        ? <><span style={{ fontWeight: 600 }}>{t.destination_site.site_name}</span> <span style={{ color: "var(--muted)", fontSize: 11 }}>{t.destination_site.site_code}</span></>
+                        : <span style={{ color: "var(--muted)" }}>—</span>}
                     </td>
                     <td className="num">{t.item_count}</td>
                     <td>
@@ -214,13 +221,26 @@ export function TransfersPage() {
                         {s.label}
                       </span>
                     </td>
-                    <td style={{ color: "#6b7a8d" }}>
+                    <td>
+                      {(() => {
+                        const age = getAgeDays(t);
+                        if (age === null) return <span style={{ color: "var(--muted)" }}>—</span>;
+                        const overdue = age > 3;
+                        return (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontWeight: overdue ? 700 : 400, color: overdue ? "#b91c1c" : "#6b7a8d" }}>
+                            {overdue && <span title="Overdue — in transit more than 3 days">⚠️</span>}
+                            {age}d
+                          </span>
+                        );
+                      })()}
+                    </td>
+                    <td style={{ color: "var(--muted)" }}>
                       {t.requested_by_profile?.full_name ?? t.requested_by_profile?.username ?? "—"}
                     </td>
-                    <td style={{ color: "#6b7a8d" }}>{formatDate(t.created_at)}</td>
+                    <td style={{ color: "var(--muted)" }}>{formatDate(t.created_at)}</td>
                     <td>
                       <button type="button" onClick={() => navigate(`/transfers/${t.id}`)}
-                        style={{ border: "1px solid var(--line)", background: "#fff", padding: "5px 12px", fontSize: 12, fontWeight: 600, color: "#374151", cursor: "pointer" }}>
+                        style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", padding: "5px 12px", fontSize: 12, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
                         View
                       </button>
                     </td>
@@ -235,3 +255,5 @@ export function TransfersPage() {
     </AppLayout>
   );
 }
+
+

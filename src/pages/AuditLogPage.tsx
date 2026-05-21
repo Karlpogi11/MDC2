@@ -17,9 +17,9 @@ type AuditRow = {
 };
 
 const ACTION_COLORS: Record<string, { bg: string; color: string }> = {
-  insert:  { bg: "#dcfce7", color: "#15803d" },
-  update:  { bg: "#dbeafe", color: "#1d4ed8" },
-  delete:  { bg: "#fee2e2", color: "#b91c1c" },
+  insert:  { bg: "#dcfce7", color: "var(--text)" },
+  update:  { bg: "#dbeafe", color: "var(--blue)" },
+  delete:  { bg: "#fee2e2", color: "var(--negative)" },
 };
 
 function formatDate(iso: string) {
@@ -151,21 +151,21 @@ export function AuditLogPage() {
       <main style={{ maxWidth: 1100, margin: "0 auto", padding: "28px 24px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
           <ShieldAlert size={18} color="var(--blue)" />
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#1a2a3a" }}>Audit Log</h1>
-          <span style={{ marginLeft: "auto", fontSize: 12, color: "#9ca3af" }}>{total.toLocaleString()} entries</span>
+          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text)" }}>Audit Log</h1>
+          <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--muted)" }}>{total.toLocaleString()} entries</span>
         </div>
 
         {/* Filters */}
         <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
           <select value={filterAction} onChange={e => { setFilterAction(e.target.value); setPage(0); }}
-            style={{ border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "7px 10px", fontSize: 13, background: "#fff", outline: "none" }}>
+            style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 10px", fontSize: 13, background: "var(--bg-surface)", outline: "none" }}>
             <option value="">All actions</option>
             <option value="insert">Insert</option>
             <option value="update">Update</option>
             <option value="delete">Delete</option>
           </select>
           <select value={filterEntity} onChange={e => { setFilterEntity(e.target.value); setPage(0); }}
-            style={{ border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "7px 10px", fontSize: 13, background: "#fff", outline: "none" }}>
+            style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 10px", fontSize: 13, background: "var(--bg-surface)", outline: "none" }}>
             <option value="">All entities</option>
             {entityTypes.map(e => <option key={e} value={e}>{e}</option>)}
           </select>
@@ -187,20 +187,20 @@ export function AuditLogPage() {
                 {loading && <tr><td colSpan={5} className="empty-row">Loading…</td></tr>}
                 {!loading && rows.length === 0 && <tr><td colSpan={5} className="empty-row">No audit entries.</td></tr>}
                 {rows.map(row => {
-                  const ac = ACTION_COLORS[row.action] ?? { bg: "#f3f4f6", color: "#374151" };
+                  const ac = ACTION_COLORS[row.action] ?? { bg: "#f3f4f6", color: "var(--text)" };
                   const actor = row.actor?.full_name ?? row.actor?.username ?? "system";
                   const label = diffSummary(row.action, row.entity_type, row.old_value, row.new_value, row.note);
                   return (
                     <tr key={row.id}>
-                      <td style={{ whiteSpace: "nowrap", color: "#6b7a8d", fontSize: 12 }}>{formatDate(row.created_at)}</td>
+                      <td style={{ whiteSpace: "nowrap", color: "var(--muted)", fontSize: 12 }}>{formatDate(row.created_at)}</td>
                       <td style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{actor}</td>
                       <td>
                         <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: "var(--radius-pill)", background: ac.bg, color: ac.color, textTransform: "uppercase" }}>
                           {row.action}
                         </span>
                       </td>
-                      <td style={{ fontFamily: "monospace", fontSize: 12, color: "#374151" }}>{row.entity_type}</td>
-                      <td style={{ fontSize: 12, color: "#6b7a8d", maxWidth: 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={label}>{label}</td>
+                      <td style={{ fontFamily: "monospace", fontSize: 12, color: "var(--text)" }}>{row.entity_type}</td>
+                      <td style={{ fontSize: 12, color: "var(--muted)", maxWidth: 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={label}>{label}</td>
                     </tr>
                   );
                 })}
@@ -213,12 +213,12 @@ export function AuditLogPage() {
         {total > PAGE_SIZE && (
           <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10, marginTop: 14, fontSize: 13 }}>
             <button type="button" disabled={page === 0} onClick={() => setPage(p => p - 1)}
-              style={{ border: "1px solid #d1d5db", background: "#fff", borderRadius: "var(--radius)", padding: "5px 14px", cursor: page === 0 ? "not-allowed" : "pointer", opacity: page === 0 ? 0.5 : 1 }}>
+              style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "5px 14px", cursor: page === 0 ? "not-allowed" : "pointer", opacity: page === 0 ? 0.5 : 1 }}>
               Prev
             </button>
-            <span style={{ color: "#6b7a8d" }}>Page {page + 1} of {Math.ceil(total / PAGE_SIZE)}</span>
+            <span style={{ color: "var(--muted)" }}>Page {page + 1} of {Math.ceil(total / PAGE_SIZE)}</span>
             <button type="button" disabled={(page + 1) * PAGE_SIZE >= total} onClick={() => setPage(p => p + 1)}
-              style={{ border: "1px solid #d1d5db", background: "#fff", borderRadius: "var(--radius)", padding: "5px 14px", cursor: (page + 1) * PAGE_SIZE >= total ? "not-allowed" : "pointer", opacity: (page + 1) * PAGE_SIZE >= total ? 0.5 : 1 }}>
+              style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "5px 14px", cursor: (page + 1) * PAGE_SIZE >= total ? "not-allowed" : "pointer", opacity: (page + 1) * PAGE_SIZE >= total ? 0.5 : 1 }}>
               Next
             </button>
           </div>
@@ -227,3 +227,5 @@ export function AuditLogPage() {
     </AppLayout>
   );
 }
+
+

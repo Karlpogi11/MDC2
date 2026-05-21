@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { LoginPage } from "@/pages/LoginPage";
+import { DashboardPage } from "@/pages/DashboardPage";
 import { InventoryPage } from "@/pages/InventoryPage";
 import { ConfigPage } from "@/pages/ConfigPage";
 import { UsersPage } from "@/pages/UsersPage";
@@ -14,6 +15,7 @@ import { AnalyticsPage } from "@/pages/AnalyticsPage";
 import { PhysicalCountPage } from "@/pages/PhysicalCountPage";
 import { ReceivePage } from "@/pages/ReceivePage";
 import { AuditLogPage } from "@/pages/AuditLogPage";
+import { ReportsPage } from "@/pages/ReportsPage";
 import { RoleGuard } from "@/components/RoleGuard";
 
 const ALL   = ["system_admin", "dc_admin", "dc_operator", "dc_viewer"] as const;
@@ -25,7 +27,9 @@ export function App() {
   return (
     <Routes>
       <Route path="/login"                      element={<LoginPage />} />
-      <Route path="/"                           element={<RoleGuard allow={[...ALL]}><InventoryPage /></RoleGuard>} />
+      <Route path="/dashboard"                  element={<RoleGuard allow={[...ALL]}><DashboardPage /></RoleGuard>} />
+      <Route path="/"                           element={<Navigate to="/dashboard" replace />} />
+      <Route path="/inventory"                  element={<RoleGuard allow={[...ALL]}><InventoryPage /></RoleGuard>} />
       <Route path="/stock-in"                   element={<RoleGuard allow={[...OPS]}><StockInPage /></RoleGuard>} />
       <Route path="/transfers"                  element={<RoleGuard allow={[...ALL]}><TransfersPage /></RoleGuard>} />
       <Route path="/transfers/new"              element={<RoleGuard allow={[...OPS]}><TransferNewPage /></RoleGuard>} />
@@ -33,12 +37,13 @@ export function App() {
       <Route path="/transfers/:id"              element={<RoleGuard allow={[...ALL]}><TransferDetailPage /></RoleGuard>} />
       <Route path="/transfers/:id/receive"      element={<ReceivePage />} />
       <Route path="/corrections"                element={<RoleGuard allow={[...ADMIN]}><CorrectionsPage /></RoleGuard>} />
-      <Route path="/exports"                    element={<RoleGuard allow={[...ALL]}><ExportsPage /></RoleGuard>} />
+      <Route path="/exports"                    element={<Navigate to="/reports" replace />} />
       <Route path="/analytics"                  element={<RoleGuard allow={[...OPS]}><AnalyticsPage /></RoleGuard>} />
       <Route path="/physical-count"             element={<RoleGuard allow={[...OPS]}><PhysicalCountPage /></RoleGuard>} />
       <Route path="/config"                     element={<RoleGuard allow={[...SYS]}><ConfigPage /></RoleGuard>} />
       <Route path="/users"                      element={<RoleGuard allow={[...SYS]}><UsersPage /></RoleGuard>} />
       <Route path="/audit-log"                  element={<RoleGuard allow={[...ADMIN]}><AuditLogPage /></RoleGuard>} />
+      <Route path="/reports"                    element={<RoleGuard allow={[...ALL]}><ReportsPage /></RoleGuard>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

@@ -8,6 +8,7 @@ import { AppLayout } from "@/components/AppLayout";
 import { PartNumberInput } from "@/components/PartNumberInput";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { useFeatureFlag } from "@/lib/useFeatureFlag";
+import { useTableResize } from "@/components/ResizableColumns";
 import { enqueueOp, getQueue, removeFromQueue } from "@/lib/offlineQueue";
 import { useOnlineStatus } from "@/lib/useOnlineStatus";
 
@@ -62,6 +63,7 @@ function validateFile(file: File): string | null {
 }
 
 export function StockInPage() {
+  const tableRef = useTableResize();
   const onlineStatus = useOnlineStatus();
   const [pendingCount, setPendingCount] = useState(() => getQueue().length);
 
@@ -300,8 +302,8 @@ export function StockInPage() {
       <main style={{ maxWidth: 680, margin: "0 auto", padding: "32px 24px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 28 }}>
           <div>
-            <h1 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#1a2a3a" }}>Stock-In</h1>
-            <p style={{ margin: 0, fontSize: 13, color: "#6b7a8d" }}>
+            <h1 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "var(--text)" }}>Stock-In</h1>
+            <p style={{ margin: 0, fontSize: 13, color: "var(--muted)" }}>
               Scan serials manually or upload a CSV/XLSX file.
             </p>
           </div>
@@ -310,7 +312,7 @@ export function StockInPage() {
               <button
                 type="button"
                 onClick={() => setCameraOpen(true)}
-                style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "8px 14px", fontSize: 13, fontWeight: 600, color: "#374151", cursor: "pointer", whiteSpace: "nowrap" }}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "8px 14px", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer", whiteSpace: "nowrap" }}
               >
                 <ScanLine size={14} /> Camera scan
               </button>
@@ -318,7 +320,7 @@ export function StockInPage() {
             <button
               type="button"
               onClick={downloadTemplate}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "8px 14px", fontSize: 13, fontWeight: 600, color: "#374151", cursor: "pointer", whiteSpace: "nowrap" }}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "8px 14px", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer", whiteSpace: "nowrap" }}
             >
               <Download size={14} /> Download template
             </button>
@@ -326,9 +328,9 @@ export function StockInPage() {
         </div>
 
         {/* Upload card */}
-        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: "var(--radius)", overflow: "hidden", marginBottom: 20 }}>
+        <div style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", overflow: "hidden", marginBottom: 20 }}>
           <div style={{ padding: "14px 20px", borderBottom: "1px solid #f3f4f6" }}>
-            <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>Upload file</h2>
+            <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text)" }}>Upload file</h2>
           </div>
           <div style={{ padding: 20 }}>
 
@@ -347,10 +349,10 @@ export function StockInPage() {
                 }}
               >
                 <Upload size={28} color="#9ca3af" style={{ marginBottom: 12 }} />
-                <p style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 600, color: "#374151" }}>
+                <p style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 600, color: "var(--text)" }}>
                   Drop file here or click to browse
                 </p>
-                <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>
+                <p style={{ margin: 0, fontSize: 12, color: "var(--muted)" }}>
                   CSV or XLSX · max {MAX_SIZE_MB}MB
                 </p>
                 <input
@@ -365,17 +367,17 @@ export function StockInPage() {
 
             {/* File selected */}
             {state.status === "selected" && (
-              <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)" }}>
                 <FileText size={20} color="#0284c7" />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#0c4a6e", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {state.file.name}
                   </p>
-                  <p style={{ margin: 0, fontSize: 12, color: "#0369a1" }}>
+                  <p style={{ margin: 0, fontSize: 12, color: "var(--muted)" }}>
                     {(state.file.size / 1024).toFixed(1)} KB
                   </p>
                 </div>
-                <button type="button" onClick={reset} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#6b7a8d" }}>
+                <button type="button" onClick={reset} style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--muted)" }}>
                   <X size={16} />
                 </button>
               </div>
@@ -384,41 +386,41 @@ export function StockInPage() {
             {/* CSV Preview */}
             {state.status === "previewing" && (
               <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 8, marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", marginBottom: 12 }}>
                   <FileText size={18} color="#0284c7" />
-                  <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#0c4a6e" }}>{state.file.name}</span>
-                  <button type="button" onClick={reset} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#6b7a8d" }}><X size={16} /></button>
+                  <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{state.file.name}</span>
+                  <button type="button" onClick={reset} style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--muted)" }}><X size={16} /></button>
                 </div>
-                <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 600, color: "#374151" }}>
+                <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 600, color: "var(--text)" }}>
                   Preview — first {state.rows.length} of {state.totalRows.toLocaleString()} rows
                   {state.rows.some((r) => !r.valid) && (
-                    <span style={{ marginLeft: 8, color: "#b91c1c" }}>⚠ {state.rows.filter((r) => !r.valid).length} invalid row(s) in preview</span>
+                    <span style={{ marginLeft: 8, color: "var(--negative)" }}>⚠ {state.rows.filter((r) => !r.valid).length} invalid row(s) in preview</span>
                   )}
                 </p>
                 {state.totalRows > 500 && (
-                  <div style={{ marginBottom: 10, padding: "8px 12px", background: "#fef9c3", border: "1px solid #fde68a", borderRadius: 6, fontSize: 12, color: "#92400e" }}>
+                  <div style={{ marginBottom: 10, padding: "8px 12px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", fontSize: 12, color: "var(--muted)" }}>
                     ⚠ Large file ({state.totalRows.toLocaleString()} rows) — import may take 30–60 seconds. Do not close this tab.
                   </div>
                 )}
-                <div style={{ border: "1px solid #e5e7eb", borderRadius: 6, overflow: "hidden", overflowX: "auto" }}>
+                <div style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", overflow: "hidden", overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                     <thead>
-                      <tr style={{ background: "#f9fafb" }}>
+                      <tr style={{ background: "var(--bg-surface-elevated)" }}>
                         {["Row", "Serial", "Part #", "Status"].map((h) => (
-                          <th key={h} style={{ padding: "7px 10px", textAlign: "left", fontWeight: 600, color: "#6b7a8d" }}>{h}</th>
+                          <th key={h} style={{ padding: "7px 10px", textAlign: "left", fontWeight: 600, color: "var(--muted)" }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {state.rows.map((r) => (
                         <tr key={r.row} style={{ borderTop: "1px solid #f3f4f6", background: r.valid ? "#fff" : "#fef2f2" }}>
-                          <td style={{ padding: "6px 10px", color: "#9ca3af" }}>{r.row}</td>
-                          <td style={{ padding: "6px 10px", fontFamily: "monospace", color: "#111827" }}>{r.serial_number || <span style={{ color: "#ef4444" }}>—</span>}</td>
-                          <td style={{ padding: "6px 10px", color: "#374151" }}>{r.part_number || <span style={{ color: "#ef4444" }}>—</span>}</td>
+                          <td style={{ padding: "6px 10px", color: "var(--muted)" }}>{r.row}</td>
+                          <td style={{ padding: "6px 10px", fontFamily: "monospace", color: "var(--text)" }}>{r.serial_number || <span style={{ color: "var(--negative)" }}>—</span>}</td>
+                          <td style={{ padding: "6px 10px", color: "var(--text)" }}>{r.part_number || <span style={{ color: "var(--negative)" }}>—</span>}</td>
                           <td style={{ padding: "6px 10px" }}>
                             {r.valid
-                              ? <span style={{ color: "#15803d", fontWeight: 600 }}>✓ OK</span>
-                              : <span style={{ color: "#b91c1c", fontSize: 11 }}>{r.error}</span>}
+                              ? <span style={{ color: "var(--text)", fontWeight: 600 }}>✓ OK</span>
+                              : <span style={{ color: "var(--negative)", fontSize: 11 }}>{r.error}</span>}
                           </td>
                         </tr>
                       ))}
@@ -432,12 +434,12 @@ export function StockInPage() {
             {state.status === "uploading" && (
               <div style={{ textAlign: "center", padding: "32px 0" }}>
                 <div className="circle" style={{ width: 40, height: 40, border: "3px solid #e5e7eb", borderTopColor: "var(--blue)", animation: "spin 0.8s linear infinite", margin: "0 auto 16px" }} />
-                <p style={{ margin: 0, fontSize: 14, color: "#374151", fontWeight: 600 }}>Processing import…</p>
-                <p style={{ margin: "4px 0 0", fontSize: 12, color: "#9ca3af" }}>
+                <p style={{ margin: 0, fontSize: 14, color: "var(--text)", fontWeight: 600 }}>Processing import…</p>
+                <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--muted)" }}>
                   {state.totalRows > 0 ? `Importing ${state.totalRows.toLocaleString()} rows — this may take a moment` : "Validating and inserting rows"}
                 </p>
                 {state.totalRows > 200 && (
-                  <p style={{ margin: "8px 0 0", fontSize: 12, color: "#a16207", background: "#fef9c3", display: "inline-block", padding: "4px 12px", borderRadius: 8 }}>
+                  <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--muted)", background: "var(--bg-surface-elevated)", display: "inline-block", padding: "4px 12px", borderRadius: "var(--radius)" }}>
                     Large file — do not close this tab
                   </p>
                 )}
@@ -446,7 +448,7 @@ export function StockInPage() {
 
             {/* Error */}
             {state.status === "error" && (
-              <div role="alert" style={{ marginTop: 12, padding: "10px 14px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "var(--radius)", color: "#b91c1c", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
+              <div role="alert" style={{ marginTop: 12, padding: "10px 14px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", color: "var(--negative)", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
                 <XCircle size={16} />
                 {state.message}
               </div>
@@ -465,7 +467,7 @@ export function StockInPage() {
                   </button>
                 )}
                 <button type="button" onClick={reset}
-                  style={{ background: "#fff", border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "9px 14px", fontSize: 13, fontWeight: 600, color: "#374151", cursor: "pointer" }}>
+                  style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "9px 14px", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
                   {state.status === "error" ? "Try again" : "Cancel"}
                 </button>
               </div>
@@ -475,22 +477,22 @@ export function StockInPage() {
 
         {/* Result card */}
         {state.status === "done" && (
-          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: "var(--radius)", overflow: "hidden" }}>
+          <div style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", overflow: "hidden" }}>
             <div style={{ padding: "14px 20px", borderBottom: "1px solid #f3f4f6", display: "flex", alignItems: "center", gap: 8 }}>
               <CheckCircle size={16} color="#16a34a" />
-              <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>Import complete</h2>
+              <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text)" }}>Import complete</h2>
             </div>
             <div style={{ padding: 20 }}>
               {/* Summary */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
                 {[
-                  { label: "Total rows", value: state.result.totalRows, color: "#374151" },
-                  { label: "Imported", value: state.result.successRows, color: "#15803d" },
+                  { label: "Total rows", value: state.result.totalRows, color: "var(--text)" },
+                  { label: "Imported", value: state.result.successRows, color: "var(--text)" },
                   { label: "Failed", value: state.result.failedRows.length, color: state.result.failedRows.length > 0 ? "#b91c1c" : "#9ca3af" },
                 ].map((s) => (
                   <div key={s.label} style={{ border: "1px solid #f3f4f6", borderRadius: "var(--radius)", padding: "12px 16px" }}>
                     <p style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</p>
-                    <p style={{ margin: 0, fontSize: 12, color: "#6b7a8d" }}>{s.label}</p>
+                    <p style={{ margin: 0, fontSize: 12, color: "var(--muted)" }}>{s.label}</p>
                   </div>
                 ))}
               </div>
@@ -498,24 +500,24 @@ export function StockInPage() {
               {/* Failed rows */}
               {state.result.failedRows.length > 0 && (
                 <div>
-                  <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: "#b91c1c" }}>
+                  <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: "var(--negative)" }}>
                     Failed rows — fix and re-upload:
                   </p>
-                  <div style={{ border: "1px solid #fecaca", borderRadius: "var(--radius)", overflow: "hidden", overflowX: "auto" }}>
+                  <div style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", overflow: "hidden", overflowX: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                       <thead>
-                        <tr style={{ background: "#fef2f2" }}>
+                        <tr style={{ background: "var(--bg-surface-elevated)" }}>
                           {["Row", "Serial", "Reason"].map((h) => (
-                            <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "#991b1b" }}>{h}</th>
+                            <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "var(--negative)" }}>{h}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
                         {state.result.failedRows.map((r) => (
-                          <tr key={r.row} style={{ borderTop: "1px solid #fecaca" }}>
-                            <td style={{ padding: "8px 12px", color: "#374151" }}>{r.row}</td>
-                            <td style={{ padding: "8px 12px", fontFamily: "monospace", color: "#374151" }}>{r.serial}</td>
-                            <td style={{ padding: "8px 12px", color: "#b91c1c" }}>{r.reason}</td>
+                          <tr key={r.row} style={{ borderTop: "1px solid var(--line)" }}>
+                            <td style={{ padding: "8px 12px", color: "var(--text)" }}>{r.row}</td>
+                            <td style={{ padding: "8px 12px", fontFamily: "monospace", color: "var(--text)" }}>{r.serial}</td>
+                            <td style={{ padding: "8px 12px", color: "var(--negative)" }}>{r.reason}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -530,7 +532,7 @@ export function StockInPage() {
                   Import another file
                 </button>
                 <button type="button" onClick={() => navigate("/")}
-                  style={{ background: "#fff", border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "9px 14px", fontSize: 13, fontWeight: 600, color: "#374151", cursor: "pointer" }}>
+                  style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "9px 14px", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
                   Back to Inventory
                 </button>
               </div>
@@ -539,12 +541,12 @@ export function StockInPage() {
         )}
 
         {/* Lock + Batch Serial Entry */}
-        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: "var(--radius)", overflow: "hidden", marginBottom: 20 }}>
+        <div style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", overflow: "hidden", marginBottom: 20 }}>
           <div style={{ padding: "14px 20px", borderBottom: "1px solid #f3f4f6", display: "flex", alignItems: "center", gap: 8 }}>
             <Plus size={15} color="var(--blue)" />
-            <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>Scan serials</h2>
+            <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text)" }}>Scan serials</h2>
             {pendingCount > 0 && (
-              <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 600, color: "#a16207", background: "#fef9c3", padding: "2px 8px", borderRadius: 10 }}>
+              <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 600, color: "var(--muted)", background: "var(--bg-surface-elevated)", padding: "2px 8px", borderRadius: "var(--radius)" }}>
                 {pendingCount} pending — will sync on reconnect
               </span>
             )}
@@ -553,8 +555,8 @@ export function StockInPage() {
             {/* Part + Serial inputs side by side */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginBottom: 12 }}>
               <div>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 5 }}>
-                  Part number <span style={{ color: "#ef4444" }}>*</span>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 5 }}>
+                  Part number <span style={{ color: "var(--negative)" }}>*</span>
                 </label>
                 <PartNumberInput
                   ref={partInputRef}
@@ -568,7 +570,7 @@ export function StockInPage() {
                 />
               </div>
               <div>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 5 }}>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 5 }}>
                   Serial number
                 </label>
                 <input
@@ -595,21 +597,21 @@ export function StockInPage() {
                     transition: "border-color 120ms, background 120ms",
                   }}
                 />
-                <p style={{ margin: "4px 0 0", fontSize: 11, color: "#9ca3af" }}>Enter to add · {navigator.platform.includes("Mac") ? "⌘" : "Ctrl"}+Enter to submit</p>
+                <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--muted)" }}>Enter to add · {navigator.platform.includes("Mac") ? "⌘" : "Ctrl"}+Enter to submit</p>
               </div>
             </div>
 
-            {draftError && <p style={{ margin: "0 0 10px", fontSize: 12, color: "#b91c1c" }}>{draftError}</p>}
+            {draftError && <p style={{ margin: "0 0 10px", fontSize: 12, color: "var(--negative)" }}>{draftError}</p>}
 
             {/* Draft list */}
             {draftList.length > 0 && (
-              <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
-                <div style={{ padding: "8px 12px", background: "#f9fafb", borderBottom: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>
+              <div style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", overflow: "hidden", marginBottom: 14 }}>
+                <div style={{ padding: "8px 12px", background: "var(--bg-surface-elevated)", borderBottom: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>
                     {draftList.filter((r) => !r.error).length} ready · {draftList.filter((r) => r.error).length} errors
                   </span>
                   <button type="button" onClick={() => { setDraftList([]); setDraftPartNumber(""); setDraftPartName(""); setDraftPartConfirmed(false); }}
-                    style={{ fontSize: 11, color: "#9ca3af", background: "none", border: "none", cursor: "pointer" }}>
+                    style={{ fontSize: 11, color: "var(--muted)", background: "none", border: "none", cursor: "pointer" }}>
                     Clear all
                   </button>
                 </div>
@@ -625,12 +627,12 @@ export function StockInPage() {
                       transition: "background 600ms",
                     }}>
                       <span style={{ fontSize: 12, fontFamily: "monospace", minWidth: 120, color: row.error ? "#b91c1c" : "#111827" }}>{row.serial}</span>
-                      <span style={{ fontSize: 11, color: "#6b7a8d", flex: 1 }}>{row.partNumber}</span>
+                      <span style={{ fontSize: 11, color: "var(--muted)", flex: 1 }}>{row.partNumber}</span>
                       {row.error
-                        ? <span style={{ fontSize: 11, color: "#b91c1c" }}>{row.error}</span>
-                        : <span style={{ fontSize: 11, color: "#15803d", fontWeight: 600 }}>✓</span>}
+                        ? <span style={{ fontSize: 11, color: "var(--negative)" }}>{row.error}</span>
+                        : <span style={{ fontSize: 11, color: "var(--text)", fontWeight: 600 }}>✓</span>}
                       <button type="button" onClick={() => setDraftList((prev) => prev.filter((_, j) => j !== realIdx))}
-                        style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", padding: 0 }}>
+                        style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", padding: 0 }}>
                         <X size={12} />
                       </button>
                     </div>
@@ -640,10 +642,10 @@ export function StockInPage() {
             )}
 
             {submitResult && (
-              <div style={{ marginBottom: 14, padding: "10px 14px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, fontSize: 13, color: "#15803d", display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ marginBottom: 14, padding: "10px 14px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", fontSize: 13, color: "var(--text)", display: "flex", alignItems: "center", gap: 12 }}>
                 <span><CheckCircle size={14} style={{ display: "inline", marginRight: 6 }} />
                 {submitResult.ok} serial{submitResult.ok !== 1 ? "s" : ""} stocked in.
-                {submitResult.failed.length > 0 && <span style={{ color: "#b91c1c", marginLeft: 8 }}>{submitResult.failed.length} failed.</span>}
+                {submitResult.failed.length > 0 && <span style={{ color: "var(--negative)", marginLeft: 8 }}>{submitResult.failed.length} failed.</span>}
                 </span>
                 <button type="button" onClick={() => navigate("/")}
                   style={{ marginLeft: "auto", background: "none", color: "var(--blue)", border: "none", padding: 0, fontSize: 13, fontWeight: 400, cursor: "pointer", whiteSpace: "nowrap" }}>
@@ -665,13 +667,13 @@ export function StockInPage() {
         </div>
 
         {/* Template info */}
-        <div style={{ marginTop: 20, padding: "14px 16px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8 }}>
-          <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "#374151" }}>Required CSV columns</p>
+        <div style={{ marginTop: 20, padding: "14px 16px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)" }}>
+          <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "var(--text)" }}>Required CSV columns</p>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {["serial_number", "part_number"].map((col) => (
-              <code key={col} style={{ background: "#e2e8f0", padding: "2px 8px", borderRadius: "var(--radius-sm)", fontSize: 12, color: "#1e293b" }}>{col}</code>
+              <code key={col} style={{ background: "var(--bg-surface-elevated)", padding: "2px 8px", borderRadius: "var(--radius-sm)", fontSize: 12, color: "#1e293b" }}>{col}</code>
             ))}
-            <code style={{ background: "#f1f5f9", padding: "2px 8px", borderRadius: "var(--radius-sm)", fontSize: 12, color: "#64748b" }}>notes (optional)</code>
+            <code style={{ background: "var(--bg-surface-elevated)", padding: "2px 8px", borderRadius: "var(--radius-sm)", fontSize: 12, color: "#64748b" }}>notes (optional)</code>
           </div>
         </div>
       </main>
@@ -680,3 +682,7 @@ export function StockInPage() {
     </AppLayout>
   );
 }
+
+
+
+

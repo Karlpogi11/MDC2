@@ -88,7 +88,7 @@ function PartNumberInput({ value, onChange, placeholder = "e.g. 923-03861", styl
   }, []);
 
   const baseStyle: React.CSSProperties = {
-    border: "1px solid #d1d5db", borderRadius: "var(--radius)", padding: "9px 12px",
+    border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "9px 12px",
     fontSize: 13, outline: "none", width: "100%", boxSizing: "border-box",
     fontFamily: "monospace", background: disabled ? "#f9fafb" : "#fff",
     color: disabled ? "#6b7a8d" : undefined,
@@ -102,8 +102,8 @@ function PartNumberInput({ value, onChange, placeholder = "e.g. 923-03861", styl
       left: dropdownPos.left,
       width: dropdownPos.width,
       zIndex: 9999,
-      background: "#fff",
-      border: "1px solid #d0d0d0",
+      background: "var(--bg-surface)",
+      border: "1px solid var(--line)",
       borderRadius: "var(--radius)",
       boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
       overflow: "hidden",
@@ -122,9 +122,9 @@ function PartNumberInput({ value, onChange, placeholder = "e.g. 923-03861", styl
         >
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <code style={{ fontWeight: 700, color: "var(--blue)", flexShrink: 0 }}>{part.part_number}</code>
-            {part.category && <span style={{ marginLeft: "auto", color: "#9ca3af", fontSize: 11, flexShrink: 0 }}>{toCapitalized(part.category)}</span>}
+            {part.category && <span style={{ marginLeft: "auto", color: "var(--muted)", fontSize: 11, flexShrink: 0 }}>{toCapitalized(part.category)}</span>}
           </div>
-          <div style={{ color: "#374151", marginTop: 2 }}>{part.part_name}</div>
+          <div style={{ color: "var(--text)", marginTop: 2 }}>{part.part_name}</div>
         </div>
       ))}
     </div>,
@@ -153,3 +153,5 @@ function PartNumberInput({ value, onChange, placeholder = "e.g. 923-03861", styl
     </div>
   );
 });
+
+

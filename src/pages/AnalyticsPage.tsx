@@ -1,8 +1,20 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useTableResize } from "@/components/ResizableColumns";
 import { friendlyError } from "@/lib/friendlyError";
 import { BarChart3, Upload, RefreshCw, TrendingUp } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase";
+import { useSites } from "@/hooks/useSites";
+
+// Module-level cache — survives tab switches, cleared after TTL
+const _cache: Record<string, { data: any; ts: number }> = {};
+function getCached<T>(key: string, ttlMs: number): T | null {
+  const entry = _cache[key];
+  if (entry && Date.now() - entry.ts < ttlMs) return entry.data as T;
+  return null;
+}
+function setCached(key: string, data: any) {
+  _cache[key] = { data, ts: Date.now() };
+}
 import { useAuth } from "@/lib/auth";
 import { AppLayout } from "@/components/AppLayout";
 import { CSVDropZone } from "@/components/CSVDropZone";
@@ -31,11 +43,11 @@ type MappingState = {
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 
-const INK        = "#0f172a";
-const MUTED      = "#64748b";
-const FAINT      = "#f8fafc";
-const BORDER     = "#e2e8f0";
-const BLUE       = "#2563eb";
+const INK        = "var(--text)";
+const MUTED      = "var(--muted)";
+const FAINT      = "var(--bg-surface-elevated)";
+const BORDER     = "var(--line)";
+const BLUE       = "var(--blue)";
 const BLUE_LIGHT = "#eff6ff";
 const BLUE_MID   = "#3b82f6";
 const SLATE      = "#94a3b8";
@@ -199,7 +211,7 @@ function MappingModal({ state, onConfirm, onCancel, importing }: { state: Mappin
   const canConfirm = mapping.part_number !== NONE || mapping.description !== NONE;
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <div style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 660, boxShadow: "0 24px 64px rgba(0,0,0,0.18)", overflow: "hidden" }}>
+      <div style={{ background: "var(--bg-surface)", borderRadius: "var(--radius)", width: "100%", maxWidth: 660, boxShadow: "0 24px 64px rgba(0,0,0,0.18)", overflow: "hidden" }}>
         <div style={{ padding: "20px 24px", borderBottom: `1px solid ${BORDER}` }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: INK }}>Map CSV Columns</div>
           <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>{state.file.name} · {state.totalRows.toLocaleString()} rows · Auto-detected below — review and correct if needed</div>
@@ -210,23 +222,23 @@ function MappingModal({ state, onConfirm, onCancel, importing }: { state: Mappin
               <div key={f.key}>
                 <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: MUTED, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>{f.label}</label>
                 <select value={mapping[f.key]} onChange={(e) => setMapping((m) => ({ ...m, [f.key]: e.target.value }))}
-                  style={{ width: "100%", border: `1px solid ${mapping[f.key] !== NONE ? BLUE : BORDER}`, borderRadius: 6, padding: "7px 10px", fontSize: 12, outline: "none", fontFamily: "inherit", background: "#fff", cursor: "pointer" }}>
+                  style={{ width: "100%", border: `1px solid ${mapping[f.key] !== NONE ? BLUE : BORDER}`, borderRadius: "var(--radius)", padding: "7px 10px", fontSize: 12, outline: "none", fontFamily: "inherit", background: "var(--bg-surface)", cursor: "pointer" }}>
                   <option value={NONE}>— not mapped —</option>
                   {state.rawHeaders.map((h, i) => <option key={i} value={state.headers[i]}>{h}</option>)}
                 </select>
-                <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>{f.hint}</div>
+                <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 2 }}>{f.hint}</div>
               </div>
             ))}
           </div>
           <div style={{ marginBottom: 20 }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Preview — first 3 rows</div>
-            <div style={{ border: `1px solid ${BORDER}`, borderRadius: 8, overflow: "hidden" }}>
+            <div style={{ border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", overflow: "hidden" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                 <thead><tr style={{ background: FAINT }}>
                   {(["part_number","qty","site_code","used_at"] as const).map((f) => (
                     <th key={f} style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: MUTED, borderBottom: `1px solid ${BORDER}` }}>
                       {FIELDS.find((x) => x.key === f)?.label}
-                      {mapping[f] !== NONE && <span style={{ color: "#94a3b8", fontWeight: 400 }}> ({mapping[f]})</span>}
+                      {mapping[f] !== NONE && <span style={{ color: "var(--muted)", fontWeight: 400 }}> ({mapping[f]})</span>}
                     </th>
                   ))}
                 </tr></thead>
@@ -253,9 +265,9 @@ function MappingModal({ state, onConfirm, onCancel, importing }: { state: Mappin
           </div>
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
             <button type="button" onClick={onCancel} disabled={importing}
-              style={{ border: `1px solid ${BORDER}`, background: "#fff", borderRadius: 6, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", color: MUTED }}>Cancel</button>
+              style={{ border: `1px solid ${BORDER}`, background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", color: MUTED }}>Cancel</button>
             <button type="button" onClick={() => onConfirm(mapping)} disabled={!canConfirm || importing}
-              style={{ border: "none", background: canConfirm ? BLUE : "#e2e8f0", borderRadius: 6, padding: "9px 20px", fontSize: 13, fontWeight: 600, cursor: canConfirm ? "pointer" : "not-allowed", color: canConfirm ? "#fff" : "#94a3b8" }}>
+              style={{ border: "none", background: canConfirm ? BLUE : "#e2e8f0", borderRadius: "var(--radius)", padding: "9px 20px", fontSize: 13, fontWeight: 600, cursor: canConfirm ? "pointer" : "not-allowed", color: canConfirm ? "#fff" : "#94a3b8" }}>
               {importing ? "Importing…" : `Import ${state.totalRows.toLocaleString()} rows`}
             </button>
           </div>
@@ -273,7 +285,7 @@ function fmtDate(iso: string) {
 
 function Panel({ title, subtitle, action, children, noPad }: { title: string; subtitle?: string; action?: React.ReactNode; children: React.ReactNode; noPad?: boolean }) {
   return (
-    <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 1px 3px rgba(0,0,0,.04)" }}>
+    <div style={{ background: "var(--bg-surface)", border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", boxShadow: "0 1px 3px rgba(0,0,0,.04)" }}>
       <div style={{ padding: "16px 20px", borderBottom: `1px solid ${BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, color: INK, letterSpacing: "-0.01em" }}>{title}</div>
@@ -288,7 +300,7 @@ function Panel({ title, subtitle, action, children, noPad }: { title: string; su
 
 function KpiCard({ label, value, sub, accent, delta }: { label: string; value: string; sub: string; accent?: boolean; delta?: string }) {
   return (
-    <div style={{ background: accent ? BLUE : "#fff", border: `1px solid ${accent ? BLUE : BORDER}`, borderRadius: 12, padding: "20px 22px", boxShadow: accent ? "0 4px 14px rgba(37,99,235,.2)" : "0 1px 3px rgba(0,0,0,.04)" }}>
+    <div style={{ background: accent ? BLUE : "#fff", border: `1px solid ${accent ? BLUE : BORDER}`, borderRadius: "var(--radius)", padding: "20px 22px", boxShadow: accent ? "0 4px 14px rgba(37,99,235,.2)" : "0 1px 3px rgba(0,0,0,.04)" }}>
       <div style={{ fontSize: 11, color: accent ? "rgba(255,255,255,.7)" : MUTED, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
       <div style={{ fontSize: 30, fontWeight: 800, color: accent ? "#fff" : INK, marginTop: 8, lineHeight: 1, letterSpacing: "-0.02em" }}>{value}</div>
       <div style={{ fontSize: 11, color: accent ? "rgba(255,255,255,.6)" : MUTED, marginTop: 8 }}>{sub}</div>
@@ -306,7 +318,7 @@ function FilterField({ label, children }: { label: string; children: React.React
 }
 
 function Empty({ msg = "No data yet." }: { msg?: string }) {
-  return <div style={{ height: 160, display: "flex", alignItems: "center", justifyContent: "center", color: "#cbd5e1", fontSize: 13 }}>{msg}</div>;
+  return <div style={{ height: 160, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--muted)", fontSize: 13 }}>{msg}</div>;
 }
 function Spinner() {
   return <div style={{ height: 160, display: "flex", alignItems: "center", justifyContent: "center", color: MUTED, fontSize: 13 }}>Loading…</div>;
@@ -314,7 +326,7 @@ function Spinner() {
 function RefreshBtn({ onClick, loading }: { onClick: () => void; loading: boolean }) {
   return (
     <button type="button" onClick={onClick} disabled={loading}
-      style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "transparent", color: loading ? "#cbd5e1" : MUTED, border: `1px solid ${BORDER}`, borderRadius: 6, padding: "5px 12px", fontSize: 12, fontWeight: 500, cursor: loading ? "not-allowed" : "pointer" }}>
+      style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "transparent", color: loading ? "#cbd5e1" : MUTED, border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 12, fontWeight: 500, cursor: loading ? "not-allowed" : "pointer" }}>
       <RefreshCw size={11} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
       {loading ? "Loading…" : "Refresh"}
     </button>
@@ -333,14 +345,14 @@ function SeriesChips({ list, selected, onChange }: {
   return (
     <div style={{ position: "relative" }}>
       <button type="button" onClick={() => setOpen((o) => !o)}
-        style={{ display: "inline-flex", alignItems: "center", gap: 6, border: `1px solid ${hasFilter ? BLUE : BORDER}`, borderRadius: 6, padding: "0 12px", fontSize: 13, fontWeight: 500, cursor: "pointer", background: hasFilter ? BLUE : "#fff", color: hasFilter ? "#fff" : INK, height: 34, minWidth: 140, justifyContent: "space-between" }}>
+        style={{ display: "inline-flex", alignItems: "center", gap: 6, border: `1px solid ${hasFilter ? BLUE : BORDER}`, borderRadius: "var(--radius)", padding: "0 12px", fontSize: 13, fontWeight: 500, cursor: "pointer", background: hasFilter ? BLUE : "#fff", color: hasFilter ? "#fff" : INK, height: 34, minWidth: 140, justifyContent: "space-between" }}>
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 180 }}>{label}</span>
         <span style={{ fontSize: 10, color: hasFilter ? "rgba(255,255,255,.7)" : SLATE, flexShrink: 0 }}>▾</span>
       </button>
       {open && (
         <>
           <div style={{ position: "fixed", inset: 0, zIndex: 99 }} onClick={() => setOpen(false)} />
-          <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 100, background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,.1)", minWidth: 220, maxHeight: 320, overflowY: "auto", padding: "6px 0" }}>
+          <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 100, background: "var(--bg-surface)", border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", boxShadow: "0 8px 24px rgba(0,0,0,.1)", minWidth: 220, maxHeight: 320, overflowY: "auto", padding: "6px 0" }}>
             {selected.length < list.length && (
               <button type="button" onClick={() => { onChange([...list]); setOpen(false); }}
                 style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 14px", fontSize: 12, color: BLUE, background: "transparent", border: "none", cursor: "pointer", borderBottom: `1px solid ${BORDER}`, marginBottom: 4 }}>
@@ -349,7 +361,7 @@ function SeriesChips({ list, selected, onChange }: {
             )}
             {selected.length > 0 && (
               <button type="button" onClick={() => { onChange([]); setOpen(false); }}
-                style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 14px", fontSize: 12, color: "#dc2626", background: "transparent", border: "none", cursor: "pointer", borderBottom: `1px solid ${BORDER}`, marginBottom: 4 }}>
+                style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 14px", fontSize: 12, color: "var(--muted)", background: "transparent", border: "none", cursor: "pointer", borderBottom: `1px solid ${BORDER}`, marginBottom: 4 }}>
                 Clear selection
               </button>
             )}
@@ -358,7 +370,7 @@ function SeriesChips({ list, selected, onChange }: {
               return (
                 <button key={s} type="button" onClick={() => toggle(s)}
                   style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", padding: "7px 14px", fontSize: 13, background: active ? BLUE_LIGHT : "transparent", border: "none", cursor: "pointer", color: active ? BLUE : INK, fontWeight: active ? 600 : 400 }}>
-                  <span style={{ width: 14, height: 14, border: `1.5px solid ${active ? BLUE : BORDER}`, borderRadius: 3, background: active ? BLUE : "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <span style={{ width: 14, height: 14, border: `1.5px solid ${active ? BLUE : BORDER}`, borderRadius: "var(--radius-sm)", background: active ? BLUE : "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     {active && <span style={{ color: "#fff", fontSize: 9, lineHeight: 1 }}>✓</span>}
                   </span>
                   {s}
@@ -648,7 +660,7 @@ export function AnalyticsPage() {
   const role = authState.status === "authenticated" ? authState.profile.role : null;
 
   const [activeTab, setActiveTab] = useState<"dc" | "upload" | "demand" | "abc" | "velocity">("dc");
-  const [sites, setSites] = useState<{ id: string; site_name: string; site_code: string; ship_to_code: string | null }[]>([]);
+  const { data: sites = [] } = useSites();
 
   // Upload
   const [sourceType, setSourceType] = useState<"fixably" | "gsx">("fixably");
@@ -697,18 +709,24 @@ export function AnalyticsPage() {
   // Auto-detected device series list
   const [seriesList, setSeriesList] = useState<string[]>([]);
 
-  const sel: React.CSSProperties = { border: `1px solid ${BORDER}`, borderRadius: 6, padding: "8px 10px", fontSize: 13, outline: "none", fontFamily: "inherit", background: "#fff", cursor: "pointer" };
+  const sel: React.CSSProperties = { border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", padding: "8px 10px", fontSize: 13, outline: "none", fontFamily: "inherit", background: "var(--bg-surface)", cursor: "pointer" };
 
   // ── Loaders ──────────────────────────────────────────────────────────────────
 
   async function loadUploads() {
+    const cached = getCached<UploadRecord[]>("uploads", 60_000);
+    if (cached) { setUploads(cached); setUploadsLoading(false); return; }
     const client = getSupabaseClient(); if (!client) return;
     const { data } = await client.from("analytics_uploads").select("id,source_type,file_name,uploaded_at,row_count,status").order("uploaded_at", { ascending: false }).limit(20);
-    setUploads((data ?? []) as UploadRecord[]);
+    const rows = (data ?? []) as UploadRecord[];
+    setCached("uploads", rows);
+    setUploads(rows);
     setUploadsLoading(false);
   }
 
   async function loadSeriesList() {
+    const cached = getCached<string[]>("seriesList", 10 * 60_000);
+    if (cached) { setSeriesList(cached); return; }
     const client = getSupabaseClient(); if (!client) return;
     // Get distinct part names from analytics_summary, extract device series
     const { data } = await client.from("analytics_summary").select("part_name").limit(2000);
@@ -736,9 +754,12 @@ export function AnalyticsPage() {
     // Sort by PATTERNS order
     const sorted = PATTERNS.filter((p) => found.has(p));
     setSeriesList(sorted);
+    setCached("seriesList", sorted);
   }
 
   async function loadDC() {
+    const cached = getCached<any>("dcData", 2 * 60_000);
+    if (cached) { setDcData(cached); setDcLoading(false); return; }
     setDcLoading(true); setDcError(null);
     const client = getSupabaseClient(); if (!client) { setDcLoading(false); return; }
     const [siRes, trRes, tiRes, snapRes] = await Promise.all([
@@ -797,15 +818,17 @@ export function AnalyticsPage() {
     const statusBreakdown = [
       { name: "Received",   value: sc.received,   color: GREEN,   pct: total ? Math.round(sc.received / total * 100) : 0 },
       { name: "In Transit", value: sc.in_transit,  color: BLUE,    pct: total ? Math.round(sc.in_transit / total * 100) : 0 },
-      { name: "Packed",     value: sc.packed,      color: "#7c3aed", pct: total ? Math.round(sc.packed / total * 100) : 0 },
+      { name: "Packed",     value: sc.packed,      color: "var(--muted)", pct: total ? Math.round(sc.packed / total * 100) : 0 },
       { name: "Draft",      value: sc.draft,       color: SLATE,   pct: total ? Math.round(sc.draft / total * 100) : 0 },
     ].filter((s) => s.value > 0);
 
     const received = transfers.filter((t) => t.status === "received").length;
-    setDcData({
+    const dcResult = {
       kpi: { totalStockedIn: serials.length, totalStockedOut: items.reduce((s, i) => s + (i.qty ?? 1), 0), totalTransfers: total, receivedRate: total ? Math.round(received / total * 100) : 0, totalAvailable, totalCommitted },
       monthly, topParts, bySite, statusBreakdown,
-    });
+    };
+    setCached("dcData", dcResult);
+    setDcData(dcResult);
     setDcLoading(false);
   }
 
@@ -922,9 +945,7 @@ export function AnalyticsPage() {
     void loadUploads();
     void loadDC();
     void loadSeriesList();
-    setDemandData(null); // always clear so Run fetches fresh
-    const client = getSupabaseClient();
-    if (client) client.from("sites").select("id,site_name,site_code,ship_to_code").eq("is_active", true).eq("is_dc", false).order("site_name").then(({ data }) => setSites((data ?? []) as any[]));
+    setDemandData(null);
   }, []);
 
   useEffect(() => {
@@ -1071,11 +1092,11 @@ export function AnalyticsPage() {
         {/* ── DC Activity ──────────────────────────────────────────────────── */}
         {activeTab === "dc" && (
           <div style={{ display: "grid", gap: 20 }}>
-            {dcError && <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "12px 16px", color: "#dc2626", fontSize: 13 }}>Error: {dcError}</div>}
+            {dcError && <div style={{ background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "12px 16px", color: "var(--muted)", fontSize: 13 }}>Error: {dcError}</div>}
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14 }}>
               {dcLoading
-                ? [1,2,3,4].map((i) => <div key={i} style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12, height: 100 }} />)
+                ? [1,2,3,4].map((i) => <div key={i} style={{ background: "var(--bg-surface)", border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", height: 100 }} />)
                 : dcData ? [
                     { label: "Available Now",    value: dcData.kpi.totalAvailable.toLocaleString(),  sub: "units ready to dispatch",       accent: false },
                     { label: "In Transit",       value: dcData.kpi.totalCommitted.toLocaleString(),  sub: "units in active transfers",      accent: false },
@@ -1122,14 +1143,14 @@ export function AnalyticsPage() {
               <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
                 {(["fixably", "gsx"] as const).map((t) => (
                   <button key={t} type="button" onClick={() => setSourceType(t)}
-                    style={{ flex: 1, border: `1px solid ${BORDER}`, borderRadius: 6, padding: "8px 0", fontSize: 13, fontWeight: 600, cursor: "pointer", background: sourceType === t ? BLUE : "#fff", color: sourceType === t ? "#fff" : INK }}>
+                    style={{ flex: 1, border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", padding: "8px 0", fontSize: 13, fontWeight: 600, cursor: "pointer", background: sourceType === t ? BLUE : "#fff", color: sourceType === t ? "#fff" : INK }}>
                     {t === "fixably" ? "Fixably" : "GSX"}
                   </button>
                 ))}
               </div>
               <CSVDropZone onFile={(f) => void handleFile(f)} onTemplate={() => downloadTemplate(sourceType)} importing={importing} label={`Import ${sourceType === "fixably" ? "Fixably" : "GSX"} CSV`} />
               {importResult && <div style={{ marginTop: 12 }}><ImportResult added={importResult.added} skipped={importResult.skipped} errors={importResult.errors} /></div>}
-              <div style={{ marginTop: 14, padding: "10px 14px", background: FAINT, borderRadius: 8, fontSize: 12, color: MUTED, lineHeight: 1.6 }}>
+              <div style={{ marginTop: 14, padding: "10px 14px", background: FAINT, borderRadius: "var(--radius)", fontSize: 12, color: MUTED, lineHeight: 1.6 }}>
                 <strong style={{ color: INK }}>Note:</strong> Rows with no date column are excluded from trend analysis.
                 Invalid years (before 2010 or future) are also excluded.
                 After upload, analytics refresh every 15 minutes automatically.
@@ -1152,7 +1173,7 @@ export function AnalyticsPage() {
                         {u.status === "done" ? "✓ active" : u.status}
                       </span>
                       <button type="button" onClick={() => void deleteUpload(u.id)} disabled={deletingUploadId === u.id} title="Delete upload and all its data"
-                        style={{ border: "none", background: "transparent", cursor: "pointer", color: "#dc2626", padding: "2px 6px", fontSize: 16, lineHeight: 1, opacity: deletingUploadId === u.id ? 0.4 : 0.5 }}>×</button>
+                        style={{ border: "none", background: "transparent", cursor: "pointer", color: "var(--muted)", padding: "2px 6px", fontSize: 16, lineHeight: 1, opacity: deletingUploadId === u.id ? 0.4 : 0.5 }}>×</button>
                     </div>
                   </div>
                 ))}
@@ -1165,7 +1186,7 @@ export function AnalyticsPage() {
         {activeTab === "demand" && (
           <div style={{ display: "grid", gap: 20 }}>
             {/* Filters — single flat toolbar, no nested containers */}
-            <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12, padding: "16px 20px", display: "flex", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}>
+            <div style={{ background: "var(--bg-surface)", border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", padding: "16px 20px", display: "flex", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}>
               <FilterField label="From">
                 <DatePicker value={demandFrom} onChange={setDemandFrom} popperPlacement="bottom-start" />
               </FilterField>
@@ -1173,7 +1194,7 @@ export function AnalyticsPage() {
                 <DatePicker value={demandTo} onChange={setDemandTo} popperPlacement="bottom-start" />
               </FilterField>
               <FilterField label="Site">
-                <select value={demandSite} onChange={(e) => setDemandSite(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 6, padding: "0 10px", fontSize: 13, outline: "none", fontFamily: "inherit", background: "#fff", cursor: "pointer", height: 34, color: demandSite ? INK : MUTED, minWidth: 160 }}>
+                <select value={demandSite} onChange={(e) => setDemandSite(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", padding: "0 10px", fontSize: 13, outline: "none", fontFamily: "inherit", background: "var(--bg-surface)", cursor: "pointer", height: 34, color: demandSite ? INK : MUTED, minWidth: 160 }}>
                   <option value="">All sites</option>
                   {sites.map((s) => <option key={s.id} value={s.ship_to_code ?? s.site_code}>{s.site_name}</option>)}
                 </select>
@@ -1181,7 +1202,7 @@ export function AnalyticsPage() {
               <FilterField label="Device Series">
                 <SeriesChips list={seriesList} selected={demandSeries} onChange={setDemandSeries} />
               </FilterField>
-              <button type="button" onClick={() => void loadDemand()} disabled={demandLoading} style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, background: demandLoading ? "#f1f5f9" : BLUE, color: demandLoading ? MUTED : "#fff", border: "none", borderRadius: 6, padding: "0 20px", fontSize: 13, fontWeight: 600, cursor: demandLoading ? "not-allowed" : "pointer", height: 34, whiteSpace: "nowrap", alignSelf: "flex-end" }}>
+              <button type="button" onClick={() => void loadDemand()} disabled={demandLoading} style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, background: demandLoading ? "#f1f5f9" : BLUE, color: demandLoading ? MUTED : "#fff", border: "none", borderRadius: "var(--radius)", padding: "0 20px", fontSize: 13, fontWeight: 600, cursor: demandLoading ? "not-allowed" : "pointer", height: 34, whiteSpace: "nowrap", alignSelf: "flex-end" }}>
                 <TrendingUp size={13} /> {demandLoading ? "Loading…" : "Run Analysis"}
               </button>
             </div>
@@ -1220,7 +1241,7 @@ export function AnalyticsPage() {
           <div style={{ display: "grid", gap: 20 }}>
             {/* Series filter */}
             {seriesList.length > 0 && (
-              <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12, padding: "16px 20px", display: "flex", alignItems: "flex-end", gap: 16 }}>
+              <div style={{ background: "var(--bg-surface)", border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", padding: "16px 20px", display: "flex", alignItems: "flex-end", gap: 16 }}>
                 <FilterField label="Device Series">
                   <SeriesChips list={seriesList} selected={abcSeries} onChange={(v) => { setAbcSeries(v); setAbcData(null); }} />
                 </FilterField>
@@ -1240,7 +1261,7 @@ export function AnalyticsPage() {
                       const color = tier === "A" ? GREEN : tier === "B" ? BLUE : SLATE;
                       const bg    = tier === "A" ? "#f0fdf4" : tier === "B" ? BLUE_LIGHT : FAINT;
                       return (
-                        <div key={tier} style={{ background: bg, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "18px 16px" }}>
+                        <div key={tier} style={{ background: bg, border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", padding: "18px 16px" }}>
                           <div style={{ fontSize: 11, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.07em" }}>Tier {tier}</div>
                           <div style={{ fontSize: 28, fontWeight: 800, color: INK, marginTop: 8, letterSpacing: "-0.02em" }}>{count}</div>
                           <div style={{ fontSize: 11, color: MUTED, marginTop: 6 }}>{vol.toLocaleString()} units used</div>
@@ -1269,7 +1290,7 @@ export function AnalyticsPage() {
                         const bg    = r.tier === "A" ? "#f0fdf4" : r.tier === "B" ? BLUE_LIGHT : FAINT;
                         return (
                           <tr key={r.part_number}>
-                            <td><span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 4, background: bg, color }}>{r.tier}</span></td>
+                            <td><span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: "var(--radius)", background: bg, color }}>{r.tier}</span></td>
                             <td style={{ fontFamily: "monospace", fontSize: 12, color: BLUE }}>{r.part_number}</td>
                             <td style={{ overflow: "hidden", textOverflow: "ellipsis", color: MUTED }}>{r.part_name ?? "—"}</td>
                             <td className="num" style={{ fontWeight: 700 }}>{r.total_qty.toLocaleString()}</td>
@@ -1288,7 +1309,7 @@ export function AnalyticsPage() {
         {activeTab === "velocity" && (
           <div style={{ display: "grid", gap: 20 }}>
             {seriesList.length > 0 && (
-              <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12, padding: "16px 20px", display: "flex", alignItems: "flex-end", gap: 16 }}>
+              <div style={{ background: "var(--bg-surface)", border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", padding: "16px 20px", display: "flex", alignItems: "flex-end", gap: 16 }}>
                 <FilterField label="Device Series">
                   <SeriesChips list={seriesList} selected={velSeries} onChange={(v) => { setVelSeries(v); setVelData(null); }} />
                 </FilterField>
@@ -1305,7 +1326,7 @@ export function AnalyticsPage() {
                     {velData.donut.map((d) => {
                       const bg = d.color === GREEN ? "#f0fdf4" : d.color === AMBER ? "#fffbeb" : FAINT;
                       return (
-                        <div key={d.name} style={{ background: bg, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "18px 16px" }}>
+                        <div key={d.name} style={{ background: bg, border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", padding: "18px 16px" }}>
                           <div style={{ fontSize: 11, fontWeight: 700, color: d.color, textTransform: "uppercase", letterSpacing: "0.07em" }}>{d.name.split(" ")[0]}</div>
                           <div style={{ fontSize: 28, fontWeight: 800, color: INK, marginTop: 8, letterSpacing: "-0.02em" }}>{d.value}</div>
                           <div style={{ fontSize: 11, color: MUTED, marginTop: 6 }}>parts</div>
@@ -1335,7 +1356,7 @@ export function AnalyticsPage() {
                         const bg    = r.category === "fast" ? "#f0fdf4" : r.category === "slow" ? "#fffbeb" : FAINT;
                         return (
                           <tr key={r.part_number}>
-                            <td><span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 4, background: bg, color }}>{r.category}</span></td>
+                            <td><span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: "var(--radius)", background: bg, color }}>{r.category}</span></td>
                             <td style={{ fontFamily: "monospace", fontSize: 12, color: BLUE }}>{r.part_number}</td>
                             <td style={{ overflow: "hidden", textOverflow: "ellipsis", color: MUTED }}>{r.part_name ?? "—"}</td>
                             <td className="num" style={{ fontWeight: 700 }}>{r.total_qty.toLocaleString()}</td>
@@ -1359,3 +1380,6 @@ export function AnalyticsPage() {
     </AppLayout>
   );
 }
+
+
+
