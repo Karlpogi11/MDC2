@@ -35,7 +35,7 @@ export function LoginPage() {
 
   const inputStyle: React.CSSProperties = {
     width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)",
-    padding: "10px 12px", fontSize: 14, color: "var(--text)",
+    padding: "5px 8px", fontSize: 14, color: "var(--text)",
     background: "var(--bg-surface)", outline: "none", boxSizing: "border-box",
   };
 
@@ -158,7 +158,7 @@ export function LoginPage() {
             style={{
               width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
               background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)",
-              padding: "10px 0", fontSize: 14, fontWeight: 600, color: "var(--text)",
+              padding: "5px 0", fontSize: 14, fontWeight: 600, color: "var(--text)",
               cursor: googleLoading ? "not-allowed" : "pointer",
               opacity: googleLoading ? 0.7 : 1,
             }}
@@ -181,6 +181,8 @@ export function LoginPage() {
     </div>
   );
 }
+
+
 
 
 

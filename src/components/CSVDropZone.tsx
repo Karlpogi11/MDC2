@@ -1,5 +1,5 @@
 import { useState, useRef, type ChangeEvent, type DragEvent } from "react";
-import { Upload, Download } from "lucide-react";
+import { ArrowUp, Download } from "lucide-react";
 
 type Props = {
   onFile: (file: File) => void;
@@ -33,14 +33,14 @@ export function CSVDropZone({ onFile, onTemplate, importing, label = "Import CSV
         onDrop={handleDrop}
         onClick={() => !importing && inputRef.current?.click()}
         style={{
-          border: `2px dashed ${dragging ? "var(--blue)" : "#d1d5db"}`,
+          border: `2px dashed ${dragging ? "var(--blue)" : "var(--line)"}`,
           borderRadius: "var(--radius)", padding: "20px 16px", textAlign: "center",
           cursor: importing ? "not-allowed" : "pointer",
-          background: dragging ? "#eff6ff" : "#fafafa",
+          background: dragging ? "var(--accent-glow)" : "var(--bg-surface-elevated)",
           transition: "all 150ms",
         }}
       >
-        <Upload size={22} color={dragging ? "var(--blue)" : "#9ca3af"} style={{ marginBottom: 8 }} />
+        <ArrowUp size={22} color={dragging ? "var(--blue)" : "var(--muted)"} style={{ marginBottom: 8 }} />
         <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
           {importing ? "Importing…" : "Drop CSV here or click to browse"}
         </p>
@@ -56,4 +56,5 @@ export function CSVDropZone({ onFile, onTemplate, importing, label = "Import CSV
     </div>
   );
 }
+
 

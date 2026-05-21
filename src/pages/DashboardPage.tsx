@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { PackagePlus, ArrowRightLeft, AlertTriangle, Clock, CheckCircle2 } from "lucide-react";
+import { PackagePlus, ArrowRightLeft, AlertTriangle, Search, CheckCircle2 } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { AppLayout } from "@/components/AppLayout";
@@ -36,6 +36,99 @@ function timeAgo(iso: string): string {
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
   return `${Math.floor(hrs / 24)}d ago`;
+}
+
+// ─── Global Search ────────────────────────────────────────────────────────────
+
+type SearchResult = { type: "serial" | "part" | "transfer"; label: string; sub: string; path: string };
+
+function GlobalSearch() {
+  const navigate = useNavigate();
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  useEffect(() => {
+    if (!q.trim() || q.length < 2) { setResults([]); setOpen(false); return; }
+    if (debounce.current) clearTimeout(debounce.current);
+    debounce.current = setTimeout(async () => {
+      const client = getSupabaseClient();
+      if (!client) return;
+      setLoading(true);
+      const term = q.trim();
+      const [serialRes, partRes, transferRes] = await Promise.all([
+        client.from("serial_numbers").select("serial_number, parts(part_name)").ilike("serial_number", `%${term}%`).limit(4),
+        client.from("parts").select("part_number, part_name").or(`part_number.ilike.%${term}%,part_name.ilike.%${term}%`).limit(4),
+        client.from("transfers").select("transfer_no, status").ilike("transfer_no", `%${term}%`).limit(3),
+      ]);
+      const out: SearchResult[] = [];
+      for (const r of (serialRes.data ?? []) as any[]) {
+        const p = Array.isArray(r.parts) ? r.parts[0] : r.parts;
+        out.push({ type: "serial", label: r.serial_number, sub: p?.part_name ?? "Serial", path: `/inventory?q=${encodeURIComponent(r.serial_number)}` });
+      }
+      for (const r of (partRes.data ?? []) as any[]) {
+        out.push({ type: "part", label: r.part_number, sub: r.part_name, path: `/inventory?q=${encodeURIComponent(r.part_number)}` });
+      }
+      for (const r of (transferRes.data ?? []) as any[]) {
+        out.push({ type: "transfer", label: r.transfer_no, sub: r.status?.replace("_", " "), path: `/transfers` });
+      }
+      setResults(out);
+      setOpen(out.length > 0);
+      setLoading(false);
+    }, 250);
+  }, [q]);
+
+  const TYPE_LABEL: Record<string, string> = { serial: "Serial", part: "Part", transfer: "Transfer" };
+
+  return (
+    <div ref={ref} style={{ position: "relative", flexShrink: 0 }}>
+      <div className="global-search-box" style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: 20, padding: "9px 16px", width: 280 }}>
+        <Search size={14} color="var(--muted)" />
+        <div
+          contentEditable
+          suppressContentEditableWarning
+          onInput={(e) => setQ(e.currentTarget.textContent ?? "")}
+          onFocus={() => results.length > 0 && setOpen(true)}
+          onKeyDown={(e) => { if (e.key === "Escape") { setOpen(false); e.currentTarget.blur(); } }}
+          data-placeholder="Search serials, parts, transfers…"
+          style={{ fontSize: 13, color: "var(--text)", flex: 1, outline: "none", minHeight: "1.4em", cursor: "text", whiteSpace: "nowrap", overflow: "hidden" }}
+        ></div>
+      </div>
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 6px)", left: 0, right: 0,
+          background: "var(--bg-surface)", border: "1px solid var(--line)",
+          borderRadius: "var(--radius)", boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
+          zIndex: 999, overflow: "hidden",
+        }}>
+          {loading && <div style={{ padding: "10px 14px", fontSize: 12, color: "var(--muted)" }}>Searching…</div>}
+          {!loading && results.map((r, i) => (
+            <div key={i} onMouseDown={() => { navigate(r.path); setQ(""); setOpen(false); }}
+              style={{ padding: "8px 14px", cursor: "pointer", borderBottom: "1px solid var(--line-soft)", display: "flex", alignItems: "center", gap: 10 }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
+              <span style={{ fontSize: 10, fontWeight: 600, color: "var(--blue)", width: 48, flexShrink: 0, textTransform: "uppercase" }}>{TYPE_LABEL[r.type]}</span>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", fontFamily: r.type !== "part" ? "monospace" : "inherit", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.label}</div>
+                <div style={{ fontSize: 11, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.sub}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function DashboardPage() {
@@ -178,15 +271,18 @@ export function DashboardPage() {
 
   return (
     <AppLayout activeModule="/dashboard">
-      <main style={{ maxWidth: 1400, margin: "0 auto", padding: "36px 40px" }}>
+      <main style={{ maxWidth: 1080, margin: "0 auto", padding: "28px 24px" }}>
         {/* Header */}
-        <div style={{ marginBottom: 24 }}>
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text)" }}>
-            Good {getGreeting()}, {profileName}.
-          </h1>
-          <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--muted)" }}>
-            Here's what needs your attention today.
-          </p>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, gap: 16 }}>
+          <div>
+            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text)" }}>
+              Good {getGreeting()}, {profileName}.
+            </h1>
+            <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--muted)" }}>
+              Here's what needs your attention today.
+            </p>
+          </div>
+          <GlobalSearch />
         </div>
 
         {error && (
@@ -225,8 +321,8 @@ export function DashboardPage() {
               {pipeline.map((p) => (
                 <div key={p.status}
                   onClick={() => navigate(`/transfers?status=${p.status}`)}
-                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", cursor: "pointer", borderBottom: "1px solid var(--line)" }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover, #f9fafb)")}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 12px", cursor: "pointer", borderBottom: "1px solid var(--line)" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -254,7 +350,7 @@ export function DashboardPage() {
                 <div style={{ padding: "16px", fontSize: 13, color: "var(--muted)", textAlign: "center" }}>No recent activity</div>
               )}
               {activity.map((a) => (
-                <div key={a.id + a.type} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "9px 16px", borderBottom: "1px solid var(--line)" }}>
+                <div key={a.id + a.type} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "5px 12px", borderBottom: "1px solid var(--line)" }}>
                   <span style={{ marginTop: 1, flexShrink: 0 }}>{ACTIVITY_ICON[a.type]}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.label}</div>
@@ -269,12 +365,12 @@ export function DashboardPage() {
         {/* Quick Actions */}
         <section className="table-card" style={{ padding: "14px 16px" }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 12 }}>Quick Actions</div>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <QuickAction label="New Transfer" onClick={() => navigate("/transfers/new")} primary />
+          <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+            <QuickAction label="New Transfer" onClick={() => navigate("/transfers/new")} />
             <QuickAction label="Stock-In" onClick={() => navigate("/stock-in")} />
             <QuickAction label="View Transfers" onClick={() => navigate("/transfers")} />
             <QuickAction label="Exports" onClick={() => navigate("/exports")} />
-            <QuickAction label="Physical Count" onClick={() => navigate("/physical-count")} />
+            <QuickAction label="Reconcile" onClick={() => navigate("/physical-count")} />
           </div>
         </section>
       </main>
@@ -314,18 +410,20 @@ function MetricCard({ label, value, alert }: { label: string; value: number | st
 function QuickAction({ label, onClick, primary }: { label: string; onClick: () => void; primary?: boolean }) {
   return (
     <button type="button" onClick={onClick} style={{
-      background: primary ? "var(--blue)" : "var(--bg-surface)",
-      color: primary ? "#fff" : "var(--text)",
-      border: `1px solid ${primary ? "transparent" : "var(--line)"}`,
-      borderRadius: "var(--radius)",
-      padding: "8px 16px",
+      background: primary ? "var(--blue)" : "transparent",
+      color: primary ? "#fff" : "var(--blue)",
+      border: "none",
+      borderRadius: primary ? "var(--radius)" : 0,
+      padding: primary ? "5px 12px" : "0",
       fontSize: 13,
-      fontWeight: 600,
+      fontWeight: primary ? 600 : 400,
       cursor: "pointer",
+      textDecoration: primary ? "none" : "none",
     }}>
       {label}
     </button>
   );
 }
+
 
 

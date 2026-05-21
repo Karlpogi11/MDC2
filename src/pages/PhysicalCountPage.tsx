@@ -67,6 +67,7 @@ export function PhysicalCountPage() {
   const [detailCountId, setDetailCountId] = useState<string | null>(null);
   const [detailRows, setDetailRows] = useState<VarianceRow[] | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [showSteps, setShowSteps] = useState(false);
 
   async function loadCounts() {
     const client = getSupabaseClient();
@@ -193,7 +194,7 @@ export function PhysicalCountPage() {
 
     const { error: approveErr } = await client
       .from("physical_counts")
-      .update({ status: "approved", approved_by: actorId, approved_at: new Date().toISOString() })
+      .update({ status: "approved", reviewed_by: actorId })
       .eq("id", countId);
 
     if (approveErr) { setSubmitError(approveErr.message); setApprovingId(null); return; }
@@ -241,22 +242,44 @@ export function PhysicalCountPage() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <ClipboardCheck size={20} color="var(--blue)" />
-            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text)" }}>Physical Count</h1>
+            <div>
+              <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text)" }}>Stock Reconciliation</h1>
+              <p style={{ margin: 0, fontSize: 12, color: "var(--muted)" }}>Compare physical stock against system records and approve adjustments</p>
+            </div>
           </div>
           <div style={{ display: "flex", gap: 10 }}>
             <button type="button" onClick={() => void handleExportSheet()} disabled={exportingSheet}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "8px 14px", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 10px", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
               <Download size={14} /> {exportingSheet ? "Exporting…" : "Export count sheet"}
             </button>
-            <label style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "5px 10px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
               <Upload size={14} /> {uploading ? "Processing…" : "Upload count"}
-              <input type="file" accept=".csv" style={{ display: "none" }} onChange={(e) => void handleUploadCount(e)} disabled={uploading} />
+              <input type="file" accept=".csv" style={{ display: "none", width: 0, height: 0, opacity: 0, position: "absolute" }} onChange={(e) => void handleUploadCount(e)} disabled={uploading} />
             </label>
           </div>
         </div>
 
-        <div style={{ marginBottom: 16, padding: "12px 16px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", fontSize: 13, color: "var(--muted)" }}>
-          <strong>Flow:</strong> Export count sheet → operators fill <code>actual_status</code> → upload CSV → review variance → <strong>admin approves</strong> → system adjusts serial statuses automatically.
+        <div style={{ marginBottom: 16 }}>
+          <button type="button" onClick={() => setShowSteps((v) => !v)}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--blue)", fontSize: 12, fontWeight: 600, padding: 0, display: "inline-flex", alignItems: "center", gap: 4 }}>
+            {showSteps ? "▲" : "▼"} How it works
+          </button>
+          {showSteps && (
+            <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+              {[
+                { n: "1", label: "Export sheet", desc: "Download the count sheet CSV with all current serials" },
+                { n: "2", label: "Fill actual status", desc: "Operators fill the actual_status column for each serial" },
+                { n: "3", label: "Upload & review", desc: "Upload the completed CSV and review the variance report" },
+                { n: "4", label: "Admin approves", desc: "DC Admin approves — system auto-adjusts serial statuses" },
+              ].map((s) => (
+                <div key={s.n} style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "10px 12px" }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--blue)", marginBottom: 3 }}>STEP {s.n}</div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 2 }}>{s.label}</div>
+                  <div style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.5 }}>{s.desc}</div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {submitError && (
@@ -279,12 +302,15 @@ export function PhysicalCountPage() {
                 <span style={{ fontSize: 12, color: "var(--muted)" }}>{variance.length} items · {variance.filter((r) => r.variance !== "match").length} discrepancies</span>
               </div>
               {isAdmin ? (
-                <button type="button"
-                  onClick={() => void handleApprove(activeCountId)}
-                  disabled={approvingId === activeCountId}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#15803d", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                  <ShieldCheck size={14} /> {approvingId === activeCountId ? "Approving…" : "Approve & Apply Adjustments"}
-                </button>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                  <button type="button"
+                    onClick={() => void handleApprove(activeCountId)}
+                    disabled={approvingId === activeCountId}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                    <ShieldCheck size={13} /> {approvingId === activeCountId ? "Approving…" : "Approve & Apply"}
+                  </button>
+                  <span style={{ fontSize: 10, color: "var(--muted)" }}>Updates status_mismatch serials only. Missing/surplus → use Corrections.</span>
+                </div>
               ) : (
                 <span style={{ fontSize: 12, color: "var(--muted)", background: "var(--bg-surface-elevated)", padding: "4px 10px", borderRadius: "var(--radius)" }}>
                   ⏳ Awaiting admin approval
@@ -306,7 +332,7 @@ export function PhysicalCountPage() {
                   {variance.map((r, i) => {
                     const vs = VARIANCE_STYLE[r.variance];
                     return (
-                      <tr key={i} style={{ background: r.variance !== "match" ? "#fffbeb" : undefined }}>
+                      <tr key={i} style={{ background: r.variance !== "match" ? "rgba(255,159,10,0.06)" : undefined }}>
                         <td style={{ fontFamily: "monospace" }}>{r.serial_number}</td>
                         <td>{r.part_number || "—"}</td>
                         <td style={{ color: "var(--muted)" }}>{r.expected_status}</td>
@@ -382,10 +408,10 @@ export function PhysicalCountPage() {
                                 <table style={{ width: "100%", fontSize: 12 }}>
                                   <thead>
                                     <tr style={{ background: "var(--bg-surface-elevated)" }}>
-                                      <th style={{ padding: "6px 12px", textAlign: "left" }}>Serial</th>
-                                      <th style={{ padding: "6px 12px", textAlign: "left" }}>Expected</th>
-                                      <th style={{ padding: "6px 12px", textAlign: "left" }}>Actual</th>
-                                      <th style={{ padding: "6px 12px", textAlign: "left" }}>Variance</th>
+                                      <th style={{ padding: "4px 10px", textAlign: "left" }}>Serial</th>
+                                      <th style={{ padding: "4px 10px", textAlign: "left" }}>Expected</th>
+                                      <th style={{ padding: "4px 10px", textAlign: "left" }}>Actual</th>
+                                      <th style={{ padding: "4px 10px", textAlign: "left" }}>Variance</th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -418,6 +444,8 @@ export function PhysicalCountPage() {
     </AppLayout>
   );
 }
+
+
 
 
 

@@ -57,14 +57,14 @@ function PartSearch({ parts, value, onChange }: { parts: Part[]; value: string; 
         onChange={e => { setQuery(e.target.value); setOpen(true); onChange(""); }}
         onFocus={() => setOpen(true)}
         placeholder="Search part number or name…"
-        style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 10px", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+        style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 8px", fontSize: 13, outline: "none", boxSizing: "border-box" }}
       />
       {open && filtered.length > 0 && (
         <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", boxShadow: "0 4px 12px rgba(0,0,0,0.1)", zIndex: 50, maxHeight: 220, overflowY: "auto" }}>
           {filtered.map(p => (
             <div key={p.id}
               onMouseDown={() => { onChange(p.id); setQuery(`${p.part_number} — ${p.part_name}`); setOpen(false); }}
-              style={{ padding: "7px 12px", fontSize: 13, cursor: "pointer", borderBottom: "1px solid #f3f4f6" }}
+              style={{ padding: "5px 8px", fontSize: 13, cursor: "pointer", borderBottom: "1px solid var(--line-soft)" }}
               onMouseEnter={e => (e.currentTarget.style.background = "#f0f4ff")}
               onMouseLeave={e => (e.currentTarget.style.background = "#fff")}
             >
@@ -183,7 +183,7 @@ export function TransferTemplatesPage() {
             <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text)" }}>Recurring Templates</h1>
           </div>
           <button type="button" onClick={() => setShowForm(v => !v)}
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
             <Plus size={14} /> New template
           </button>
         </div>
@@ -198,12 +198,12 @@ export function TransferTemplatesPage() {
               <div>
                 <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#666", marginBottom: 4, textTransform: "uppercase" }}>Template name</label>
                 <input value={formName} onChange={e => setFormName(e.target.value)} placeholder="e.g. Weekly Podium Restock"
-                  style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "8px 10px", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                  style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 8px", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
               </div>
               <div>
                 <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#666", marginBottom: 4, textTransform: "uppercase" }}>Destination site</label>
                 <select value={formSite} onChange={e => setFormSite(e.target.value)}
-                  style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "8px 10px", fontSize: 13, outline: "none", background: "var(--bg-surface)" }}>
+                  style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 8px", fontSize: 13, outline: "none", background: "var(--bg-surface)" }}>
                   <option value="">— select site —</option>
                   {sites.map(s => <option key={s.id} value={s.id}>{s.site_name} ({s.site_code})</option>)}
                 </select>
@@ -212,7 +212,7 @@ export function TransferTemplatesPage() {
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#666", marginBottom: 4, textTransform: "uppercase" }}>Schedule</label>
               <select value={formSchedule} onChange={e => setFormSchedule(e.target.value)}
-                style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "8px 10px", fontSize: 13, outline: "none", background: "var(--bg-surface)" }}>
+                style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 8px", fontSize: 13, outline: "none", background: "var(--bg-surface)" }}>
                 {SCHEDULE_PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
               </select>
             </div>
@@ -223,7 +223,7 @@ export function TransferTemplatesPage() {
                 <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
                   <PartSearch parts={parts} value={item.part_id} onChange={id => setFormItems(prev => prev.map((x, j) => j === i ? { ...x, part_id: id } : x))} />
                   <input type="number" min={1} value={item.qty} onChange={e => setFormItems(prev => prev.map((x, j) => j === i ? { ...x, qty: parseInt(e.target.value) || 1 } : x))}
-                    style={{ width: 64, border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 10px", fontSize: 13, outline: "none", textAlign: "center" }} />
+                    style={{ width: 64, border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 8px", fontSize: 13, outline: "none", textAlign: "center" }} />
                   <button type="button" onClick={() => setFormItems(prev => prev.filter((_, j) => j !== i))} disabled={formItems.length === 1}
                     style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", padding: 4 }}>
                     <Trash2 size={14} />
@@ -237,9 +237,9 @@ export function TransferTemplatesPage() {
             </div>
 
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button type="button" onClick={() => setShowForm(false)} style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", color: "var(--text)" }}>Cancel</button>
+              <button type="button" onClick={() => setShowForm(false)} style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer", color: "var(--text)" }}>Cancel</button>
               <button type="button" onClick={() => void handleSave()} disabled={saving || !formName.trim() || !formSite}
-                style={{ background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                style={{ background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                 {saving ? "Saving…" : "Save template"}
               </button>
             </div>
@@ -249,7 +249,7 @@ export function TransferTemplatesPage() {
         {/* Template list */}
         {loading && <div style={{ padding: 32, textAlign: "center", color: "var(--muted)" }}>Loading…</div>}
         {!loading && templates.length === 0 && (
-          <div style={{ padding: 48, textAlign: "center", color: "var(--muted)", border: "1px dashed #d1d5db", borderRadius: "var(--radius)" }}>
+          <div style={{ padding: 48, textAlign: "center", color: "var(--muted)", border: "1px dashed var(--line)", borderRadius: "var(--radius)" }}>
             <RepeatIcon size={32} color="#d1d5db" style={{ marginBottom: 12 }} />
             <p style={{ margin: 0 }}>No templates yet. Create one to auto-generate recurring draft transfers.</p>
           </div>
@@ -277,11 +277,11 @@ export function TransferTemplatesPage() {
               </div>
               <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
                 <button type="button" onClick={() => void handleRunNow(t.id)} disabled={runningId === t.id}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", opacity: runningId === t.id ? 0.6 : 1 }}>
+                  style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", opacity: runningId === t.id ? 0.6 : 1 }}>
                   <Play size={12} /> {runningId === t.id ? "Creating…" : "Run now"}
                 </button>
                 <button type="button" onClick={() => void handleToggle(t.id, t.is_active)}
-                  style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--text)" }}>
+                  style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--text)" }}>
                   {t.is_active ? "Pause" : "Resume"}
                 </button>
                 <button type="button" onClick={() => void handleDelete(t.id)}
@@ -296,5 +296,9 @@ export function TransferTemplatesPage() {
     </AppLayout>
   );
 }
+
+
+
+
 
 

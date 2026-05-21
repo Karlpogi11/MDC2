@@ -104,12 +104,12 @@ export function SerialNumbersTab() {
             placeholder="Search serial number…"
             value={search}
             onChange={(e) => handleSearch(e.target.value)}
-            style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 12px", fontSize: 13, width: 260, outline: "none" }}
+            style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 8px", fontSize: 13, width: 260, outline: "none" }}
           />
           <select
             value={statusFilter}
             onChange={(e) => handleStatusFilter(e.target.value)}
-            style={{ border: "1px solid var(--line)", padding: "7px 10px", fontSize: 13, color: "var(--text)", background: "var(--bg-surface)", cursor: "pointer" }}
+            style={{ border: "1px solid var(--line)", padding: "5px 8px", fontSize: 13, color: "var(--text)", background: "var(--bg-surface)", cursor: "pointer" }}
           >
             <option value="">All statuses</option>
             <option value="in_stock">In Stock</option>
@@ -172,7 +172,7 @@ export function SerialNumbersTab() {
               type="button"
               onClick={() => void loadPage(false)}
               disabled={loading}
-              style={{ fontSize: 13, fontWeight: 600, color: "var(--blue)", background: "none", border: "1px solid var(--blue)", padding: "6px 16px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.6 : 1 }}
+              style={{ fontSize: 13, fontWeight: 600, color: "var(--blue)", background: "none", border: "1px solid var(--blue)", padding: "4px 10px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.6 : 1 }}
             >
               {loading ? "Loading…" : `Load more (${serials.length} loaded)`}
             </button>
@@ -182,4 +182,6 @@ export function SerialNumbersTab() {
     </main>
   );
 }
+
+
 

@@ -313,7 +313,7 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
         <div style={{ display: "flex", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
           {([["serials", "Serials"], ["history", "Chain of Custody"]] as const).map(([tab, label]) => (
             <button key={tab} type="button" onClick={() => { setActiveTab(tab); setSelectedSerial(null); }}
-              style={{ flex: 1, padding: "10px 0", fontSize: 13, fontWeight: activeTab === tab ? 700 : 400, color: activeTab === tab ? "var(--blue)" : "var(--muted)", background: "transparent", border: "none", borderBottom: `2px solid ${activeTab === tab ? "var(--blue)" : "transparent"}`, cursor: "pointer", marginBottom: -1 }}>
+              style={{ flex: 1, padding: "5px 0", fontSize: 13, fontWeight: activeTab === tab ? 700 : 400, color: activeTab === tab ? "var(--blue)" : "var(--muted)", background: "transparent", border: "none", borderBottom: `2px solid ${activeTab === tab ? "var(--blue)" : "transparent"}`, cursor: "pointer", marginBottom: -1 }}>
               {label}
             </button>
           ))}
@@ -321,7 +321,7 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
 
         {activeTab === "serials" && (
           <>
-            <div style={{ padding: "10px 20px", borderBottom: "1px solid #f0f0f0", flexShrink: 0 }}>
+            <div style={{ padding: "5px 12px", borderBottom: "1px solid #f0f0f0", flexShrink: 0 }}>
               <div style={{ position: "relative" }}>
                 <Search size={14} color="#9ca3af" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
                 <input ref={searchRef} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search serial number..."
@@ -334,7 +334,7 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
               {!loading && filtered.map((serial, i) => {
                 const sm = STATUS_STYLE[serial.status] ?? { bg: "#f3f4f6", color: "var(--muted)", label: serial.status };
                 return (
-                  <div key={serial.id} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", alignItems: "center", gap: 12, padding: "10px 20px", borderBottom: "1px solid #f3f4f6", background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
+                  <div key={serial.id} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", alignItems: "center", gap: 12, padding: "5px 12px", borderBottom: "1px solid var(--line-soft)", background: "transparent" }}>
                     <div>
                       <div style={{ fontFamily: "monospace", fontWeight: 600, fontSize: 12, color: "var(--blue)", marginBottom: 2 }}>{serial.serial_number}</div>
                       <div style={{ fontSize: 11, color: "var(--muted)" }}>
@@ -369,7 +369,7 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
                 );
               })}
             </div>
-            <div style={{ padding: "10px 20px", borderTop: "1px solid var(--line)", background: "var(--bg-surface-elevated)", flexShrink: 0, fontSize: 12, color: "var(--muted)" }}>
+            <div style={{ padding: "5px 12px", borderTop: "1px solid var(--line)", background: "var(--bg-surface-elevated)", flexShrink: 0, fontSize: 12, color: "var(--muted)" }}>
               {!loading && `Showing ${filtered.length} of ${serials.length} serials`}
             </div>
           </>
@@ -378,11 +378,11 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
         {activeTab === "history" && (
           <>
             {/* Serial selector */}
-            <div style={{ padding: "10px 20px", borderBottom: "1px solid #f0f0f0", flexShrink: 0 }}>
+            <div style={{ padding: "5px 12px", borderBottom: "1px solid #f0f0f0", flexShrink: 0 }}>
               <select value={selectedSerial?.id ?? ""} onChange={(e) => {
                 const s = serials.find(x => x.id === e.target.value) ?? null;
                 setSelectedSerial(s);
-              }} style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 10px", fontSize: 13, outline: "none", fontFamily: "monospace" }}>
+              }} style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 8px", fontSize: 13, outline: "none", fontFamily: "monospace" }}>
                 <option value="">- select a serial to view history -</option>
                 {serials.map(s => <option key={s.id} value={s.id}>{s.serial_number}</option>)}
               </select>
@@ -399,5 +399,9 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
     </>
   );
 }
+
+
+
+
 
 

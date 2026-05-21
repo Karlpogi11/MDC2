@@ -59,7 +59,7 @@ export function DangerAction({
               <button
                 type="button"
                 onClick={() => setConfirming(false)}
-                style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", color: "var(--text)", padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", borderRadius: "var(--radius)" }}
+                style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", color: "var(--text)", padding: "4px 10px", fontSize: 13, fontWeight: 600, cursor: "pointer", borderRadius: "var(--radius)" }}
               >
                 Cancel
               </button>
@@ -67,7 +67,7 @@ export function DangerAction({
                 type="button"
                 onClick={() => { setConfirming(false); onConfirm(); }}
                 disabled={busy}
-                style={{ border: "none", background: "#b91c1c", color: "#fff", padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", borderRadius: "var(--radius)" }}
+                style={{ border: "none", background: "#b91c1c", color: "#fff", padding: "4px 10px", fontSize: 13, fontWeight: 600, cursor: "pointer", borderRadius: "var(--radius)" }}
               >
                 {busy ? "…" : confirmLabel}
               </button>
@@ -135,7 +135,7 @@ export function DangerZoneCard({
                 style={{
                   background: allChecked ? "#b91c1c" : "#e5e7eb",
                   color: allChecked ? "#fff" : "#9ca3af",
-                  border: "none", padding: "8px 18px", fontSize: 13, fontWeight: 600,
+                  border: "none", padding: "5px 12px", fontSize: 13, fontWeight: 600,
                   cursor: allChecked ? "pointer" : "not-allowed",
                 }}>
                 {busy ? "Working…" : actionLabel}
@@ -146,5 +146,6 @@ export function DangerZoneCard({
     </div>
   );
 }
+
 
 

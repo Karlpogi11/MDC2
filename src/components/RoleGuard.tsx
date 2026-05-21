@@ -55,7 +55,7 @@ export function RoleGuard({ allow, requireMfa, children }: Props) {
         <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--muted)", textAlign: "center", maxWidth: 320 }}>
           Admin accounts must have two-factor authentication enabled and verified.
         </p>
-        <a href="/login?mfa=setup" style={{ padding: "8px 20px", background: "var(--blue)", color: "#fff", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
+        <a href="/login?mfa=setup" style={{ padding: "5px 12px", background: "var(--blue)", color: "#fff", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
           Set up MFA
         </a>
       </div>
@@ -64,5 +64,6 @@ export function RoleGuard({ allow, requireMfa, children }: Props) {
 
   return <>{children}</>;
 }
+
 
 

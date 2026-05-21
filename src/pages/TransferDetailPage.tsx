@@ -567,13 +567,13 @@ export function TransferDetailPage() {
               )}
               {transfer.status === "draft" && (
                 <button type="button" onClick={() => setScanMode(v => !v)}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 6, background: scanMode ? "#1a2a3a" : "#fff", color: scanMode ? "#fff" : "var(--blue)", border: "1px solid var(--blue)", borderRadius: "var(--radius)", padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, background: scanMode ? "#1a2a3a" : "#fff", color: scanMode ? "#fff" : "var(--blue)", border: "1px solid var(--blue)", borderRadius: "var(--radius)", padding: "4px 10px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                   <ScanLine size={14} /> {scanMode ? "Exit Scan Mode" : "Verify Serials"}
                 </button>
               )}
               {["received"].includes(transfer.status) && (
                 <button type="button" onClick={() => void generatePDF()} disabled={generatingPDF}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--bg-surface)", color: "var(--blue)", border: "1px solid var(--blue)", borderRadius: "var(--radius)", padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: generatingPDF ? "not-allowed" : "pointer", opacity: generatingPDF ? 0.7 : 1 }}>
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--bg-surface)", color: "var(--blue)", border: "1px solid var(--blue)", borderRadius: "var(--radius)", padding: "4px 10px", fontSize: 13, fontWeight: 600, cursor: generatingPDF ? "not-allowed" : "pointer", opacity: generatingPDF ? 0.7 : 1 }}>
                   <FileText size={14} /> {generatingPDF ? "Generating…" : "Packing List PDF"}
                 </button>
               )}
@@ -582,7 +582,7 @@ export function TransferDetailPage() {
                   <button
                     type="button"
                     onClick={() => setShowActionMenu((v) => !v)}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--bg-surface)", color: "var(--text)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--bg-surface)", color: "var(--text)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 8px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
                     aria-haspopup="menu"
                     aria-expanded={showActionMenu}
                   >
@@ -591,15 +591,15 @@ export function TransferDetailPage() {
                   {showActionMenu && (
                     <div role="menu" style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", minWidth: 180, background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", boxShadow: "0 6px 16px rgba(0,0,0,0.12)", padding: 6, zIndex: 30 }}>
                       <button type="button" onClick={() => { setShowActionMenu(false); void generatePDF(); }} disabled={generatingPDF}
-                        style={{ width: "100%", textAlign: "left", background: "var(--bg-surface)", border: "none", padding: "8px 10px", fontSize: 13, color: "var(--text)", cursor: generatingPDF ? "not-allowed" : "pointer", opacity: generatingPDF ? 0.6 : 1 }}>
+                        style={{ width: "100%", textAlign: "left", background: "var(--bg-surface)", border: "none", padding: "5px 8px", fontSize: 13, color: "var(--text)", cursor: generatingPDF ? "not-allowed" : "pointer", opacity: generatingPDF ? 0.6 : 1 }}>
                         {generatingPDF ? "Generating PDF…" : "Packing List PDF"}
                       </button>
                       <button type="button" onClick={() => void resendTransferEmail(transfer.id)} disabled={sendingEmail}
-                        style={{ width: "100%", textAlign: "left", background: "var(--bg-surface)", border: "none", padding: "8px 10px", fontSize: 13, color: "var(--text)", cursor: sendingEmail ? "not-allowed" : "pointer", opacity: sendingEmail ? 0.6 : 1 }}>
+                        style={{ width: "100%", textAlign: "left", background: "var(--bg-surface)", border: "none", padding: "5px 8px", fontSize: 13, color: "var(--text)", cursor: sendingEmail ? "not-allowed" : "pointer", opacity: sendingEmail ? 0.6 : 1 }}>
                         {sendingEmail ? "Sending…" : "Resend Email"}
                       </button>
                       <a href={`/transfers/${transfer.id}/receive`} target="_blank" rel="noopener noreferrer" onClick={() => setShowActionMenu(false)}
-                        style={{ display: "block", textAlign: "left", padding: "8px 10px", fontSize: 13, color: "var(--text)", textDecoration: "none" }}>
+                        style={{ display: "block", textAlign: "left", padding: "5px 8px", fontSize: 13, color: "var(--text)", textDecoration: "none" }}>
                         Open Receive Page
                       </a>
                     </div>
@@ -656,7 +656,7 @@ export function TransferDetailPage() {
           </div>
         )}
         {canAdvance && transfer.status === "in_transit" && !transfer.receipt_token && (
-          <div role="status" style={{ marginBottom: 16, padding: "10px 14px", background: "#fffbeb", border: "1px solid var(--line)", borderRadius: "var(--radius)", color: "var(--muted)", fontSize: 13 }}>
+          <div role="status" style={{ marginBottom: 16, padding: "10px 14px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", color: "var(--muted)", fontSize: 13 }}>
             This transfer does not have a receipt email token yet. Use More → Resend Email when you're ready.
           </div>
         )}
@@ -703,13 +703,13 @@ export function TransferDetailPage() {
                 </span>
               </div>
               <button type="button" onClick={() => setShowScanner(true)}
-                style={{ background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                style={{ background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "4px 10px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                 Scan Serial
               </button>
             </div>
 
             {scanFeedback && (
-              <div style={{ marginBottom: 10, padding: "8px 12px", borderRadius: "var(--radius)", background: scanFeedback.ok ? "#dcfce7" : "#fee2e2", color: scanFeedback.ok ? "#15803d" : "#b91c1c", fontSize: 13, fontWeight: 600, fontFamily: "monospace" }}>
+              <div style={{ marginBottom: 10, padding: "5px 8px", borderRadius: "var(--radius)", background: scanFeedback.ok ? "#dcfce7" : "#fee2e2", color: scanFeedback.ok ? "#15803d" : "#b91c1c", fontSize: 13, fontWeight: 600, fontFamily: "monospace" }}>
                 {scanFeedback.msg}
               </div>
             )}
@@ -760,7 +760,7 @@ export function TransferDetailPage() {
                   {transfer.items.map((item) => (
                     <tr key={item.id} style={{ background: receivedItems.has(item.id) ? "#f0fdf4" : undefined }}>
                       {transfer.status === "in_transit" && (
-                        <td style={{ padding: "10px 12px" }}>
+                        <td style={{ padding: "5px 8px" }}>
                           <input type="checkbox" checked={receivedItems.has(item.id)}
                             onChange={() => setReceivedItems((prev) => {
                               const next = new Set(prev);
@@ -851,7 +851,7 @@ export function TransferDetailPage() {
                 value={trackingCourier}
                 onChange={(e) => setTrackingCourier(e.target.value)}
                 placeholder="e.g. LBC, J&T, Lalamove"
-                style={{ width: "100%", border: "1px solid var(--line)", borderRadius: 0, padding: "8px 10px", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                style={{ width: "100%", border: "1px solid var(--line)", borderRadius: 0, padding: "5px 8px", fontSize: 13, outline: "none", boxSizing: "border-box" }}
               />
             </div>
 
@@ -864,14 +864,14 @@ export function TransferDetailPage() {
                 onChange={(e) => setTrackingAwb(e.target.value)}
                 placeholder="e.g. 1234567890"
                 autoFocus
-                style={{ width: "100%", border: `1px solid ${trackingAwb.trim() ? "var(--line)" : "#fca5a5"}`, borderRadius: 0, padding: "8px 10px", fontSize: 13, fontFamily: "monospace", outline: "none", boxSizing: "border-box" }}
+                style={{ width: "100%", border: `1px solid ${trackingAwb.trim() ? "var(--line)" : "#fca5a5"}`, borderRadius: 0, padding: "5px 8px", fontSize: 13, fontFamily: "monospace", outline: "none", boxSizing: "border-box" }}
               />
               {!trackingAwb.trim() && <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--negative)" }}>Tracking number is required.</p>}
             </div>
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <button type="button" onClick={() => setShowTrackingModal(false)}
-                style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: 0, padding: "7px 16px", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
+                style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: 0, padding: "4px 10px", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
                 Cancel
               </button>
               <button type="button"
@@ -918,11 +918,11 @@ export function TransferDetailPage() {
                   await load(true);
                   setAdvancing(false);
                 })(); }}
-                style={{ flex: 1, background: "#15803d", color: "#fff", border: "none", borderRadius: 0, padding: "10px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                style={{ flex: 1, background: "#15803d", color: "#fff", border: "none", borderRadius: 0, padding: "5px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                 Confirm
               </button>
               <button type="button" onClick={() => setShowReceiptConfirm(false)}
-                style={{ flex: 1, background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: 0, padding: "10px 0", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
+                style={{ flex: 1, background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: 0, padding: "5px 0", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
                 Cancel
               </button>
             </div>
@@ -958,5 +958,8 @@ function InfoRow({ label, value, mono }: { label: string; value: string; mono?: 
     </div>
   );
 }
+
+
+
 
 

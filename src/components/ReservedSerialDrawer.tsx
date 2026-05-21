@@ -162,7 +162,7 @@ export function ReservedSerialDrawer({ partId, partName, partNumber, reservedCou
           </div>
         </div>
 
-        <div style={{ padding: "10px 20px", borderBottom: "1px solid #f0f0f0", flexShrink: 0 }}>
+        <div style={{ padding: "5px 12px", borderBottom: "1px solid #f0f0f0", flexShrink: 0 }}>
           <div style={{ position: "relative" }}>
             <Search size={14} color="#9ca3af" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
             <input
@@ -185,7 +185,7 @@ export function ReservedSerialDrawer({ partId, partName, partNumber, reservedCou
           {!loading && filteredRows.map((row, i) => {
             const meta = TRANSFER_STATUS_STYLE[row.transferStatus];
             return (
-              <div key={row.transferItemId} style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr 1fr", gap: 12, padding: "10px 20px", borderBottom: "1px solid #f3f4f6", background: i % 2 === 0 ? "#fff" : "#fafafa", alignItems: "center" }}>
+              <div key={row.transferItemId} style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr 1fr", gap: 12, padding: "5px 12px", borderBottom: "1px solid var(--line-soft)", background: "transparent", alignItems: "center" }}>
                 <div>
                   <div style={{ fontFamily: row.serialNumber ? "monospace" : undefined, fontWeight: 600, fontSize: 12, color: row.serialNumber ? "var(--blue)" : "#374151", marginBottom: 2 }}>
                     {row.serialNumber ?? "No serial assigned"}
@@ -211,7 +211,7 @@ export function ReservedSerialDrawer({ partId, partName, partNumber, reservedCou
           })}
         </div>
 
-        <div style={{ padding: "10px 20px", borderTop: "1px solid var(--line)", background: "var(--bg-surface-elevated)", flexShrink: 0, fontSize: 12, color: "var(--muted)", display: "flex", justifyContent: "space-between", gap: 12 }}>
+        <div style={{ padding: "5px 12px", borderTop: "1px solid var(--line)", background: "var(--bg-surface-elevated)", flexShrink: 0, fontSize: 12, color: "var(--muted)", display: "flex", justifyContent: "space-between", gap: 12 }}>
           <span>{!loading && `Showing ${filteredRows.length} rows (${filteredQty} qty)`}</span>
           {!loading && <span>Serialized: {serializedReservedQty} | Non-serialized: {nonSerializedReservedQty} | Total: {reservedCount}</span>}
         </div>
@@ -219,5 +219,8 @@ export function ReservedSerialDrawer({ partId, partName, partNumber, reservedCou
     </>
   );
 }
+
+
+
 
 

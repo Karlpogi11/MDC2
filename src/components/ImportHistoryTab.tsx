@@ -16,7 +16,7 @@ function BatchItems({ batchId }: { batchId: string }) {
       .then(({ data }) => { setItems(data ?? []); setLoading(false); });
   }, [batchId]);
 
-  if (loading) return <tr><td colSpan={5} style={{ padding: "8px 16px", fontSize: 12, color: "var(--muted)" }}>Loading items…</td></tr>;
+  if (loading) return <tr><td colSpan={5} style={{ padding: "5px 12px", fontSize: 12, color: "var(--muted)" }}>Loading items…</td></tr>;
 
   return (
     <>
@@ -27,10 +27,10 @@ function BatchItems({ batchId }: { batchId: string }) {
               <thead>
                 <tr style={{ background: "var(--bg-surface-elevated)" }}>
                   <th style={{ padding: "6px 16px 6px 32px", textAlign: "left", fontWeight: 600, color: "var(--muted)", width: 160 }}>Serial</th>
-                  <th style={{ padding: "6px 12px", textAlign: "left", fontWeight: 600, color: "var(--muted)", width: 120 }}>Part #</th>
-                  <th style={{ padding: "6px 12px", textAlign: "left", fontWeight: 600, color: "var(--muted)" }}>Part Name</th>
-                  <th style={{ padding: "6px 16px", textAlign: "right", fontWeight: 600, color: "var(--muted)", width: 60 }}>Qty</th>
-                  <th style={{ padding: "6px 16px", textAlign: "left", fontWeight: 600, color: "var(--muted)", width: 90 }}>Status</th>
+                  <th style={{ padding: "4px 10px", textAlign: "left", fontWeight: 600, color: "var(--muted)", width: 120 }}>Part #</th>
+                  <th style={{ padding: "4px 10px", textAlign: "left", fontWeight: 600, color: "var(--muted)" }}>Part Name</th>
+                  <th style={{ padding: "4px 10px", textAlign: "right", fontWeight: 600, color: "var(--muted)", width: 60 }}>Qty</th>
+                  <th style={{ padding: "4px 10px", textAlign: "left", fontWeight: 600, color: "var(--muted)", width: 90 }}>Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -124,5 +124,6 @@ export function ImportHistoryTab() {
     </section>
   );
 }
+
 
 

@@ -181,7 +181,7 @@ function CorrectionModal({ serial, onClose, onDone, actorId }: {
           <div style={{ display: "flex", gap: 0, marginTop: 14, border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", overflow: "hidden", width: "fit-content" }}>
             {(["serial", "part"] as const).map((m) => (
               <button key={m} type="button" onClick={() => setMode(m)}
-                style={{ border: "none", borderRadius: 0, padding: "6px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer", background: mode === m ? INK : "var(--bg-surface-elevated)", color: mode === m ? "var(--nav-active)" : MUTED }}>
+                style={{ border: "none", borderRadius: 0, padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", background: mode === m ? INK : "var(--bg-surface-elevated)", color: mode === m ? "var(--nav-active)" : MUTED }}>
                 {m === "serial" ? "Wrong serial number" : "Wrong part number"}
               </button>
             ))}
@@ -250,7 +250,7 @@ function CorrectionModal({ serial, onClose, onDone, actorId }: {
                   {!partSearching && !partResults.length && <div style={{ padding: "10px 14px", fontSize: 12, color: MUTED }}>No parts found.</div>}
                   {partResults.map((p) => (
                     <button key={p.id} type="button" onClick={() => { setNewPart(p); setPartQuery(""); }}
-                      style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "9px 14px", border: "none", borderBottom: `1px solid ${FAINT}`, background: "var(--bg-surface)", cursor: "pointer", textAlign: "left" }}>
+                      style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "5px 10px", border: "none", borderBottom: `1px solid ${FAINT}`, background: "var(--bg-surface)", cursor: "pointer", textAlign: "left" }}>
                       <code style={{ fontSize: 12, fontWeight: 700, color: BLUE, flexShrink: 0 }}>{p.part_number}</code>
                       <span style={{ fontSize: 12, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.part_name}</span>
                     </button>
@@ -268,18 +268,18 @@ function CorrectionModal({ serial, onClose, onDone, actorId }: {
             <textarea required value={reason} onChange={(e) => setReason(e.target.value)}
               placeholder={mode === "serial" ? "e.g. Wrong serial scanned during packing — physical unit confirmed correct" : "e.g. Unit stocked under wrong part — physical label confirmed correct part number"}
               rows={2}
-              style={{ width: "100%", border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", padding: "8px 10px", fontSize: 13, fontFamily: "inherit", outline: "none", resize: "none", boxSizing: "border-box", color: INK }} />
+              style={{ width: "100%", border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", padding: "5px 8px", fontSize: 13, fontFamily: "inherit", outline: "none", resize: "none", boxSizing: "border-box", color: INK }} />
           </div>
 
           {error && <div style={{ marginBottom: 12, fontSize: 12, color: MUTED }}>{error}</div>}
 
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button type="button" onClick={onClose}
-                style={{ border: `1px solid ${BORDER}`, background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "8px 16px", fontSize: 13, fontWeight: 500, cursor: "pointer", color: MUTED }}>
+                style={{ border: `1px solid ${BORDER}`, background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 13, fontWeight: 500, cursor: "pointer", color: MUTED }}>
                 Cancel
               </button>
               <button type="submit" disabled={!canSubmit || submitting}
-                style={{ border: "none", background: canSubmit ? BLUE : "#e2e8f0", borderRadius: "var(--radius)", padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: canSubmit ? "pointer" : "not-allowed", color: canSubmit ? "#fff" : "#94a3b8" }}>
+                style={{ border: "none", background: canSubmit ? BLUE : "#e2e8f0", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: canSubmit ? "pointer" : "not-allowed", color: canSubmit ? "#fff" : "#94a3b8" }}>
                 {submitting ? "Submitting…" : "Submit for approval"}
               </button>
             </div>
@@ -414,7 +414,7 @@ export function CorrectionsPage() {
 
         {/* Search bar — full width, prominent */}
         <form onSubmit={(e) => void handleSearch(e)} style={{ marginBottom: 24 }}>
-          <div style={{ display: "flex", gap: 0, border: `1px solid ${result ? BLUE : BORDER}`, borderRadius: "var(--radius)", overflow: "hidden", boxShadow: result ? `0 0 0 3px rgba(37,99,235,.1)` : "none", transition: "box-shadow .15s" }}>
+          <div style={{ display: "flex", gap: 0, border: `1px solid ${result ? BLUE : BORDER}`, borderRadius: 20, overflow: "hidden", boxShadow: result ? `0 0 0 3px rgba(37,99,235,.1)` : "none", transition: "box-shadow .15s" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 40, flexShrink: 0 }}>
               <Search size={15} color={MUTED} />
             </div>
@@ -422,7 +422,8 @@ export function CorrectionsPage() {
               value={query}
               onChange={(e) => { setQuery(e.target.value); setResult(null); setNotFound(false); }}
               placeholder="Search serial number to correct…"
-              style={{ flex: 1, border: "none", borderRadius: 0, outline: "none", padding: "11px 12px", fontSize: 14, fontFamily: "monospace", color: INK, background: "var(--bg-surface)" }}
+              style={{ flex: 1, border: "none", borderRadius: 0, padding: "5px 8px", fontSize: 14, fontFamily: "monospace", color: INK, background: "var(--bg-surface)", outline: "none" }}
+              className="search-input"
             />
             <button type="submit" disabled={searching || !query.trim()}
               style={{ border: "none", borderRadius: 0, background: BLUE, color: "#fff", padding: "0 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
@@ -456,7 +457,7 @@ export function CorrectionsPage() {
               )}
             </div>
             <button type="button" onClick={() => setCorrecting(true)}
-              style={{ border: "none", background: BLUE, color: "#fff", borderRadius: "var(--radius)", padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
+              style={{ border: "none", background: BLUE, color: "#fff", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
               Correct serial
             </button>
           </div>
@@ -477,7 +478,7 @@ export function CorrectionsPage() {
               <span style={{ fontSize: 11, fontWeight: 600, background: FAINT, color: MUTED, border: `1px solid ${BORDER}`, padding: "1px 8px", borderRadius: "var(--radius)" }}>{pending.length}</span>
             </div>
             {approveError && (
-              <div style={{ padding: "10px 20px", background: "var(--bg-surface-elevated)", borderBottom: `1px solid var(--line)`, fontSize: 12, color: MUTED }}>
+              <div style={{ padding: "5px 12px", background: "var(--bg-surface-elevated)", borderBottom: `1px solid var(--line)`, fontSize: 12, color: MUTED }}>
                 {approveError}
               </div>
             )}
@@ -563,6 +564,8 @@ export function CorrectionsPage() {
     </AppLayout>
   );
 }
+
+
 
 
 

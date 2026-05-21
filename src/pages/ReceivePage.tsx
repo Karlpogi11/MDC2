@@ -258,7 +258,7 @@ export function ReceivePage() {
                   <tr key={item.id}
                     onClick={() => setItems((p) => p.map((x) => x.id === item.id ? { ...x, received: !x.received } : x))}
                     style={{ cursor: "pointer", background: item.received ? "#f0fdf4" : undefined }}>
-                    <td style={{ padding: "10px 12px" }}>
+                    <td style={{ padding: "5px 8px" }}>
                       <div style={{ width: 22, height: 22, background: item.received ? "#16a34a" : "#f3f4f6", border: `2px solid ${item.received ? "#16a34a" : "#d1d5db"}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
                         {item.received ? <Check size={12} color="#fff" strokeWidth={3} /> : <Package size={11} color="#9ca3af" />}
                       </div>
@@ -296,5 +296,6 @@ function StandalonePage({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
+
 
 

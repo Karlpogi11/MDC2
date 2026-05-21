@@ -269,24 +269,21 @@ function InventoryTab() {
 
       <section className="action-row">
         <div className="action-left">
-          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <div style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", overflow: "hidden" }}>
               <input
                 aria-label="Search inventory"
                 placeholder="Search part, category, or serial…"
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); if (!e.target.value) { setSerialLookup(null); setPage(() => 0); } }}
                 onKeyDown={(e) => { if (e.key === "Enter" && search.trim()) setSerialLookup(search.trim()); }}
-                style={{ border: "none", borderRadius: 0, padding: "7px 12px", fontSize: 13, width: 280, outline: "none", background: "var(--bg-surface)", color: "var(--text)" }}
+                style={{ fontSize: 13, width: 280, color: "var(--text)" }}
+                className="search-input"
               />
-            </div>
             {search && (
               <button type="button" className="clear-btn" onClick={() => { setSearch(""); setSerialLookup(null); void loadInventory(0, ""); }}
                 aria-label="Clear search">
                 ×
               </button>
             )}
-          </div>
           <strong style={{ fontSize: 13, color: "var(--muted)" }}>{sortedRows.length} items</strong>
         </div>
         <div className="action-right">
@@ -424,14 +421,14 @@ function InventoryTab() {
             <tfoot>
               <tr style={{ borderTop: "1px solid var(--line)" }}>
                 <td />
-                <td colSpan={3} style={{ padding: "10px 12px", fontSize: 13, fontWeight: 600, color: "var(--muted)" }}>
+                <td colSpan={3} style={{ padding: "5px 8px", fontSize: 13, fontWeight: 600, color: "var(--muted)" }}>
                   {sortedRows.length} items
                 </td>
-                {showStockInColumns && <td className="num" style={{ padding: "10px 12px", fontSize: 13, fontWeight: 600, color: "var(--muted)" }}>{totals.inStock.toLocaleString()}</td>}
-                {showStockInColumns && <td className="num" style={{ padding: "10px 12px", fontSize: 13, fontWeight: 600, color: "var(--muted)" }}>{totals.reserved.toLocaleString()}</td>}
-                {showStockInColumns && <td className="num" style={{ padding: "10px 12px", fontSize: 13, fontWeight: 600, color: "var(--muted)" }}>{totals.available.toLocaleString()}</td>}
+                {showStockInColumns && <td className="num" style={{ padding: "5px 8px", fontSize: 13, fontWeight: 600, color: "var(--muted)" }}>{totals.inStock.toLocaleString()}</td>}
+                {showStockInColumns && <td className="num" style={{ padding: "5px 8px", fontSize: 13, fontWeight: 600, color: "var(--muted)" }}>{totals.reserved.toLocaleString()}</td>}
+                {showStockInColumns && <td className="num" style={{ padding: "5px 8px", fontSize: 13, fontWeight: 600, color: "var(--muted)" }}>{totals.available.toLocaleString()}</td>}
                 {showStockInColumns && <td />}
-                {showStockOutColumns && <td className="num" style={{ padding: "10px 12px", fontSize: 13, fontWeight: 600, color: "var(--muted)" }}>{totals.stockedOut.toLocaleString()}</td>}
+                {showStockOutColumns && <td className="num" style={{ padding: "5px 8px", fontSize: 13, fontWeight: 600, color: "var(--muted)" }}>{totals.stockedOut.toLocaleString()}</td>}
                 {showStockOutColumns && <td />}
               </tr>
             </tfoot>
@@ -727,4 +724,5 @@ function SiteInventoryTab() {
     </main>
   );
 }
+
 

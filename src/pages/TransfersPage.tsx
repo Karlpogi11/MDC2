@@ -133,14 +133,14 @@ export function TransfersPage() {
             <button
               type="button"
               onClick={() => navigate("/transfers/templates")}
-              style={{ background: "var(--bg-surface)", color: "var(--text)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+              style={{ background: "var(--bg-surface)", color: "var(--text)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 10px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
             >
               Templates
             </button>
             <button
               type="button"
               onClick={() => navigate("/transfers/new")}
-              style={{ background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+              style={{ background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
             >
               New transfer
             </button>
@@ -156,7 +156,7 @@ export function TransfersPage() {
               onClick={() => setStatusFilter(s)}
               style={{
                 border: "none", borderBottom: `2px solid ${statusFilter === s ? "var(--blue)" : "transparent"}`,
-                borderRadius: 0, padding: "8px 14px", fontSize: 13, fontWeight: statusFilter === s ? 600 : 400,
+                borderRadius: 0, padding: "5px 10px", fontSize: 13, fontWeight: statusFilter === s ? 600 : 400,
                 cursor: "pointer", background: "transparent",
                 color: statusFilter === s ? "var(--blue)" : "#6b7a8d",
                 marginBottom: -1,
@@ -197,7 +197,7 @@ export function TransfersPage() {
                     <FileText size={28} color="#d1d5db" style={{ marginBottom: 8 }} />
                     <p style={{ margin: "0 0 10px", color: "var(--muted)" }}>No transfers found.</p>
                     <button type="button" onClick={() => navigate("/transfers/new")}
-                      style={{ background: "var(--blue)", color: "#fff", border: "none", padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                      style={{ background: "var(--blue)", color: "#fff", border: "none", padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                       Create first transfer
                     </button>
                   </td>
@@ -255,5 +255,6 @@ export function TransfersPage() {
     </AppLayout>
   );
 }
+
 
 

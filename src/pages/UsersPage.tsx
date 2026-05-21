@@ -107,7 +107,7 @@ export function UsersPage() {
 
   const inputStyle: React.CSSProperties = {
     width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)",
-    padding: "9px 12px", fontSize: 13, color: "var(--text)",
+    padding: "5px 10px", fontSize: 13, color: "var(--text)",
     background: "var(--bg-surface)", outline: "none", boxSizing: "border-box",
   };
 
@@ -143,7 +143,7 @@ export function UsersPage() {
 
         {/* Invite form */}
         <div style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", marginBottom: 24, overflow: "hidden" }}>
-          <div style={{ padding: "14px 20px", borderBottom: "1px solid #f3f4f6", display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--line-soft)", display: "flex", alignItems: "center", gap: 8 }}>
             <UserPlus size={16} color="var(--blue)" />
             <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text)" }}>Invite new user</h2>
           </div>
@@ -177,18 +177,18 @@ export function UsersPage() {
             </div>
 
             {inviteError && (
-              <div role="alert" style={{ marginBottom: 14, padding: "9px 12px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", color: "var(--negative)", fontSize: 13 }}>
+              <div role="alert" style={{ marginBottom: 14, padding: "5px 10px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", color: "var(--negative)", fontSize: 13 }}>
                 {inviteError}
               </div>
             )}
             {inviteSuccess && (
-              <div role="status" style={{ marginBottom: 14, padding: "9px 12px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", color: "var(--text)", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
+              <div role="status" style={{ marginBottom: 14, padding: "5px 10px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", color: "var(--text)", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
                 <Check size={14} /> {inviteSuccess}
               </div>
             )}
 
             <button type="submit" disabled={inviting}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: inviting ? "#6b8fc4" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: inviting ? "not-allowed" : "pointer" }}>
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: inviting ? "#6b8fc4" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: inviting ? "not-allowed" : "pointer" }}>
               <UserPlus size={14} />
               {inviting ? "Sending invite…" : "Send invite"}
             </button>
@@ -204,7 +204,7 @@ export function UsersPage() {
           </div>
 
           {actionError && (
-            <div role="alert" style={{ margin: "12px 20px 0", padding: "9px 12px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", color: "var(--negative)", fontSize: 13 }}>
+            <div role="alert" style={{ margin: "12px 20px 0", padding: "5px 10px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", color: "var(--negative)", fontSize: 13 }}>
               {actionError}
             </div>
           )}
@@ -272,5 +272,7 @@ export function UsersPage() {
     </div>
   );
 }
+
+
 
 

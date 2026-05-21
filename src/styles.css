@@ -23,26 +23,27 @@
   color-scheme: light;
 }
 
-/* GSX-style Dark Theme — exact color match */
+/* GSX2-matched dark theme — exact colors from user spec */
 html.dark-theme {
-  --bg-page:             #1e1e1e;
-  --bg-surface:          #2d2d2d;
-  --bg-surface-elevated: #333333;
-  --bg-btn-secondary:    #3d3d3d;
-  --nav-bg:              #2a2a2a;
-  --nav-text:            rgba(255,255,255,0.65);
+  --bg-page:             #1a1a1a;
+  --bg-surface:          #242424;
+  --bg-surface-elevated: #2e2e2e;
+  --bg-input:            #2a2a2a;
+  --bg-btn-secondary:    #2e2e2e;
+  --nav-bg:              #0a0a0a;
+  --nav-text:            rgba(255,255,255,0.75);
   --nav-active:          #ffffff;
-  --nav-border:          #444444;
-  --line:                #444444;
-  --line-soft:           #3a3a3a;
+  --nav-border:          #2a2a2a;
+  --line:                #3a3a3a;
+  --line-soft:           #2a2a2a;
   --blue:                #0071e3;
   --blue-hover:          #0077ed;
   --link:                #2997ff;
   --text:                #e8e8e8;
-  --muted:               #999999;
+  --muted:               #888888;
   --negative:            #ff453a;
   --warning:             #ff9f0a;
-  --accent-glow:         rgba(0,113,227,0.20);
+  --accent-glow:         rgba(0,113,227,0.18);
   --focus-outline:       #0071e3;
   --radius:              6px;
   --radius-sm:           4px;
@@ -133,10 +134,35 @@ table {
   font: inherit;
 }
 
+/* Global input/select sizing — compact, consistent */
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+select,
+textarea {
+  padding: 5px 8px !important;
+  font-size: 13px !important;
+  line-height: 1.4;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--bg-surface);
+  color: var(--text);
+  box-sizing: border-box;
+  height: auto;
+}
+
+textarea {
+  padding: 6px 8px !important;
+  height: auto !important;
+  min-height: 60px;
+  resize: vertical;
+}
+
 button {
   border-radius: var(--radius);
   cursor: pointer;
   color: var(--text);
+  font-size: 12px;
+  padding: 4px 10px;
+  line-height: 1.4;
 }
 
 .katana-app {
@@ -198,14 +224,21 @@ html:not(.dark-theme) .global-nav {
 }
 
 .brand-word {
-  font-size: 13px;
-  font-family: "Inter", "Segoe UI", sans-serif;
-  font-weight: 700;
-  letter-spacing: 1px;
+  font-size: 14px;
+  font-family: "SF Pro Rounded", "Nunito", "Varela Round", "Inter", "Segoe UI", sans-serif;
+  font-weight: 800;
+  letter-spacing: 0.5px;
   text-transform: uppercase;
   line-height: 1;
-  color: #fff;
+  color: #fff !important;
   white-space: nowrap;
+}
+
+.brand-trigger {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  color: #fff !important;
 }
 
 .main-modules {
@@ -291,6 +324,8 @@ html:not(.dark-theme) .global-nav {
   color: rgba(255,255,255,0.65);
   width: 30px;
   height: 30px;
+  padding: 0 !important;
+  font-size: inherit !important;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -662,6 +697,10 @@ td {
 
 td {
   border-right: 1px solid var(--line);
+}
+
+tbody tr:hover td {
+  background: rgba(0,0,0,0.04);
 }
 
 td:last-child,
@@ -1188,251 +1227,113 @@ th .col-resize-handle:active::after {
   50% { opacity: 0.3; }
 }
 
-/* ─── Dark Mode — GSX Exact Match ────────────────────────────────────────────── */
 
-html.dark-theme body {
-  background: var(--bg-page);
-  color: var(--text);
+/* ── Search inputs — pill shape, darker bg ── */
+.search-input,
+input.search-input {
+  border-radius: 20px !important;
+  background: var(--bg-surface-elevated) !important;
+  border: 1px solid var(--line) !important;
+  padding: 5px 14px !important;
 }
 
-/* Nav */
+html.dark-theme .search-input,
+html.dark-theme input.search-input,
+html.dark-theme input[class*="search-input"] {
+  background: #111111 !important;
+  border: 1px solid rgba(255,255,255,0.25) !important;
+  border-radius: 20px !important;
+}
+
+/* Inner input inside global search — no styling, container handles it */
+html .global-search-box input,
+html.dark-theme .global-search-box input {
+  all: unset !important;
+  display: inline-block !important;
+  font-size: 13px !important;
+  color: var(--text) !important;
+  width: 100% !important;
+  cursor: text !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+html.dark-theme .global-search-box {
+  background: #111111 !important;
+  border-color: rgba(255,255,255,0.10) !important;
+}
+
+.global-search-box [contenteditable]:empty::before {
+  content: attr(data-placeholder);
+  color: var(--muted);
+  pointer-events: none;
+  position: absolute;
+}
+
+.global-search-box [contenteditable] {
+  position: relative;
+}
+
+/* ── Breadcrumb ── */
+.breadcrumb-bar {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--line);
+  padding: 7px 28px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.breadcrumb-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.breadcrumb-sep {
+  color: var(--muted);
+}
+
+.breadcrumb-link {
+  background: none !important;
+  border: none !important;
+  padding: 0 !important;
+  color: var(--blue) !important;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.breadcrumb-current {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DARK MODE OVERRIDES — all CSS-variable-based, no hardcoded colors
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+html.dark-theme body,
+html.dark-theme .katana-app { background: var(--bg-page); color: var(--text); }
+
+/* ── Nav ── */
 html.dark-theme .global-nav {
   background: var(--nav-bg) !important;
-  border-bottom: 1px solid var(--nav-border);
+  border-bottom: 1px solid var(--nav-border) !important;
 }
 
-/* Page background */
-html.dark-theme .katana-app,
-html.dark-theme main {
-  background: var(--bg-page);
-}
-
-/* ── Cards / Tables ── */
-html.dark-theme .table-card {
-  background: var(--bg-surface);
-  border: 1px solid var(--line);
-}
-
-html.dark-theme th {
-  background: var(--bg-surface-elevated);
-  color: var(--muted);
-  border-bottom: 1px solid var(--line);
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-html.dark-theme td {
-  background: var(--bg-surface);
-  color: var(--text);
-  border-bottom: 1px solid var(--line-soft);
-}
-
-html.dark-theme tr:hover td {
-  background: #383838;
-}
-
-html.dark-theme .selected-row td {
-  background: rgba(0,113,227,0.15);
-}
-
-html.dark-theme .empty-row {
-  color: var(--muted);
-  background: var(--bg-surface);
-}
-
-html.dark-theme .skeleton-line {
-  background: linear-gradient(90deg, #333 25%, #3d3d3d 50%, #333 75%);
-  background-size: 200% 100%;
-  animation: skeleton-shimmer 1.4s infinite;
-}
-
-/* ── Buttons ── */
-/* Secondary / outline buttons — GSX gray style */
-html.dark-theme button:not([class*="segment"]):not(.module):not(.icon-btn):not(.sub-tab):not(.col-sort):not(.row-link-btn) {
-  background: var(--bg-btn-secondary);
-  color: var(--text);
-  border: 1px solid #555555;
-  border-radius: var(--radius);
-}
-
-/* Primary blue buttons — keep blue bg, white text */
-html.dark-theme button[style*="background: var(--blue)"],
-html.dark-theme button[style*="background:var(--blue)"],
-html.dark-theme button[style*="background: #0071e3"],
-html.dark-theme button[style*="background:#0071e3"],
-html.dark-theme button[style*="background: \"var(--blue)\""] {
-  background: #0071e3 !important;
-  color: #ffffff !important;
-  border: none !important;
-}
-
-/* Bulk action buttons */
-html.dark-theme .bulk-btn {
-  background: var(--bg-btn-secondary);
-  color: var(--text);
-  border: 1px solid #555555;
-}
-
-html.dark-theme .bulk-btn.ghost {
-  background: transparent;
-  color: var(--muted);
-  border-color: #444;
-}
-
-/* Icon buttons in nav */
-html.dark-theme .icon-btn {
-  color: rgba(255,255,255,0.65);
-}
-html.dark-theme .icon-btn:hover {
-  color: #ffffff;
-}
-
-/* ── Inputs / Selects ── */
-html.dark-theme input,
-html.dark-theme select,
-html.dark-theme textarea {
-  background: #3d3d3d !important;
-  color: #e8e8e8 !important;
-  border: 1px solid #555555 !important;
-  border-radius: var(--radius) !important;
-}
-
-html.dark-theme input::placeholder,
-html.dark-theme textarea::placeholder {
-  color: #777777 !important;
-}
-
-html.dark-theme select option {
-  background: #3d3d3d;
-  color: #e8e8e8;
-}
-
-/* ── Sub-nav / Tabs ── */
-html.dark-theme .sub-nav {
-  background: var(--bg-surface);
-  border-bottom: 1px solid var(--line);
-}
-
-html.dark-theme .sub-tab {
-  color: var(--muted);
-}
-
-html.dark-theme .sub-tab.active {
-  color: var(--blue);
-  border-bottom-color: var(--blue);
-}
-
-/* ── Segment tabs ── */
-html.dark-theme .segment.ghost {
-  background: var(--bg-surface-elevated);
-  color: var(--muted);
-}
-
-/* ── Status badges — GSX style: slightly brighter on dark ── */
-html.dark-theme .status-badge {
-  filter: brightness(1.2) saturate(0.85);
-}
-
-/* ── Sort buttons ── */
-html.dark-theme .col-sort { color: var(--muted); }
-html.dark-theme .col-sort.active { color: var(--text); }
-
-/* ── Row link buttons ── */
-html.dark-theme .row-link-btn { color: var(--link); background: transparent; border: none; }
-
-/* ── Error / feedback banners ── */
-html.dark-theme .error-banner {
-  background: rgba(255,69,58,0.12);
-  border: 1px solid rgba(255,69,58,0.4);
-  color: #ff6961;
-}
-
-html.dark-theme .action-feedback {
-  background: var(--bg-surface-elevated);
-  border-color: var(--line);
-  color: var(--text);
-}
-
-/* ── Row focus card ── */
-html.dark-theme .row-focus-card {
-  background: var(--bg-surface-elevated);
-  border-color: var(--line);
-}
-html.dark-theme .row-focus-card p { color: var(--muted); }
-
-/* ── Breadcrumb bar ── */
-html.dark-theme .global-nav + div {
-  background: var(--bg-surface) !important;
-  border-bottom-color: var(--line) !important;
-  color: var(--muted) !important;
-}
-
-/* ── Scrollbar ── */
-html.dark-theme ::-webkit-scrollbar-track { background: var(--bg-page); }
-html.dark-theme ::-webkit-scrollbar-thumb { background: #4a4a4a; border: 2px solid var(--bg-page); }
-html.dark-theme ::-webkit-scrollbar-thumb:hover { background: #606060; }
-
-/* ── Broad text/bg cascade — forces all inline hardcoded colors to theme ── */
-
-/* Every element inside dark-theme inherits text color by default */
-html.dark-theme * {
-  color: inherit;
-}
-
-/* Root sets the base */
-html.dark-theme body,
-html.dark-theme .katana-app {
-  color: var(--text);
-  background: var(--bg-page);
-}
-
-/* All headings */
-html.dark-theme h1, html.dark-theme h2,
-html.dark-theme h3, html.dark-theme h4,
-html.dark-theme h5, html.dark-theme h6 {
-  color: var(--text) !important;
-}
-
-/* All paragraphs and labels */
-html.dark-theme p, html.dark-theme label,
-html.dark-theme li, html.dark-theme dt, html.dark-theme dd {
-  color: var(--text) !important;
-}
-
-/* Spans — only override if they don't have a status-badge class */
-html.dark-theme span:not(.status-badge) {
-  color: inherit !important;
-}
-
-/* Strong / small */
-html.dark-theme strong, html.dark-theme small, html.dark-theme code {
-  color: inherit !important;
-}
-
-/* All divs default to surface bg, transparent text (inherit from parent) */
-html.dark-theme div {
-  color: inherit;
-}
-
-/* Muted text — anything that was gray in light mode stays muted gray */
-html.dark-theme .muted,
-html.dark-theme [class*="muted"],
-html.dark-theme th {
-  color: var(--muted) !important;
-}
-
-/* ── Backgrounds ── */
-/* Any element with an inline white/light bg gets surface */
+/* ── Page / main ── */
 html.dark-theme main,
 html.dark-theme section,
-html.dark-theme article {
-  background: var(--bg-page);
-  color: var(--text);
-}
+html.dark-theme article,
+html.dark-theme .inventory-shell { background: var(--bg-page); color: var(--text); }
 
-/* Cards */
+/* ── Cards ── */
 html.dark-theme .table-card,
 html.dark-theme [class*="card"] {
   background: var(--bg-surface) !important;
@@ -1440,149 +1341,226 @@ html.dark-theme [class*="card"] {
   color: var(--text) !important;
 }
 
-/* Section/panel headers (elevated) */
-html.dark-theme th,
-html.dark-theme .sub-nav {
+/* ── Tables ── */
+html.dark-theme th {
   background: var(--bg-surface-elevated) !important;
+  color: var(--muted) !important;
+  border-bottom: 1px solid var(--line) !important;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
+
+html.dark-theme td {
+  background: var(--bg-surface) !important;
+  color: var(--text) !important;
+  border-bottom: 1px solid var(--line-soft) !important;
+  border-right: 1px solid var(--line-soft) !important;
+}
+
+html.dark-theme td:last-child { border-right: none !important; }
+
+html.dark-theme tr:hover td { background: rgba(255,255,255,0.04) !important; }
+
+html.dark-theme .selected-row td { background: rgba(0,113,227,0.12) !important; }
+
+html.dark-theme tfoot td {
+  background: var(--bg-surface) !important;
+  color: var(--muted) !important;
+  border-top: 1px solid var(--line) !important;
+}
+
+html.dark-theme .empty-row { color: var(--muted) !important; background: var(--bg-surface) !important; }
+
+html.dark-theme .skeleton-line {
+  background: linear-gradient(90deg, var(--bg-surface-elevated) 25%, var(--line) 50%, var(--bg-surface-elevated) 75%) !important;
+}
+
+/* ── Status badges — text only in dark mode, no colored bg ── */
+html.dark-theme .status-badge {
+  background: transparent !important;
+  color: var(--muted) !important;
+  border: 1px solid var(--line) !important;
+  filter: none !important;
+}
+
+/* ── Inputs / Selects ── */
+html.dark-theme input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+html.dark-theme select,
+html.dark-theme textarea {
+  background: var(--bg-input);
+  color: var(--text) !important;
+  border: 1px solid rgba(255,255,255,0.25) !important;
+}
+
+html.dark-theme input::placeholder,
+html.dark-theme textarea::placeholder { color: var(--muted) !important; }
+
+html.dark-theme select option { background: var(--bg-surface-elevated); color: var(--text); }
 
 /* ── Buttons ── */
-/* All buttons default to secondary style — exclude nav/tab/sort/link buttons */
-html.dark-theme button:not(.module):not(.icon-btn):not(.sub-tab):not(.col-sort):not(.row-link-btn):not(.segment):not(.bulk-btn) {
+html.dark-theme button:not(.module):not(.icon-btn):not(.sub-tab):not(.col-sort):not(.row-link-btn):not(.segment):not(.bulk-btn):not(.clear-btn):not(.brand-trigger) {
   background: var(--bg-btn-secondary);
-  color: var(--text) !important;
-  border-color: #555555;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 4px 10px;
+  font-size: 12px;
 }
 
-/* Blue primary — keep as-is */
-html.dark-theme button.btn-primary,
+html.dark-theme .brand-trigger {
+  background: transparent !important;
+  border: none !important;
+  color: #fff !important;
+}
+
+/* Blue primary */
 html.dark-theme button[style*="background: var(--blue)"],
 html.dark-theme button[style*="background:var(--blue)"],
 html.dark-theme button[style*="background: #0071e3"],
 html.dark-theme button[style*="background:#0071e3"] {
-  background: #0071e3 !important;
-  color: #ffffff !important;
+  background: var(--blue) !important;
+  color: #fff !important;
   border: none !important;
 }
 
-/* Green approve buttons */
+/* Labels styled as buttons (file upload) — keep their inline styles */
+html.dark-theme label[style*="background: var(--blue)"],
+html.dark-theme label[style*="background:var(--blue)"] {
+  background: var(--blue) !important;
+  color: #fff !important;
+}
 html.dark-theme button[style*="background: #15803d"],
 html.dark-theme button[style*="background:#15803d"] {
   background: #15803d !important;
-  color: #ffffff !important;
+  color: #fff !important;
   border: none !important;
 }
 
-/* Red danger buttons */
+/* Red danger */
 html.dark-theme button[style*="background: #b91c1c"],
-html.dark-theme button[style*="background:#b91c1c"] {
-  background: #b91c1c !important;
-  color: #ffffff !important;
+html.dark-theme button[style*="background:#b91c1c"],
+html.dark-theme button[style*="background: var(--negative)"] {
+  background: var(--negative) !important;
+  color: #fff !important;
   border: none !important;
 }
 
-/* Nav module buttons — don't override */
-html.dark-theme .module,
-html.dark-theme .icon-btn,
-html.dark-theme .sub-tab,
-html.dark-theme .col-sort,
-html.dark-theme .row-link-btn,
-html.dark-theme .segment {
-  background: transparent;
-  border-color: transparent;
-}
+html.dark-theme .bulk-btn { background: var(--bg-btn-secondary); color: var(--text); border: 1px solid var(--line); }
+html.dark-theme .bulk-btn.ghost { background: transparent; color: var(--muted); border-color: var(--line); }
 
+/* ── Nav buttons ── */
 html.dark-theme .module { background: transparent !important; color: var(--nav-text); border: none !important; }
-html.dark-theme .module.active { background: transparent !important; color: #ffffff !important; font-weight: 600; border: none !important; }
-html.dark-theme .module:hover { background: transparent !important; color: rgba(255,255,255,0.85) !important; }
+html.dark-theme .module.active { color: #4da3ff !important; font-weight: 600; }
+html.dark-theme .module:hover { color: rgba(255,255,255,0.90) !important; }
 html.dark-theme .module:active,
 html.dark-theme .module:focus { background: transparent !important; outline: none !important; }
-html.dark-theme .icon-btn { background: transparent !important; color: rgba(255,255,255,0.65); border: none !important; }
+
+html.dark-theme .icon-btn { background: transparent !important; color: rgba(255,255,255,0.80); border: none !important; }
 html.dark-theme .icon-btn:hover { color: #fff; }
-html.dark-theme .row-link-btn { background: transparent; color: var(--link); }
-html.dark-theme .col-sort { background: transparent; color: var(--muted); }
-html.dark-theme .col-sort.active { color: var(--text); }
-html.dark-theme .sub-tab { background: transparent; color: var(--muted); }
+
+html.dark-theme .clear-btn { background: transparent !important; border: none !important; outline: none !important; color: var(--muted); }
+
+/* ── Sub-nav / Tabs ── */
+html.dark-theme .sub-nav { background: var(--bg-surface); border-bottom: 1px solid var(--line); }
+html.dark-theme .sub-tab { color: var(--muted); background: transparent; border-radius: 0 !important; }
 html.dark-theme .sub-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+
+/* ── Segment tabs ── */
 html.dark-theme .segment { background: var(--blue); color: #fff; }
 html.dark-theme .segment.ghost { background: var(--bg-surface-elevated); color: var(--muted); }
-html.dark-theme .bulk-btn { background: var(--bg-btn-secondary); color: var(--text); border-color: #555; }
-html.dark-theme .bulk-btn.ghost { background: transparent; color: var(--muted); }
 
-/* ── Inputs ── */
-html.dark-theme input,
-html.dark-theme select,
-html.dark-theme textarea {
-  background: #3d3d3d !important;
-  color: #e8e8e8 !important;
-  border: 1px solid #555555 !important;
-}
-html.dark-theme input::placeholder,
-html.dark-theme textarea::placeholder { color: #777 !important; }
-html.dark-theme select option { background: #3d3d3d; color: #e8e8e8; }
+/* ── Sort / link buttons ── */
+html.dark-theme .col-sort { color: var(--muted); background: transparent; border: none; }
+html.dark-theme .col-sort.active { color: var(--text); }
+html.dark-theme .row-link-btn { color: var(--link); background: transparent; border: none; }
 
-/* ── Tables ── */
-html.dark-theme td {
-  background: var(--bg-surface);
+/* ── Text cascade — headings, paragraphs, labels ── */
+html.dark-theme h1, html.dark-theme h2, html.dark-theme h3,
+html.dark-theme h4, html.dark-theme h5, html.dark-theme h6 {
   color: var(--text) !important;
-  border-bottom: 1px solid #3a3a3a;
+  background: transparent !important;
 }
-html.dark-theme tr:hover td { background: #383838; }
-html.dark-theme .selected-row td { background: rgba(0,113,227,0.15); }
-html.dark-theme .empty-row { color: var(--muted) !important; background: var(--bg-surface); }
-html.dark-theme tfoot td { background: var(--bg-surface) !important; color: var(--text) !important; border-top: 1px solid var(--line) !important; }
+html.dark-theme p, html.dark-theme label, html.dark-theme li { color: var(--text); }
+html.dark-theme span:not(.status-badge) { color: inherit; }
+html.dark-theme strong, html.dark-theme small, html.dark-theme code { color: inherit; }
+html.dark-theme div { color: inherit; }
 
-/* ── Status badges — only place color is allowed ── */
-html.dark-theme .status-badge { filter: brightness(1.2) saturate(0.85); }
-
-/* ── Modals ── */
+/* ── Backgrounds — flip all light inline backgrounds ── */
 html.dark-theme [role="dialog"] {
   background: var(--bg-surface) !important;
   border-color: var(--line) !important;
-}
-
-/* ── Error / info banners ── */
-html.dark-theme .error-banner { background: rgba(255,69,58,0.12) !important; border-color: rgba(255,69,58,0.4) !important; color: #ff6961 !important; }
-html.dark-theme .action-feedback { background: var(--bg-surface-elevated) !important; border-color: var(--line) !important; color: var(--text) !important; }
-
-/* ── Skeleton ── */
-html.dark-theme .skeleton-line { background: linear-gradient(90deg, #333 25%, #3d3d3d 50%, #333 75%) !important; }
-
-/* ── Scrollbar ── */
-html.dark-theme ::-webkit-scrollbar-track { background: var(--bg-page); }
-html.dark-theme ::-webkit-scrollbar-thumb { background: #4a4a4a; border: 2px solid var(--bg-page); }
-html.dark-theme ::-webkit-scrollbar-thumb:hover { background: #606060; }
-
-
-
-/* ── Neutralize colored body text in dark mode ── */
-/* Error banners: keep red border but use CSS var for text */
-html.dark-theme [role="alert"] {
-  background: rgba(255, 69, 58, 0.10) !important;
-  border-color: rgba(255, 69, 58, 0.35) !important;
   color: var(--text) !important;
 }
 
-/* Success/status banners */
+/* ── Error / status banners ── */
+html.dark-theme [role="alert"] {
+  background: rgba(255,69,58,0.10) !important;
+  border-color: rgba(255,69,58,0.30) !important;
+  color: var(--text) !important;
+}
 html.dark-theme [role="status"] {
-  background: rgba(255,255,255,0.05) !important;
+  background: var(--bg-surface-elevated) !important;
   border-color: var(--line) !important;
   color: var(--text) !important;
 }
 
-/* All inline colored text → inherit (becomes --text from parent) */
-/* This catches #b91c1c, #15803d, #1d4ed8, #a16207, etc. on body text */
-html.dark-theme p,
-html.dark-theme span:not(.status-badge),
-html.dark-theme td,
-html.dark-theme li,
-html.dark-theme small {
-  color: inherit !important;
+html.dark-theme .error-banner {
+  background: rgba(255,69,58,0.12) !important;
+  border: 1px solid rgba(255,69,58,0.35) !important;
+  color: var(--negative) !important;
 }
 
-/* Ensure body/page sets the base color */
-html.dark-theme body,
-html.dark-theme main,
-html.dark-theme .katana-app {
-  color: var(--text);
+html.dark-theme .action-feedback {
+  background: var(--bg-surface-elevated) !important;
+  border-color: var(--line) !important;
+  color: var(--text) !important;
 }
+
+/* ── Row focus card ── */
+html.dark-theme .row-focus-card { background: var(--bg-surface-elevated); border-color: var(--line); }
+html.dark-theme .row-focus-card p { color: var(--muted) !important; }
+
+/* ── Breadcrumb ── */
+html.dark-theme .global-nav + div {
+  background: var(--bg-surface) !important;
+  border-bottom-color: var(--line) !important;
+  color: var(--muted) !important;
+}
+
+/* ── Upload / drop zones ── */
+html.dark-theme [class*="drop"],
+html.dark-theme [class*="upload"],
+html.dark-theme [class*="csv"] {
+  background: var(--bg-surface-elevated) !important;
+  border-color: var(--line) !important;
+  color: var(--text) !important;
+}
+
+/* Drop zone areas — black bg in dark mode */
+html.dark-theme [style*="2px dashed"] {
+  background: #111111 !important;
+}
+
+/* ── Datepicker dark mode ── */
+html.dark-theme .react-datepicker {
+  background: var(--bg-surface) !important;
+  border-color: var(--line) !important;
+  color: var(--text) !important;
+}
+html.dark-theme .react-datepicker__header {
+  background: var(--bg-surface-elevated) !important;
+  border-bottom-color: var(--line) !important;
+}
+html.dark-theme .react-datepicker__current-month,
+html.dark-theme .react-datepicker__day-name { color: var(--muted) !important; }
+html.dark-theme .react-datepicker__day { color: var(--text) !important; background: transparent !important; }
+html.dark-theme .react-datepicker__day:hover { background: var(--bg-surface-elevated) !important; }
+html.dark-theme .react-datepicker__day--selected { background: var(--blue) !important; color: #fff !important; }
+html.dark-theme .react-datepicker__navigation-icon::before { border-color: var(--muted) !important; }
+
+/* ── Scrollbar ── */
+html.dark-theme ::-webkit-scrollbar-track { background: var(--bg-page); }
+html.dark-theme ::-webkit-scrollbar-thumb { background: var(--line); border: 2px solid var(--bg-page); }
+html.dark-theme ::-webkit-scrollbar-thumb:hover { background: var(--muted); }

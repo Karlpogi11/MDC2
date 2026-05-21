@@ -192,28 +192,24 @@ export function TransferNewPage() {
   }
 
   const inputStyle: React.CSSProperties = {
-    border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "8px 10px",
+    border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 8px",
     fontSize: 13, color: "var(--text)", background: "var(--bg-surface)", outline: "none", width: "100%", boxSizing: "border-box",
   };
 
   return (
     <AppLayout>
       <main style={{ maxWidth: 960, margin: "0 auto", padding: "32px 24px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", marginBottom: 24 }}>
           <div>
             <h1 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "var(--text)" }}>Create Transfer</h1>
             <p style={{ margin: 0, fontSize: 13, color: "var(--muted)" }}>Select a destination and add serials or parts to transfer from DC.</p>
           </div>
-          <button type="button" onClick={() => navigate("/transfers")}
-            style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "8px 16px", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
-            Cancel
-          </button>
         </div>
 
         <form onSubmit={(e) => void handleSubmit(e)}>
           {/* Destination */}
           <div style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", marginBottom: 16, overflow: "hidden" }}>
-            <div style={{ padding: "12px 20px", borderBottom: "1px solid #f3f4f6" }}>
+            <div style={{ padding: "12px 20px", borderBottom: "1px solid var(--line)" }}>
               <h2 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "var(--text)" }}>Destination site</h2>
             </div>
             <div style={{ padding: "16px 20px" }}>
@@ -221,7 +217,7 @@ export function TransferNewPage() {
                 required
                 value={destinationId}
                 onChange={(e) => setDestinationId(e.target.value)}
-                style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "9px 12px", fontSize: 13, color: "var(--text)", background: "var(--bg-surface)", outline: "none", width: 320, cursor: "pointer" }}
+                style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 10px", fontSize: 13, color: "var(--text)", background: "var(--bg-surface)", outline: "none", width: 320, cursor: "pointer" }}
               >
                 <option value="">— Select destination —</option>
                 {sites.map((s) => (
@@ -233,13 +229,13 @@ export function TransferNewPage() {
 
           {/* Line items */}
           <div style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", marginBottom: 16, overflow: "hidden" }}>
-            <div style={{ padding: "12px 20px", borderBottom: "1px solid #f3f4f6", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ padding: "12px 20px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <h2 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "var(--text)" }}>Items</h2>
               <span style={{ fontSize: 12, color: "var(--muted)" }}>Enter serial number OR part number</span>
             </div>
             <div style={{ padding: "16px 20px" }}>
               {/* Column headers */}
-              <div style={{ display: "grid", gridTemplateColumns: "180px 160px 1fr 64px 32px", gap: 10, marginBottom: 6, paddingBottom: 6, borderBottom: "1px solid #f3f4f6" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "180px 160px 1fr 64px 32px", gap: 10, marginBottom: 6, paddingBottom: 6, borderBottom: "1px solid var(--line-soft)" }}>
                 {["Serial number", "Part number", "Description", "Qty", ""].map((h) => (
                   <div key={h} style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</div>
                 ))}
@@ -256,11 +252,11 @@ export function TransferNewPage() {
                       value={line.serial_number}
                       onChange={(e) => updateLine(i, "serial_number", e.target.value)}
                       onBlur={(e) => void resolveSerial(i, e.target.value)}
-                      style={{ border: `1px solid ${line.error ? "#fca5a5" : "#d1d5db"}`, borderRadius: "var(--radius)", padding: "9px 10px", fontSize: 12, fontFamily: "monospace", outline: "none", width: "100%", boxSizing: "border-box" as const }}
+                      style={{ border: `1px solid ${line.error ? "#fca5a5" : "#d1d5db"}`, borderRadius: "var(--radius)", padding: "5px 8px", fontSize: 12, fontFamily: "monospace", outline: "none", width: "100%", boxSizing: "border-box" as const }}
                     />
                     {hasSerial && line.part_number ? (
                       <input type="text" readOnly value={line.part_number}
-                        style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "9px 10px", fontSize: 12, fontFamily: "monospace", background: "var(--bg-surface-elevated)", color: "var(--blue)", width: "100%", boxSizing: "border-box" as const, outline: "none" }} />
+                        style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 8px", fontSize: 12, fontFamily: "monospace", background: "var(--bg-surface-elevated)", color: "var(--blue)", width: "100%", boxSizing: "border-box" as const, outline: "none" }} />
                     ) : (
                       <PartNumberInput value={line.part_number}
                         onChange={(pn, part) => { updateLine(i, "part_number", pn); if (part) updateLine(i, "part_name", part.part_name); }}
@@ -269,7 +265,7 @@ export function TransferNewPage() {
                     <input type="text" readOnly
                       value={line.resolving ? "Looking up…" : (line.part_name || "")}
                       placeholder="Auto-filled"
-                      style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "9px 10px", fontSize: 12, background: "var(--bg-surface-elevated)", color: "var(--text)", outline: "none", width: "100%", boxSizing: "border-box" as const }}
+                      style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 8px", fontSize: 12, background: "var(--bg-surface-elevated)", color: "var(--text)", outline: "none", width: "100%", boxSizing: "border-box" as const }}
                     />
                     {hasSerial ? (
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "var(--muted)", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", height: 38 }}>1</div>
@@ -290,7 +286,7 @@ export function TransferNewPage() {
               })}
 
               <button type="button" onClick={addLine}
-                style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", border: "1px dashed #d1d5db", borderRadius: "var(--radius)", padding: "7px 14px", fontSize: 13, color: "var(--muted)", cursor: "pointer", marginTop: 8 }}>
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", border: "1px dashed var(--line)", borderRadius: "var(--radius)", padding: "4px 10px", fontSize: 13, color: "var(--muted)", cursor: "pointer", marginTop: 8 }}>
                 <Plus size={14} /> Add row
               </button>
             </div>
@@ -302,10 +298,16 @@ export function TransferNewPage() {
             </div>
           )}
 
-          <button type="submit" disabled={submitting}
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, background: submitting ? "#6b8fc4" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "10px 24px", fontSize: 13, fontWeight: 600, cursor: submitting ? "not-allowed" : "pointer" }}>
-            {submitting ? "Creating…" : "Review & Create"}
-          </button>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button type="button" onClick={() => navigate("/transfers")}
+              style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 12, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
+              Cancel
+            </button>
+            <button type="submit" disabled={submitting}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: submitting ? "var(--muted)" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "5px 14px", fontSize: 12, fontWeight: 600, cursor: submitting ? "not-allowed" : "pointer" }}>
+              {submitting ? "Creating…" : "Review & Create"}
+            </button>
+          </div>
         </form>
       </main>
 
@@ -350,11 +352,11 @@ export function TransferNewPage() {
               </div>
               <div style={{ display: "flex", gap: 10 }}>
                 <button type="button" onClick={() => void confirmAndSubmit()}
-                  style={{ flex: 1, background: "var(--blue)", color: "#fff", border: "none", borderRadius: 0, padding: "10px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                  style={{ flex: 1, background: "var(--blue)", color: "#fff", border: "none", borderRadius: 0, padding: "5px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                   Confirm
                 </button>
                 <button type="button" onClick={() => setShowConfirm(false)}
-                  style={{ flex: 1, background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: 0, padding: "10px 0", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
+                  style={{ flex: 1, background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: 0, padding: "5px 0", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
                   Go back
                 </button>
               </div>
@@ -365,6 +367,10 @@ export function TransferNewPage() {
     </AppLayout>
   );
 }
+
+
+
+
 
 
 

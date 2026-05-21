@@ -216,7 +216,7 @@ export function PartsTab() {
   );
 
   const addInputStyle: React.CSSProperties = {
-    border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "8px 10px",
+    border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 8px",
     fontSize: 13, outline: "none", width: "100%", boxSizing: "border-box", fontFamily: "inherit",
   };
 
@@ -242,7 +242,7 @@ export function PartsTab() {
                 <select
                   value={colMap[field] ?? ""}
                   onChange={(e) => setColMap((m) => ({ ...m, [field]: e.target.value }))}
-                  style={{ width: "100%", border: "1px solid var(--line)", padding: "7px 10px", fontSize: 13, background: "var(--bg-surface)", outline: "none" }}
+                  style={{ width: "100%", border: "1px solid var(--line)", padding: "5px 8px", fontSize: 13, background: "var(--bg-surface)", outline: "none" }}
                 >
                   <option value="">— skip —</option>
                   {csvHeaders.map((h) => <option key={h} value={h}>{h}</option>)}
@@ -263,7 +263,7 @@ export function PartsTab() {
                 </thead>
                 <tbody>
                   {csvRows.filter(r => r[colMap.part_number]?.trim() && r[colMap.part_name]?.trim()).slice(0, 10).map((r, i) => (
-                    <tr key={i} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                    <tr key={i} style={{ borderBottom: "1px solid var(--line-soft)" }}>
                       <td style={{ padding: "5px 10px", fontFamily: "monospace", color: "var(--blue)" }}>{r[colMap.part_number]}</td>
                       <td style={{ padding: "5px 10px", color: "#111" }}>{r[colMap.part_name]}</td>
                       {colMap.category && <td style={{ padding: "5px 10px", color: "var(--muted)" }}>{r[colMap.category] || "—"}</td>}
@@ -271,7 +271,7 @@ export function PartsTab() {
                   ))}
                 </tbody>
               </table>
-              <div style={{ padding: "6px 10px", fontSize: 11, color: "var(--muted)", borderTop: "1px solid #f3f4f6" }}>
+              <div style={{ padding: "6px 10px", fontSize: 11, color: "var(--muted)", borderTop: "1px solid var(--line-soft)" }}>
                 Showing first 10 of {csvRows.filter(r => r[colMap.part_number]?.trim() && r[colMap.part_name]?.trim()).length} valid rows
                 {csvRows.length - csvRows.filter(r => r[colMap.part_number]?.trim() && r[colMap.part_name]?.trim()).length > 0 &&
                   <span style={{ color: "var(--muted)", marginLeft: 8 }}>
@@ -296,11 +296,11 @@ export function PartsTab() {
           <div style={{ display: "flex", gap: 8 }}>
             <button type="button" onClick={() => void handleConfirmImport()}
               disabled={importing || !colMap.part_number || !colMap.part_name}
-              style={{ background: "var(--blue)", color: "#fff", border: "none", padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: (!colMap.part_number || !colMap.part_name) ? 0.5 : 1 }}>
+              style={{ background: "var(--blue)", color: "#fff", border: "none", padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: (!colMap.part_number || !colMap.part_name) ? 0.5 : 1 }}>
               {importing ? "Importing…" : `Import ${csvRows.filter(r => r[colMap.part_number]?.trim() && r[colMap.part_name]?.trim()).length} rows`}
             </button>
             <button type="button" onClick={() => setCsvRows(null)}
-              style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", padding: "8px 14px", fontSize: 13, color: "#666", cursor: "pointer" }}>
+              style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", padding: "5px 10px", fontSize: 13, color: "#666", cursor: "pointer" }}>
               Cancel
             </button>
           </div>
@@ -326,7 +326,7 @@ export function PartsTab() {
                   if (part) { setName(part.part_name); setCategory(part.category ?? ""); }
                 }}
                 required
-                style={{ padding: "8px 10px", fontSize: 13 }}
+                style={{ padding: "5px 8px", fontSize: 13 }}
               />
             </div>
             <div>
@@ -344,7 +344,7 @@ export function PartsTab() {
           </div>
           {addError && <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--negative)" }}>{addError}</p>}
           <button type="submit" disabled={adding}
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, background: addSuccess ? "#16a34a" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, background: addSuccess ? "#16a34a" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "4px 10px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
             {addSuccess ? <><Check size={14} /> Saved</> : adding ? "Saving…" : <><Plus size={14} /> Add part</>}
           </button>
         </form>
@@ -443,6 +443,9 @@ export function PartsTab() {
     </div>
   );
 }
+
+
+
 
 
 

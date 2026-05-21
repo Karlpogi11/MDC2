@@ -53,7 +53,7 @@ export function NotificationBell() {
           zIndex: 200, overflow: "hidden",
         }}>
           {/* Header */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid #f3f4f6" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid var(--line-soft)" }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>
               Notifications {unreadCount > 0 && <span style={{ fontSize: 11, background: "#ef4444", color: "#fff", borderRadius: "var(--radius)", padding: "1px 6px", marginLeft: 4 }}>{unreadCount}</span>}
             </span>
@@ -78,7 +78,7 @@ export function NotificationBell() {
                 onClick={() => { if (!n.read_at) void markRead(n.id); }}
                 style={{
                   padding: "12px 16px", borderBottom: "1px solid #f9fafb", cursor: n.read_at ? "default" : "pointer",
-                  background: n.read_at ? "#fff" : "#f0f7ff",
+                  background: n.read_at ? "transparent" : "var(--accent-glow)",
                   display: "flex", gap: 10, alignItems: "flex-start",
                 }}
               >
@@ -98,5 +98,7 @@ export function NotificationBell() {
     </div>
   );
 }
+
+
 
 

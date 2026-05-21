@@ -158,14 +158,14 @@ export function AuditLogPage() {
         {/* Filters */}
         <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
           <select value={filterAction} onChange={e => { setFilterAction(e.target.value); setPage(0); }}
-            style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 10px", fontSize: 13, background: "var(--bg-surface)", outline: "none" }}>
+            style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 8px", fontSize: 13, background: "var(--bg-surface)", outline: "none" }}>
             <option value="">All actions</option>
             <option value="insert">Insert</option>
             <option value="update">Update</option>
             <option value="delete">Delete</option>
           </select>
           <select value={filterEntity} onChange={e => { setFilterEntity(e.target.value); setPage(0); }}
-            style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 10px", fontSize: 13, background: "var(--bg-surface)", outline: "none" }}>
+            style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 8px", fontSize: 13, background: "var(--bg-surface)", outline: "none" }}>
             <option value="">All entities</option>
             {entityTypes.map(e => <option key={e} value={e}>{e}</option>)}
           </select>
@@ -227,5 +227,6 @@ export function AuditLogPage() {
     </AppLayout>
   );
 }
+
 
 

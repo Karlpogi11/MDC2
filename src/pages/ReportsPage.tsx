@@ -190,9 +190,9 @@ function StockInThisWeekReport() {
                     <tr key={`${r.id}-serials`}>
                       <td colSpan={3} style={{ padding: 0, background: "var(--bg-surface-elevated)" }}>
                         {loadingSerials ? (
-                          <div style={{ padding: "10px 16px", fontSize: 12, color: "var(--muted)" }}>Loading serials…</div>
+                          <div style={{ padding: "5px 12px", fontSize: 12, color: "var(--muted)" }}>Loading serials…</div>
                         ) : (
-                          <div style={{ maxHeight: 260, overflowY: "auto", padding: "8px 16px" }}>
+                          <div style={{ maxHeight: 260, overflowY: "auto", padding: "5px 12px" }}>
                             {serials.length === 0 && <span style={{ fontSize: 12, color: "var(--muted)" }}>No serials found.</span>}
                             {serials.map((s) => (
                               <div key={s.serial_number} style={{ fontSize: 12, padding: "3px 0", display: "flex", gap: 16 }}>
@@ -358,7 +358,7 @@ function ExportsInline() {
 
   const cardStyle: React.CSSProperties = { background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", overflow: "hidden" };
   const headStyle: React.CSSProperties = { padding: "14px 20px", borderBottom: "1px solid var(--line)", background: "var(--bg-surface-elevated)" };
-  const selStyle: React.CSSProperties = { border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "8px 10px", fontSize: 13, background: "var(--bg-surface-elevated)", color: "var(--text)", cursor: "pointer" };
+  const selStyle: React.CSSProperties = { border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 8px", fontSize: 13, background: "var(--bg-surface-elevated)", color: "var(--text)", cursor: "pointer" };
 
   return (
     <main style={{ maxWidth: 860, margin: "0 auto", padding: "28px 24px" }}>
@@ -378,7 +378,7 @@ function ExportsInline() {
               <DatePicker label="From date" value={siFrom} onChange={setSiFrom} />
               <DatePicker label="To date" value={siTo} onChange={setSiTo} />
               <button type="button" onClick={() => void exportStockedIn()} disabled={siExporting}
-                style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: siExporting ? "not-allowed" : "pointer", opacity: siExporting ? 0.7 : 1 }}>
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: siExporting ? "not-allowed" : "pointer", opacity: siExporting ? 0.7 : 1 }}>
                 <Download size={14} /> {siExporting ? "Exporting…" : "Download CSV"}
               </button>
               {siCount !== null && <span style={{ fontSize: 13, color: "var(--muted)", fontWeight: 600 }}>✓ {siCount} rows</span>}
@@ -410,7 +410,7 @@ function ExportsInline() {
                 </select>
               </div>
               <button type="button" onClick={() => void exportTransferred()} disabled={trExporting}
-                style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: trExporting ? "not-allowed" : "pointer", opacity: trExporting ? 0.7 : 1 }}>
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: trExporting ? "not-allowed" : "pointer", opacity: trExporting ? 0.7 : 1 }}>
                 <Download size={14} /> {trExporting ? "Exporting…" : "Download CSV"}
               </button>
               {trCount !== null && <span style={{ fontSize: 13, color: "var(--muted)", fontWeight: 600 }}>✓ {trCount} rows</span>}
@@ -462,7 +462,7 @@ export function ReportsPage() {
             {REPORTS.map((r) => (
               <button key={r.id} type="button" onClick={() => setActive(r.id)}
                 style={{
-                  textAlign: "left", padding: "10px 20px", cursor: "pointer",
+                  textAlign: "left", padding: "5px 12px", cursor: "pointer",
                   border: "none",
                   borderRadius: 0,
                   borderBottom: `2px solid ${active === r.id ? "var(--blue)" : "transparent"}`,
@@ -491,6 +491,8 @@ export function ReportsPage() {
     </AppLayout>
   );
 }
+
+
 
 
 

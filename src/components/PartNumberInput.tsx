@@ -88,10 +88,10 @@ function PartNumberInput({ value, onChange, placeholder = "e.g. 923-03861", styl
   }, []);
 
   const baseStyle: React.CSSProperties = {
-    border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "9px 12px",
+    border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 10px",
     fontSize: 13, outline: "none", width: "100%", boxSizing: "border-box",
-    fontFamily: "monospace", background: disabled ? "#f9fafb" : "#fff",
-    color: disabled ? "#6b7a8d" : undefined,
+    fontFamily: "monospace", background: "var(--bg-surface)",
+    color: "var(--text)",
     ...style,
   };
 
@@ -105,9 +105,9 @@ function PartNumberInput({ value, onChange, placeholder = "e.g. 923-03861", styl
       background: "var(--bg-surface)",
       border: "1px solid var(--line)",
       borderRadius: "var(--radius)",
-      boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+      boxShadow: "0 4px 16px rgba(0,0,0,0.2)",
       overflow: "hidden",
-      maxHeight: 280,
+      maxHeight: 240,
       overflowY: "auto",
     }}>
       {suggestions.map((part, i) => (
@@ -115,16 +115,16 @@ function PartNumberInput({ value, onChange, placeholder = "e.g. 923-03861", styl
           key={part.id}
           onMouseDown={(e) => { e.preventDefault(); select(part); }}
           style={{
-            padding: "8px 12px", cursor: "pointer", fontSize: 12,
-            background: i === activeIdx ? "#eff6ff" : "#fff",
-            borderBottom: i < suggestions.length - 1 ? "1px solid #f3f4f6" : undefined,
+            padding: "6px 10px", cursor: "pointer", fontSize: 12,
+            background: i === activeIdx ? "var(--accent-glow)" : "transparent",
+            borderBottom: i < suggestions.length - 1 ? "1px solid var(--line-soft)" : undefined,
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <code style={{ fontWeight: 700, color: "var(--blue)", flexShrink: 0 }}>{part.part_number}</code>
+            <code style={{ fontWeight: 600, color: "var(--blue)", flexShrink: 0 }}>{part.part_number}</code>
             {part.category && <span style={{ marginLeft: "auto", color: "var(--muted)", fontSize: 11, flexShrink: 0 }}>{toCapitalized(part.category)}</span>}
           </div>
-          <div style={{ color: "var(--text)", marginTop: 2 }}>{part.part_name}</div>
+          <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 1 }}>{part.part_name}</div>
         </div>
       ))}
     </div>,
@@ -153,5 +153,7 @@ function PartNumberInput({ value, onChange, placeholder = "e.g. 923-03861", styl
     </div>
   );
 });
+
+
 
 

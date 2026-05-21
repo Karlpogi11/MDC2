@@ -44,35 +44,36 @@ html[data-theme="light"] {
 
 html.dark-theme,
 html[data-theme="dark"] {
-  --bg-page: #111213;
-  --bg-surface: #050505;
-  --bg-surface-elevated: #2a2d31;
-  --bg-btn-secondary: #2b2f34;
-  --bg-btn-tertiary: #23262b;
+  /* Exact GSX2 dark palette */
+  --bg-page:             #202020;
+  --bg-surface:          #000000;      /* Table/card background — black */
+  --bg-surface-elevated: #2a2a2a;      /* Table headers, raised panels */
+  --bg-btn-secondary:    #2a2a2a;
+  --bg-btn-tertiary:     #212121;
 
-  --nav-bg: #424449;
-  --nav-border: #565a61;
-  --nav-text: rgba(235, 238, 243, 0.74);
+  --nav-bg:     #4a4a4a;
+  --nav-border: #212121;
+  --nav-text:   rgba(220, 225, 232, 0.70);
   --nav-active: #ffffff;
 
-  --line: #3f434a;
-  --line-soft: #2d3138;
+  --line:      #4a4a4a;
+  --line-soft: #2a2a2a;
 
-  --text: #eceff3;
-  --muted: #97a0ad;
+  --text:  #e8eaed;
+  --muted: #9aa0aa;
 
-  --blue: #0e4ea8;
-  --blue-hover: #1860c3;
-  --link: #54a0ff;
+  --blue:       #1a73e8;
+  --blue-hover: #2a82f8;
+  --link:       #8ab4f8;
 
-  --positive: #4fa571;
-  --warning: #c99034;
-  --negative: #d45a5a;
+  --positive: #34a853;
+  --warning:  #f29900;
+  --negative: #ea4335;
 
-  --focus-outline: #4b95ff;
+  --focus-outline: #4d90fe;
 
-  --overlay: rgba(0, 0, 0, 0.56);
-  --shadow-modal: 0 16px 38px rgba(0, 0, 0, 0.52);
+  --overlay:      rgba(0, 0, 0, 0.62);
+  --shadow-modal: 0 12px 32px rgba(0, 0, 0, 0.60), 0 2px 8px rgba(0, 0, 0, 0.40);
 
   color-scheme: dark;
 }
@@ -131,6 +132,12 @@ html:not(.dark-theme) .global-nav,
 html[data-theme="light"] .global-nav {
   background: linear-gradient(180deg, #15335b 0%, #0f223f 100%) !important;
   border-bottom-color: #0b2d4c !important;
+}
+
+html.dark-theme .global-nav,
+html[data-theme="dark"] .global-nav {
+  background: #4a4a4a !important;
+  border-bottom: 1px solid #212121 !important;
 }
 
 .brand-trigger {
@@ -447,15 +454,23 @@ td {
 }
 
 tr:hover td {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 html:not(.dark-theme) tr:hover td {
   background: #f8fafd;
 }
 
+html.dark-theme tr:hover td {
+  background: rgba(138, 180, 248, 0.06);
+}
+
 .selected-row td {
-  background: rgba(14, 78, 168, 0.14);
+  background: rgba(26, 115, 232, 0.16);
+}
+
+html.dark-theme .selected-row td {
+  background: rgba(26, 115, 232, 0.20);
 }
 
 input,
@@ -495,8 +510,8 @@ button[style*="background: var(--blue)"],
 button[style*="background: \"var(--blue)\""],
 button.btn-primary,
 .bulk-btn:not(.ghost):hover {
-  background: linear-gradient(to bottom, #1265d3, #0a4fa9) !important;
-  border-color: #2f73d8 !important;
+  background: linear-gradient(to bottom, #1a7ef5, #1264d1) !important;
+  border-color: #2a82f8 !important;
   color: #ffffff !important;
 }
 

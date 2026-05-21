@@ -161,7 +161,7 @@ export function ExportsPage() {
   }
 
   const inputStyle: React.CSSProperties = {
-    border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "8px 10px",
+    border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 8px",
     fontSize: 13, outline: "none", fontFamily: "inherit", background: "var(--bg-surface)",
   };
 
@@ -185,7 +185,7 @@ export function ExportsPage() {
                 <DatePicker label="From date" value={siFrom} onChange={setSiFrom} />
                 <DatePicker label="To date" value={siTo} onChange={setSiTo} />
                 <button type="button" onClick={() => void exportStockedIn()} disabled={siExporting}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 6, background: siExporting ? "#6b8fc4" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: siExporting ? "not-allowed" : "pointer" }}>
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, background: siExporting ? "#6b8fc4" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: siExporting ? "not-allowed" : "pointer" }}>
                   <Download size={14} /> {siExporting ? "Exporting…" : "Download CSV"}
                 </button>
                 {siCount !== null && (
@@ -225,7 +225,7 @@ export function ExportsPage() {
                   </select>
                 </div>
                 <button type="button" onClick={() => void exportStockedOut()} disabled={trExporting}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 6, background: trExporting ? "#6b8fc4" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: trExporting ? "not-allowed" : "pointer" }}>
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, background: trExporting ? "#6b8fc4" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: trExporting ? "not-allowed" : "pointer" }}>
                   <Download size={14} /> {trExporting ? "Exporting…" : "Download CSV"}
                 </button>
                 {trCount !== null && (
@@ -242,5 +242,7 @@ export function ExportsPage() {
     </AppLayout>
   );
 }
+
+
 
 

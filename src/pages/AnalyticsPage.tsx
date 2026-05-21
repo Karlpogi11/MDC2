@@ -48,11 +48,11 @@ const MUTED      = "var(--muted)";
 const FAINT      = "var(--bg-surface-elevated)";
 const BORDER     = "var(--line)";
 const BLUE       = "var(--blue)";
-const BLUE_LIGHT = "#eff6ff";
+const BLUE_LIGHT = "var(--bg-surface-elevated)";
 const BLUE_MID   = "#3b82f6";
-const SLATE      = "#94a3b8";
-const GREEN      = "#16a34a";
-const AMBER      = "#d97706";
+const SLATE      = "var(--muted)";
+const GREEN      = "var(--text)";
+const AMBER      = "var(--muted)";
 
 // ── CSV helpers ───────────────────────────────────────────────────────────────
 
@@ -222,7 +222,7 @@ function MappingModal({ state, onConfirm, onCancel, importing }: { state: Mappin
               <div key={f.key}>
                 <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: MUTED, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>{f.label}</label>
                 <select value={mapping[f.key]} onChange={(e) => setMapping((m) => ({ ...m, [f.key]: e.target.value }))}
-                  style={{ width: "100%", border: `1px solid ${mapping[f.key] !== NONE ? BLUE : BORDER}`, borderRadius: "var(--radius)", padding: "7px 10px", fontSize: 12, outline: "none", fontFamily: "inherit", background: "var(--bg-surface)", cursor: "pointer" }}>
+                  style={{ width: "100%", border: `1px solid ${mapping[f.key] !== NONE ? BLUE : BORDER}`, borderRadius: "var(--radius)", padding: "5px 8px", fontSize: 12, outline: "none", fontFamily: "inherit", background: "var(--bg-surface)", cursor: "pointer" }}>
                   <option value={NONE}>— not mapped —</option>
                   {state.rawHeaders.map((h, i) => <option key={i} value={state.headers[i]}>{h}</option>)}
                 </select>
@@ -236,7 +236,7 @@ function MappingModal({ state, onConfirm, onCancel, importing }: { state: Mappin
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                 <thead><tr style={{ background: FAINT }}>
                   {(["part_number","qty","site_code","used_at"] as const).map((f) => (
-                    <th key={f} style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: MUTED, borderBottom: `1px solid ${BORDER}` }}>
+                    <th key={f} style={{ padding: "5px 8px", textAlign: "left", fontWeight: 600, color: MUTED, borderBottom: `1px solid ${BORDER}` }}>
                       {FIELDS.find((x) => x.key === f)?.label}
                       {mapping[f] !== NONE && <span style={{ color: "var(--muted)", fontWeight: 400 }}> ({mapping[f]})</span>}
                     </th>
@@ -252,10 +252,10 @@ function MappingModal({ state, onConfirm, onCancel, importing }: { state: Mappin
                     const date = mapping.used_at !== NONE ? (row[mapping.used_at]?.slice(0, 10) || "today") : "today";
                     return (
                       <tr key={i} style={{ borderBottom: i < 2 ? `1px solid ${FAINT}` : "none" }}>
-                        <td style={{ padding: "8px 12px", fontFamily: pn ? "monospace" : "inherit", color: pn ? INK : MUTED, fontSize: pn ? 12 : 11 }}>{displayPn}</td>
-                        <td style={{ padding: "8px 12px", color: INK }}>{qty}</td>
-                        <td style={{ padding: "8px 12px", color: MUTED }}>{site}</td>
-                        <td style={{ padding: "8px 12px", color: MUTED }}>{date}</td>
+                        <td style={{ padding: "5px 8px", fontFamily: pn ? "monospace" : "inherit", color: pn ? INK : MUTED, fontSize: pn ? 12 : 11 }}>{displayPn}</td>
+                        <td style={{ padding: "5px 8px", color: INK }}>{qty}</td>
+                        <td style={{ padding: "5px 8px", color: MUTED }}>{site}</td>
+                        <td style={{ padding: "5px 8px", color: MUTED }}>{date}</td>
                       </tr>
                     );
                   })}
@@ -265,9 +265,9 @@ function MappingModal({ state, onConfirm, onCancel, importing }: { state: Mappin
           </div>
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
             <button type="button" onClick={onCancel} disabled={importing}
-              style={{ border: `1px solid ${BORDER}`, background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", color: MUTED }}>Cancel</button>
+              style={{ border: `1px solid ${BORDER}`, background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer", color: MUTED }}>Cancel</button>
             <button type="button" onClick={() => onConfirm(mapping)} disabled={!canConfirm || importing}
-              style={{ border: "none", background: canConfirm ? BLUE : "#e2e8f0", borderRadius: "var(--radius)", padding: "9px 20px", fontSize: 13, fontWeight: 600, cursor: canConfirm ? "pointer" : "not-allowed", color: canConfirm ? "#fff" : "#94a3b8" }}>
+              style={{ border: "none", background: canConfirm ? BLUE : "#e2e8f0", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: canConfirm ? "pointer" : "not-allowed", color: canConfirm ? "#fff" : "#94a3b8" }}>
               {importing ? "Importing…" : `Import ${state.totalRows.toLocaleString()} rows`}
             </button>
           </div>
@@ -300,10 +300,10 @@ function Panel({ title, subtitle, action, children, noPad }: { title: string; su
 
 function KpiCard({ label, value, sub, accent, delta }: { label: string; value: string; sub: string; accent?: boolean; delta?: string }) {
   return (
-    <div style={{ background: accent ? BLUE : "#fff", border: `1px solid ${accent ? BLUE : BORDER}`, borderRadius: "var(--radius)", padding: "20px 22px", boxShadow: accent ? "0 4px 14px rgba(37,99,235,.2)" : "0 1px 3px rgba(0,0,0,.04)" }}>
-      <div style={{ fontSize: 11, color: accent ? "rgba(255,255,255,.7)" : MUTED, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
-      <div style={{ fontSize: 30, fontWeight: 800, color: accent ? "#fff" : INK, marginTop: 8, lineHeight: 1, letterSpacing: "-0.02em" }}>{value}</div>
-      <div style={{ fontSize: 11, color: accent ? "rgba(255,255,255,.6)" : MUTED, marginTop: 8 }}>{sub}</div>
+    <div style={{ background: accent ? "var(--blue)" : "var(--bg-surface)", border: `1px solid ${accent ? "var(--blue)" : "var(--line)"}`, borderRadius: "var(--radius)", padding: "16px 18px" }}>
+      <div style={{ fontSize: 11, color: accent ? "rgba(255,255,255,.7)" : "var(--muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
+      <div style={{ fontSize: 28, fontWeight: 700, color: accent ? "#fff" : "var(--text)", marginTop: 6, lineHeight: 1, letterSpacing: "-0.02em" }}>{value}</div>
+      <div style={{ fontSize: 11, color: accent ? "rgba(255,255,255,.6)" : "var(--muted)", marginTop: 6 }}>{sub}</div>
     </div>
   );
 }
@@ -355,13 +355,13 @@ function SeriesChips({ list, selected, onChange }: {
           <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 100, background: "var(--bg-surface)", border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", boxShadow: "0 8px 24px rgba(0,0,0,.1)", minWidth: 220, maxHeight: 320, overflowY: "auto", padding: "6px 0" }}>
             {selected.length < list.length && (
               <button type="button" onClick={() => { onChange([...list]); setOpen(false); }}
-                style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 14px", fontSize: 12, color: BLUE, background: "transparent", border: "none", cursor: "pointer", borderBottom: `1px solid ${BORDER}`, marginBottom: 4 }}>
+                style={{ display: "block", width: "100%", textAlign: "left", padding: "4px 10px", fontSize: 12, color: BLUE, background: "transparent", border: "none", cursor: "pointer", borderBottom: `1px solid ${BORDER}`, marginBottom: 4 }}>
                 Select all
               </button>
             )}
             {selected.length > 0 && (
               <button type="button" onClick={() => { onChange([]); setOpen(false); }}
-                style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 14px", fontSize: 12, color: "var(--muted)", background: "transparent", border: "none", cursor: "pointer", borderBottom: `1px solid ${BORDER}`, marginBottom: 4 }}>
+                style={{ display: "block", width: "100%", textAlign: "left", padding: "4px 10px", fontSize: 12, color: "var(--muted)", background: "transparent", border: "none", cursor: "pointer", borderBottom: `1px solid ${BORDER}`, marginBottom: 4 }}>
                 Clear selection
               </button>
             )}
@@ -369,7 +369,7 @@ function SeriesChips({ list, selected, onChange }: {
               const active = selected.includes(s);
               return (
                 <button key={s} type="button" onClick={() => toggle(s)}
-                  style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", padding: "7px 14px", fontSize: 13, background: active ? BLUE_LIGHT : "transparent", border: "none", cursor: "pointer", color: active ? BLUE : INK, fontWeight: active ? 600 : 400 }}>
+                  style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", padding: "4px 10px", fontSize: 13, background: active ? BLUE_LIGHT : "transparent", border: "none", cursor: "pointer", color: active ? BLUE : INK, fontWeight: active ? 600 : 400 }}>
                   <span style={{ width: 14, height: 14, border: `1.5px solid ${active ? BLUE : BORDER}`, borderRadius: "var(--radius-sm)", background: active ? BLUE : "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     {active && <span style={{ color: "#fff", fontSize: 9, lineHeight: 1 }}>✓</span>}
                   </span>
@@ -452,9 +452,9 @@ function AreaChart({ data, keys, height = 200 }: {
         return (
           <g key={i}>
             <line x1={pad.l} x2={W - pad.r} y1={y} y2={y}
-              stroke={i === ticks ? "#cbd5e1" : "#f1f5f9"} strokeWidth={i === ticks ? 1 : 0.75} />
+              stroke="currentColor" strokeOpacity={i === ticks ? 0.15 : 0.07} strokeWidth={i === ticks ? 1 : 0.75} />
             {/* Y labels: 9px, 70% opacity — supporting info */}
-            <text x={pad.l - 8} y={y + 4} textAnchor="end" fontSize={9} fill="#94a3b8" opacity={0.75} fontFamily="system-ui">{lbl}</text>
+            <text x={pad.l - 8} y={y + 4} textAnchor="end" fontSize={9} fill="currentColor" opacity={0.4} fontFamily="system-ui">{lbl}</text>
           </g>
         );
       })}
@@ -475,16 +475,16 @@ function AreaChart({ data, keys, height = 200 }: {
       })}
 
       {/* Peak annotation — LARGE value (dominant), tiny "peak" label (supporting) */}
-      <circle cx={peakX} cy={peakY} r={4} fill={keys[0].color} stroke="#fff" strokeWidth={2} />
+      <circle cx={peakX} cy={peakY} r={4} fill={keys[0].color} stroke="currentColor" strokeOpacity={0.3} strokeWidth={2} />
       <text x={peakX + (flipPeak ? -10 : 10)} y={peakY - 10} textAnchor={flipPeak ? "end" : "start"}
-        fontSize={15} fontWeight="800" fill={INK} fontFamily="system-ui" letterSpacing="-0.5">{peakLabel}</text>
+        fontSize={15} fontWeight="800" fill="currentColor" fontFamily="system-ui" letterSpacing="-0.5">{peakLabel}</text>
       <text x={peakX + (flipPeak ? -10 : 10)} y={peakY + 4} textAnchor={flipPeak ? "end" : "start"}
         fontSize={9} fill={MUTED} opacity={0.6} fontFamily="system-ui">peak</text>
 
       {/* Last point dot */}
       {keys.map((k) => {
         const val = Number(data[data.length-1]?.[k.key] ?? 0);
-        return <circle key={k.key} cx={px(data.length-1)} cy={py(val)} r={3} fill={k.color} stroke="#fff" strokeWidth={1.5} />;
+        return <circle key={k.key} cx={px(data.length-1)} cy={py(val)} r={3} fill={k.color} stroke="currentColor" strokeOpacity={0.3} strokeWidth={1.5} />;
       })}
 
       {/* X labels — month names, year at Jan */}
@@ -503,11 +503,12 @@ function AreaChart({ data, keys, height = 200 }: {
         const display = (isJan || isFirst) ? `${monthName} ${yr}` : monthName;
         return (
           <g key={i}>
-            {(isJan && !isFirst) && <line x1={px(i)} x2={px(i)} y1={pad.t + ch} y2={pad.t + ch + 4} stroke="#cbd5e1" strokeWidth={1} />}
+            {(isJan && !isFirst) && <line x1={px(i)} x2={px(i)} y1={pad.t + ch} y2={pad.t + ch + 4} stroke="currentColor" strokeOpacity={0.2} strokeWidth={1} />}
             <text x={px(i)} y={height - pad.b + 15} textAnchor="middle"
               fontSize={(isJan || isFirst) ? 10 : 9}
               fontWeight={(isJan || isFirst) ? "600" : "400"}
-              fill={(isJan || isFirst) ? "#475569" : "#94a3b8"}
+              fill="currentColor"
+              opacity={(isJan || isFirst) ? 0.6 : 0.4}
               fontFamily="system-ui">{display}</text>
           </g>
         );
@@ -709,7 +710,7 @@ export function AnalyticsPage() {
   // Auto-detected device series list
   const [seriesList, setSeriesList] = useState<string[]>([]);
 
-  const sel: React.CSSProperties = { border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", padding: "8px 10px", fontSize: 13, outline: "none", fontFamily: "inherit", background: "var(--bg-surface)", cursor: "pointer" };
+  const sel: React.CSSProperties = { border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", padding: "5px 8px", fontSize: 13, outline: "none", fontFamily: "inherit", background: "var(--bg-surface)", cursor: "pointer" };
 
   // ── Loaders ──────────────────────────────────────────────────────────────────
 
@@ -1083,7 +1084,7 @@ export function AnalyticsPage() {
         <div style={{ display: "flex", borderBottom: `1px solid ${BORDER}`, marginBottom: 28 }}>
           {TABS.map((t) => (
             <button key={t.key} type="button" onClick={() => setActiveTab(t.key)}
-              style={{ border: "none", background: "transparent", padding: "10px 20px", fontSize: 13, fontWeight: activeTab === t.key ? 600 : 400, cursor: "pointer", whiteSpace: "nowrap", color: activeTab === t.key ? BLUE : MUTED, borderBottom: activeTab === t.key ? `2px solid ${BLUE}` : "2px solid transparent", marginBottom: -1, transition: "color .15s" }}>
+              style={{ border: "none", borderRadius: 0, background: "transparent", padding: "5px 12px", fontSize: 13, fontWeight: activeTab === t.key ? 600 : 400, cursor: "pointer", whiteSpace: "nowrap", color: activeTab === t.key ? "var(--blue)" : "var(--muted)", borderBottom: activeTab === t.key ? "2px solid var(--blue)" : "2px solid transparent", marginBottom: -1 }}>
               {t.label}
             </button>
           ))}
@@ -1168,8 +1169,8 @@ export function AnalyticsPage() {
                       <div style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>{fmtDate(u.uploaded_at)} · {u.row_count.toLocaleString()} rows</div>
                     </div>
                     <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                      <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: u.source_type === "fixably" ? "#f3e8ff" : BLUE_LIGHT, color: u.source_type === "fixably" ? "#7c3aed" : BLUE }}>{u.source_type}</span>
-                      <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: u.status === "done" ? "#f0fdf4" : u.status === "error" ? "#fef2f2" : "#fefce8", color: u.status === "done" ? GREEN : u.status === "error" ? "#dc2626" : AMBER }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: "var(--bg-surface-elevated)", color: "var(--muted)", border: "1px solid var(--line)" }}>{u.source_type}</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: u.status === "done" ? "var(--bg-surface-elevated)" : u.status === "error" ? "var(--bg-surface-elevated)" : "var(--bg-surface-elevated)", color: u.status === "done" ? "var(--text)" : u.status === "error" ? "var(--negative)" : "var(--muted)", border: "1px solid var(--line)" }}>
                         {u.status === "done" ? "✓ active" : u.status}
                       </span>
                       <button type="button" onClick={() => void deleteUpload(u.id)} disabled={deletingUploadId === u.id} title="Delete upload and all its data"
@@ -1259,7 +1260,7 @@ export function AnalyticsPage() {
                       const count = abcData.rows.filter((r) => r.tier === tier).length;
                       const vol   = abcData.rows.filter((r) => r.tier === tier).reduce((s, r) => s + r.total_qty, 0);
                       const color = tier === "A" ? GREEN : tier === "B" ? BLUE : SLATE;
-                      const bg    = tier === "A" ? "#f0fdf4" : tier === "B" ? BLUE_LIGHT : FAINT;
+                      const bg    = tier === "A" ? "var(--bg-surface-elevated)" : tier === "B" ? BLUE_LIGHT : FAINT;
                       return (
                         <div key={tier} style={{ background: bg, border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", padding: "18px 16px" }}>
                           <div style={{ fontSize: 11, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.07em" }}>Tier {tier}</div>
@@ -1287,7 +1288,7 @@ export function AnalyticsPage() {
                     <tbody>
                       {Array.from(new Map(abcData.rows.map((r) => [r.part_number, r])).values()).slice(0, 100).map((r) => {
                         const color = r.tier === "A" ? GREEN : r.tier === "B" ? BLUE : SLATE;
-                        const bg    = r.tier === "A" ? "#f0fdf4" : r.tier === "B" ? BLUE_LIGHT : FAINT;
+                        const bg    = r.tier === "A" ? "var(--bg-surface-elevated)" : r.tier === "B" ? BLUE_LIGHT : FAINT;
                         return (
                           <tr key={r.part_number}>
                             <td><span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: "var(--radius)", background: bg, color }}>{r.tier}</span></td>
@@ -1324,7 +1325,7 @@ export function AnalyticsPage() {
                 <Panel title="Movement Summary" subtitle="Fast ≤30d · Slow 31–90d · Dead 90d+">
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
                     {velData.donut.map((d) => {
-                      const bg = d.color === GREEN ? "#f0fdf4" : d.color === AMBER ? "#fffbeb" : FAINT;
+                      const bg = d.color === GREEN ? "var(--bg-surface-elevated)" : d.color === AMBER ? "var(--bg-surface-elevated)" : FAINT;
                       return (
                         <div key={d.name} style={{ background: bg, border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", padding: "18px 16px" }}>
                           <div style={{ fontSize: 11, fontWeight: 700, color: d.color, textTransform: "uppercase", letterSpacing: "0.07em" }}>{d.name.split(" ")[0]}</div>
@@ -1353,7 +1354,7 @@ export function AnalyticsPage() {
                     <tbody>
                       {Array.from(new Map(velData.rows.map((r) => [r.part_number, r])).values()).slice(0, 100).map((r) => {
                         const color = r.category === "fast" ? GREEN : r.category === "slow" ? AMBER : SLATE;
-                        const bg    = r.category === "fast" ? "#f0fdf4" : r.category === "slow" ? "#fffbeb" : FAINT;
+                        const bg    = r.category === "fast" ? "var(--bg-surface-elevated)" : r.category === "slow" ? "var(--bg-surface-elevated)" : FAINT;
                         return (
                           <tr key={r.part_number}>
                             <td><span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: "var(--radius)", background: bg, color }}>{r.category}</span></td>
@@ -1380,6 +1381,9 @@ export function AnalyticsPage() {
     </AppLayout>
   );
 }
+
+
+
 
 
 

@@ -120,7 +120,7 @@ export function ConfigPage() {
           {TABS.map((t) => (
             <button key={t.key} type="button" onClick={() => setTab(t.key)}
               style={{
-                border: "none", background: "transparent", padding: "10px 20px",
+                border: "none", background: "transparent", padding: "5px 12px",
                 fontSize: 14, fontWeight: 600, cursor: "pointer",
                 color: tab === t.key ? "var(--blue)" : "#6b7a8d",
                 borderBottom: tab === t.key ? "2px solid var(--blue)" : "2px solid transparent",
@@ -152,11 +152,11 @@ export function ConfigPage() {
                       style={{ height: 40, maxWidth: 160, objectFit: "contain", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: 4, background: "var(--bg-surface)" }}
                     />
                   ) : (
-                    <div style={{ width: 120, height: 40, border: "1px dashed #d1d5db", borderRadius: "var(--radius)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <div style={{ width: 120, height: 40, border: "1px dashed var(--line)", borderRadius: "var(--radius)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <span style={{ fontSize: 11, color: "var(--muted)" }}>No logo</span>
                     </div>
                   )}
-                  <label style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "8px 14px", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
+                  <label style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 10px", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
                     <Upload size={14} />{uploadingLogo ? "Uploading…" : "Upload logo"}
                     <input ref={logoInputRef} type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" style={{ display: "none" }} onChange={(e) => void handleLogoUpload(e, "brand_logo_url")} disabled={uploadingLogo} />
                   </label>
@@ -211,7 +211,7 @@ export function ConfigPage() {
 function Section({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
   return (
     <div style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", overflow: "hidden" }}>
-      <div style={{ padding: "14px 20px", borderBottom: "1px solid #f3f4f6" }}>
+      <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--line-soft)" }}>
         <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text)" }}>{title}</h2>
         <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--muted)" }}>{description}</p>
       </div>
@@ -236,7 +236,7 @@ function ConfigTextField({ label, hint, value, onChange, onSave, saving, saved, 
 }) {
   const inputStyle: React.CSSProperties = {
     width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)",
-    padding: "9px 12px", fontSize: 13, color: "var(--text)", background: "var(--bg-surface)",
+    padding: "5px 10px", fontSize: 13, color: "var(--text)", background: "var(--bg-surface)",
     outline: "none", boxSizing: "border-box", resize: multiline ? "vertical" : undefined,
     minHeight: multiline ? 72 : undefined,
   };
@@ -247,7 +247,7 @@ function ConfigTextField({ label, hint, value, onChange, onSave, saving, saved, 
           ? <textarea style={inputStyle} value={value} onChange={(e) => onChange(e.target.value)} rows={3} />
           : <input style={inputStyle} type={type} value={value} onChange={(e) => onChange(e.target.value)} />}
         <button type="submit" disabled={saving}
-          style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 6, background: saved ? "#16a34a" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1, transition: "background 200ms" }}>
+          style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 6, background: saved ? "#16a34a" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "5px 10px", fontSize: 13, fontWeight: 600, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1, transition: "background 200ms" }}>
           {saved ? <Check size={14} /> : <Save size={14} />}
           {saved ? "Saved" : saving ? "Saving…" : "Save"}
         </button>
@@ -266,9 +266,9 @@ function ColorField({ label, value, onChange, onSave, saving, saved }: {
         <input type="color" value={value} onChange={(e) => onChange(e.target.value)}
           style={{ width: 40, height: 36, border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: 2, cursor: "pointer", background: "var(--bg-surface)" }} />
         <input type="text" value={value} onChange={(e) => onChange(e.target.value)}
-          style={{ flex: 1, border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "9px 12px", fontSize: 13, color: "var(--text)", outline: "none" }} />
+          style={{ flex: 1, border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 10px", fontSize: 13, color: "var(--text)", outline: "none" }} />
         <button type="submit" disabled={saving}
-          style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 6, background: saved ? "#16a34a" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1, transition: "background 200ms" }}>
+          style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 6, background: saved ? "#16a34a" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "5px 10px", fontSize: 13, fontWeight: 600, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1, transition: "background 200ms" }}>
           {saved ? <Check size={14} /> : <Save size={14} />}
           {saved ? "Saved" : saving ? "…" : "Save"}
         </button>
@@ -323,15 +323,15 @@ function DigestTab({ actorId }: { actorId: string }) {
           <Field label="Recipients" hint="One email per line or comma-separated.">
             <textarea value={recipients} onChange={(e) => setRecipients(e.target.value)} rows={3}
               placeholder="admin@company.com&#10;manager@company.com"
-              style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "9px 12px", fontSize: 13, outline: "none", resize: "vertical", boxSizing: "border-box" }} />
+              style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 10px", fontSize: 13, outline: "none", resize: "vertical", boxSizing: "border-box" }} />
           </Field>
           <Field label="Cron schedule" hint="Default: Monday 8AM. Use crontab.guru to build expressions.">
             <input type="text" value={schedule} onChange={(e) => setSchedule(e.target.value)}
-              style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "9px 12px", fontSize: 13, fontFamily: "monospace", outline: "none", width: 200 }} />
+              style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 10px", fontSize: 13, fontFamily: "monospace", outline: "none", width: 200 }} />
           </Field>
           <div>
             <button type="submit" disabled={saving}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: saved ? "#16a34a" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: saved ? "#16a34a" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
               {saved ? <><Check size={14} /> Saved</> : <><Save size={14} /> {saving ? "Saving…" : "Create job"}</>}
             </button>
           </div>
@@ -340,7 +340,7 @@ function DigestTab({ actorId }: { actorId: string }) {
       {!loading && jobs.length > 0 && (
         <Section title="Active jobs" description="">
           {jobs.map((j) => (
-            <div key={j.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #f3f4f6" }}>
+            <div key={j.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 0", borderBottom: "1px solid var(--line-soft)" }}>
               <div>
                 <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--text)", fontFamily: "monospace" }}>{j.schedule}</p>
                 <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--muted)" }}>{(j.recipients ?? []).join(", ")}</p>
@@ -403,11 +403,11 @@ function WebhooksTab({ actorId }: { actorId: string }) {
         <form onSubmit={(e) => void handleSave(e)} style={{ display: "grid", gap: 16 }}>
           <Field label="Endpoint URL" hint="Must be HTTPS.">
             <input type="url" required value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://your-system.com/webhook"
-              style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "9px 12px", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+              style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 10px", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
           </Field>
           <Field label="Signing secret" hint="Used to compute X-MDC-Signature HMAC header.">
             <input type="text" required value={secret} onChange={(e) => setSecret(e.target.value)} placeholder="whsec_..."
-              style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "9px 12px", fontSize: 13, fontFamily: "monospace", outline: "none", boxSizing: "border-box" }} />
+              style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 10px", fontSize: 13, fontFamily: "monospace", outline: "none", boxSizing: "border-box" }} />
           </Field>
           <Field label="Events" hint="Comma-separated event names.">
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
@@ -427,7 +427,7 @@ function WebhooksTab({ actorId }: { actorId: string }) {
           </Field>
           <div>
             <button type="submit" disabled={saving}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: saved ? "#16a34a" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: saved ? "#16a34a" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
               {saved ? <><Check size={14} /> Saved</> : <><Save size={14} /> {saving ? "Saving…" : "Register"}</>}
             </button>
           </div>
@@ -436,7 +436,7 @@ function WebhooksTab({ actorId }: { actorId: string }) {
       {!loading && webhooks.length > 0 && (
         <Section title="Registered webhooks" description="">
           {webhooks.map((w) => (
-            <div key={w.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "10px 0", borderBottom: "1px solid #f3f4f6", gap: 12 }}>
+            <div key={w.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "5px 0", borderBottom: "1px solid var(--line-soft)", gap: 12 }}>
               <div style={{ minWidth: 0 }}>
                 <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--blue)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.url}</p>
                 <p style={{ margin: "2px 0 0", fontSize: 11, color: "var(--muted)" }}>{(w.events ?? []).join(", ")}</p>
@@ -526,7 +526,7 @@ function DangerZoneTab({ role }: { role: string | null }) {
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
               placeholder="RESET"
-              style={{ border: "1px solid #fca5a5", borderRadius: "var(--radius)", padding: "9px 12px", fontSize: 13, fontFamily: "monospace", outline: "none", width: 200 }}
+              style={{ border: "1px solid #fca5a5", borderRadius: "var(--radius)", padding: "5px 10px", fontSize: 13, fontFamily: "monospace", outline: "none", width: 200 }}
             />
           </div>
           {err && <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--negative)" }}>{err}</p>}
@@ -537,7 +537,7 @@ function DangerZoneTab({ role }: { role: string | null }) {
             style={{
               background: confirm === "RESET" ? "#b91c1c" : "#d1d5db",
               color: "#fff", border: "none", borderRadius: "var(--radius)",
-              padding: "9px 20px", fontSize: 13, fontWeight: 700,
+              padding: "5px 12px", fontSize: 13, fontWeight: 700,
               cursor: confirm === "RESET" && !running ? "pointer" : "not-allowed",
             }}
           >
@@ -567,7 +567,7 @@ function AppearanceSection() {
             onClick={() => toggle(t)}
             style={{
               display: "flex", alignItems: "center", gap: 8,
-              padding: "10px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer",
+              padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer",
               border: `2px solid ${theme === t ? "var(--blue)" : "var(--line)"}`,
               background: theme === t ? "var(--blue)" : "var(--bg-surface)",
               color: theme === t ? "#fff" : "var(--text)",
@@ -581,6 +581,9 @@ function AppearanceSection() {
     </Section>
   );
 }
+
+
+
 
 
 

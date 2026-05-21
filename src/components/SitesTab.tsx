@@ -153,7 +153,7 @@ export function SitesTab() {
   }
 
   const addInputStyle: React.CSSProperties = {
-    border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "8px 10px",
+    border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 8px",
     fontSize: 13, outline: "none", width: "100%", boxSizing: "border-box", fontFamily: "inherit",
   };
 
@@ -195,7 +195,7 @@ export function SitesTab() {
           </div>
           {addError && <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--negative)" }}>{addError}</p>}
           <button type="submit" disabled={adding}
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, background: addSuccess ? "#16a34a" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, background: addSuccess ? "#16a34a" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "4px 10px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
             {addSuccess ? <><Check size={14} /> Saved</> : adding ? "Saving…" : <><Plus size={14} /> Add site</>}
           </button>
         </form>
@@ -339,5 +339,7 @@ export function SitesTab() {
     </div>
   );
 }
+
+
 
 

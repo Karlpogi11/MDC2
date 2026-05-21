@@ -33,7 +33,7 @@ const MODULES: Module[] = [
   { label: "Stock-in", icon: PackagePlus, path: "/stock-in" },
   { label: "Transfers", icon: ShieldCheck, path: "/transfers" },
   { label: "Corrections", icon: ClipboardCheck, path: "/corrections" },
-  { label: "Physical Count", icon: ClipboardList, path: "/physical-count" },
+  { label: "Reconcile",     icon: ClipboardList, path: "/physical-count" },
   { label: "Reports", icon: FileBarChart2, path: "/reports" },
   { label: "Analytics", icon: BarChart3, path: "/analytics" },
 ];
@@ -226,35 +226,35 @@ export function AppLayout({ children, activeModule }: Props) {
       {children}
 
       {showHelp && (
-        <>
-          <div onClick={() => setShowHelp(false)} className="modal-backdrop" />
-          <div role="dialog" aria-modal="true" aria-label="Help" className="help-dialog">
-            <div className="help-dialog-head">
-              <h2>Help & Quick Reference</h2>
-              <button type="button" onClick={() => setShowHelp(false)} className="help-close-btn">
-                <X size={18} />
-              </button>
-            </div>
-            <div className="help-dialog-body">
-              {[
-                { title: "Inventory", body: "View all stocked parts and serials. Use the Serial Numbers tab to filter by status (In Stock, In Transit, Transferred)." },
-                { title: "Stock-In", body: "Import new serials or parts into DC inventory via CSV upload or manual entry." },
-                { title: "Transfers", body: "Create and manage outbound transfers from DC to branch sites. Advance status: Draft -> Packed -> In Transit -> Received." },
-                { title: "Corrections", body: "Fix incorrect serial assignments with a full audit trail. Requires dc_admin or system_admin role." },
-                { title: "Exports", body: "Download stocked-in or transferred serials as CSV for reporting." },
-                { title: "Analytics", body: "Upload Fixably or GSX exports to analyze repair trends by date range, site, or part." },
-                { title: "Physical Count", body: "Reconcile physical stock against system records." },
-                { title: "Configuration", body: "Manage sites, parts, branding, and system settings. System admin only." },
-              ].map(({ title, body }) => (
-                <div key={title} className="help-topic">
-                  <div className="help-topic-title">{title}</div>
-                  <div className="help-topic-body">{body}</div>
-                </div>
-              ))}
-              <div className="help-footer-note">For support, contact your system administrator.</div>
-            </div>
+        <div role="dialog" aria-modal="true" aria-label="Help"
+          style={{
+            position: "fixed", top: 52, right: 12, width: 320, maxHeight: "70vh",
+            background: "var(--bg-surface)", border: "1px solid var(--line)",
+            borderRadius: "var(--radius)", boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
+            zIndex: 201, overflowY: "auto",
+          }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid var(--line)" }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>Quick Reference</span>
+            <button type="button" onClick={() => setShowHelp(false)}
+              style={{ border: "none", background: "transparent", cursor: "pointer", color: "var(--muted)", padding: 2, lineHeight: 1, fontSize: 16 }}>×</button>
           </div>
-        </>
+          <div style={{ padding: "8px 0" }}>
+            {[
+              { title: "Inventory", body: "View stocked parts and serials. Use Serial Numbers tab to filter by status." },
+              { title: "Stock-In", body: "Import new serials or parts via CSV or manual entry." },
+              { title: "Transfers", body: "Create outbound transfers. Status: Draft → Packed → In Transit → Received." },
+              { title: "Corrections", body: "Fix incorrect serial assignments with audit trail. dc_admin only." },
+              { title: "Reports", body: "Pre-built summaries and CSV exports for transfers and stock-in." },
+              { title: "Analytics", body: "Upload Fixably or GSX exports to analyze repair trends." },
+              { title: "Physical Count", body: "Reconcile physical stock against system records." },
+            ].map(({ title, body }) => (
+              <div key={title} style={{ padding: "8px 16px", borderBottom: "1px solid var(--line-soft)" }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 2 }}>{title}</div>
+                <div style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.5 }}>{body}</div>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );
