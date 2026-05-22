@@ -167,6 +167,11 @@ Deno.serve(async (req) => {
       failed_rows: failedRows.length,
     }).eq("id", batch.id);
 
+    // Refresh materialized view so inventory page shows new items immediately
+    if (successCount > 0) {
+      await client.rpc("refresh_inventory_snapshot").catch(() => {/* non-fatal */});
+    }
+
     const responseBody = {
       batchId: batch.id,
       totalRows: rows.length,

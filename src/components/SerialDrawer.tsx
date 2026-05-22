@@ -29,12 +29,12 @@ type Props = {
 };
 
 const STATUS_STYLE: Record<string, { bg: string; color: string; label: string }> = {
-  in_stock:    { bg: "#dcfce7", color: "var(--text)", label: "In Stock" },
-  in_transit:  { bg: "#fef9c3", color: "var(--muted)", label: "In Transit" },
-  transit:     { bg: "#fef9c3", color: "var(--muted)", label: "In Transit" },
-  transferred: { bg: "#dbeafe", color: "var(--blue)", label: "Stocked Out" },
-  consumed:    { bg: "#f3f4f6", color: "var(--muted)", label: "Consumed" },
-  void:        { bg: "#fee2e2", color: "var(--negative)", label: "Void" },
+  in_stock:    { bg: "var(--bg-surface-elevated)", color: "var(--link)",  label: "In Stock" },
+  in_transit:  { bg: "var(--bg-surface-elevated)", color: "var(--muted)", label: "In Transit" },
+  transit:     { bg: "var(--bg-surface-elevated)", color: "var(--muted)", label: "In Transit" },
+  transferred: { bg: "var(--bg-surface-elevated)", color: "var(--muted)", label: "Stocked Out" },
+  consumed:    { bg: "var(--bg-surface-elevated)", color: "var(--muted)",    label: "Consumed" },
+  void:        { bg: "var(--bg-surface-elevated)", color: "var(--negative)", label: "Void" },
 };
 
 function fmt(iso: string) {
@@ -45,12 +45,12 @@ function fmtDate(iso: string) {
 }
 
 function actionColor(action: string): string {
-  if (action.includes("stock") || action.includes("insert")) return "#15803d";
-  if (action.includes("transit") || action.includes("transfer")) return "#1d4ed8";
-  if (action.includes("receiv")) return "#7c3aed";
-  if (action.includes("void") || action.includes("cancel")) return "#b91c1c";
-  if (action.includes("correct")) return "#d97706";
-  return "#6b7a8d";
+  if (action.includes("stock") || action.includes("insert")) return "var(--blue)";
+  if (action.includes("transit") || action.includes("transfer")) return "var(--muted)";
+  if (action.includes("receiv")) return "var(--muted)";
+  if (action.includes("void") || action.includes("cancel")) return "var(--negative)";
+  if (action.includes("correct")) return "var(--muted)";
+  return "var(--muted)";
 }
 
 function actionLabel(action: string, newVal: any, oldVal: any): string {
@@ -194,18 +194,15 @@ function SerialTimeline({ serialId, serialNumber }: { serialId: string; serialNu
     <div style={{ padding: "16px 20px" }}>
       <div style={{ position: "relative" }}>
         {/* Vertical line */}
-        <div style={{ position: "absolute", left: 11, top: 8, bottom: 8, width: 2, background: "#e5e7eb" }} />
+        <div style={{ position: "absolute", left: 4, top: 8, bottom: 8, width: 2, background: "var(--line)" }} />
 
         {events.map((ev, i) => (
           <div key={ev.id} style={{ display: "flex", gap: 16, marginBottom: i < events.length - 1 ? 20 : 0, position: "relative" }}>
             {/* Dot */}
             <div className="circle" style={{
-              width: 24, height: 24, borderRadius: "50%", background: ev.color,
-              flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
-              zIndex: 1, marginTop: 2,
-            }}>
-              <div className="circle" style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--bg-surface)" }} />
-            </div>
+              width: 10, height: 10, borderRadius: "50%", background: ev.color,
+              flexShrink: 0, zIndex: 1, marginTop: 4,
+            }} />
 
             {/* Content */}
             <div style={{ flex: 1, paddingBottom: 4 }}>
@@ -312,7 +309,7 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
         {/* Tabs */}
         <div style={{ display: "flex", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
           {([["serials", "Serials"], ["history", "Chain of Custody"]] as const).map(([tab, label]) => (
-            <button key={tab} type="button" onClick={() => { setActiveTab(tab); setSelectedSerial(null); }}
+            <button key={tab} type="button" onClick={() => { setActiveTab(tab); if (tab === "serials") setSelectedSerial(null); }}
               style={{ flex: 1, padding: "5px 0", fontSize: 13, fontWeight: activeTab === tab ? 700 : 400, color: activeTab === tab ? "var(--blue)" : "var(--muted)", background: "transparent", border: "none", borderBottom: `2px solid ${activeTab === tab ? "var(--blue)" : "transparent"}`, cursor: "pointer", marginBottom: -1 }}>
               {label}
             </button>
@@ -325,7 +322,9 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
               <div style={{ position: "relative" }}>
                 <Search size={14} color="#9ca3af" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
                 <input ref={searchRef} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search serial number..."
-                  style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 10px 7px 30px", fontSize: 12, outline: "none", boxSizing: "border-box" }} />
+                  className="drawer-search"
+                  data-plain
+                  style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 10px 7px 34px", fontSize: 12, outline: "none", boxSizing: "border-box", background: "var(--bg-surface-elevated)", color: "var(--text)" }} />
               </div>
             </div>
             <div style={{ flex: 1, overflowY: "auto" }}>
@@ -334,37 +333,19 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
               {!loading && filtered.map((serial, i) => {
                 const sm = STATUS_STYLE[serial.status] ?? { bg: "#f3f4f6", color: "var(--muted)", label: serial.status };
                 return (
-                  <div key={serial.id} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", alignItems: "center", gap: 12, padding: "5px 12px", borderBottom: "1px solid var(--line-soft)", background: "transparent" }}>
+                  <div key={serial.id} style={{ display: "grid", gridTemplateColumns: "1fr auto", alignItems: "center", gap: 12, padding: "5px 12px", borderBottom: "1px solid var(--line-soft)", background: "transparent" }}>
                     <div>
-                      <div style={{ fontFamily: "monospace", fontWeight: 600, fontSize: 12, color: "var(--blue)", marginBottom: 2 }}>{serial.serial_number}</div>
+                      <div
+                        role="button"
+                        onClick={() => { setSelectedSerial(serial); setActiveTab("history"); }}
+                        style={{ fontFamily: "monospace", fontWeight: 700, fontSize: 12, color: "var(--link)", marginBottom: 2, cursor: "pointer", textDecoration: "underline" }}
+                      >{serial.serial_number}</div>
                       <div style={{ fontSize: 11, color: "var(--muted)" }}>
                         Stocked in {fmtDate(serial.stock_in_at)}
                         {serial.current_site && <span> · {serial.current_site.site_name}</span>}
                       </div>
                     </div>
                     <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: "var(--radius-pill)", background: sm.bg, color: sm.color, whiteSpace: "nowrap" }}>{sm.label}</span>
-                    <button
-                      type="button"
-                      onClick={() => { setSelectedSerial(serial); setActiveTab("history"); }}
-                      aria-label={`View history for ${serial.serial_number}`}
-                      title={`View history for ${serial.serial_number}`}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 4,
-                        fontSize: 11,
-                        fontWeight: 600,
-                        color: "var(--blue)",
-                        background: "var(--bg-surface-elevated)",
-                        border: "1px solid var(--line)",
-                        borderRadius: "var(--radius-sm)",
-                        padding: "3px 8px",
-                        cursor: "pointer",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      <Clock size={10} />View
-                    </button>
                   </div>
                 );
               })}

@@ -224,15 +224,15 @@ export function PhysicalCountPage() {
   }
 
   const VARIANCE_STYLE: Record<string, { bg: string; color: string; label: string }> = {
-    match:           { bg: "#dcfce7", color: "var(--text)", label: "Match" },
-    missing:         { bg: "#fee2e2", color: "var(--negative)", label: "Missing" },
-    surplus:         { bg: "#fef9c3", color: "var(--muted)", label: "Surplus" },
-    status_mismatch: { bg: "#dbeafe", color: "var(--blue)", label: "Status diff" },
+    match:           { bg: "var(--bg-surface-elevated)", color: "var(--link)",     label: "Match" },
+    missing:         { bg: "var(--bg-surface-elevated)", color: "var(--negative)", label: "Missing" },
+    surplus:         { bg: "var(--bg-surface-elevated)", color: "var(--muted)",    label: "Surplus" },
+    status_mismatch: { bg: "var(--bg-surface-elevated)", color: "var(--blue)",     label: "Status diff" },
   };
 
   const STATUS_STYLE: Record<string, { bg: string; color: string }> = {
-    submitted: { bg: "#dbeafe", color: "var(--blue)" },
-    approved:  { bg: "#dcfce7", color: "var(--text)" },
+    submitted: { bg: "var(--bg-surface-elevated)", color: "var(--blue)" },
+    approved:  { bg: "var(--bg-surface-elevated)", color: "var(--text)" },
     draft:     { bg: "#f3f4f6", color: "var(--muted)" },
   };
 
@@ -252,9 +252,13 @@ export function PhysicalCountPage() {
               style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 10px", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
               <Download size={14} /> {exportingSheet ? "Exporting…" : "Export count sheet"}
             </button>
-            <label style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "5px 10px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-              <Upload size={14} /> {uploading ? "Processing…" : "Upload count"}
-              <input type="file" accept=".csv" style={{ display: "none", width: 0, height: 0, opacity: 0, position: "absolute" }} onChange={(e) => void handleUploadCount(e)} disabled={uploading} />
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "5px 10px", fontSize: 13, fontWeight: 600, cursor: "pointer", position: "relative", overflow: "hidden" }}>
+              <input type="file" accept=".csv" onChange={(e) => void handleUploadCount(e)} disabled={uploading}
+                style={{ position: "absolute", inset: 0, opacity: 0, width: "100%", height: "100%", cursor: "pointer", zIndex: 1 }} />
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, pointerEvents: "none", position: "relative", zIndex: 2 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                {uploading ? "Processing…" : "Upload count"}
+              </span>
             </label>
           </div>
         </div>

@@ -52,8 +52,10 @@ export function ReceivePage() {
         .single()
         .then(({ data, error: err }) => {
           if (err || !data) {
-            const code = err?.message ?? "TRANSFER_NOT_FOUND";
-            setError(ERROR_MESSAGES[code] ?? "Transfer not found.");
+            const raw = err?.message ?? "TRANSFER_NOT_FOUND";
+            // Postgres wraps the raise exception message — extract the key
+            const code = Object.keys(ERROR_MESSAGES).find((k) => raw.includes(k)) ?? "TRANSFER_NOT_FOUND";
+            setError(ERROR_MESSAGES[code] ?? raw);
             setLoading(false);
             return;
           }
@@ -128,7 +130,9 @@ export function ReceivePage() {
         p_transfer_id: id, p_token: token,
       });
       if (err) {
-        setError(ERROR_MESSAGES[err.message] ?? err.message);
+        const raw = err.message;
+        const code = Object.keys(ERROR_MESSAGES).find((k) => raw.includes(k));
+        setError(code ? ERROR_MESSAGES[code] : raw);
         setSubmitting(false); return;
       }
     } else {

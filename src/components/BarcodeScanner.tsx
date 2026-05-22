@@ -22,17 +22,30 @@ export function BarcodeScanner({ onScan, onClose }: Props) {
     const reader = new BrowserMultiFormatReader();
     readerRef.current = reader;
 
-    reader
-      .decodeFromVideoDevice(undefined, videoRef.current!, (result, err) => {
-        if (result) {
-          onScan(result.getText());
-          // Brief pause before next scan
-          setScanning(false);
-          setTimeout(() => setScanning(true), 1000);
+    BrowserMultiFormatReader.listVideoInputDevices()
+      .then((devices) => {
+        // Prefer environment/back camera, fall back to first available
+        const device = devices.find((d) =>
+          d.label.toLowerCase().includes("back") ||
+          d.label.toLowerCase().includes("environment") ||
+          d.label.toLowerCase().includes("rear")
+        ) ?? devices[0];
+
+        if (!device) {
+          setError("No camera found on this device.");
+          return;
         }
-        if (err && !(err.message?.includes("No MultiFormat"))) {
-          // Ignore "no barcode found" errors — they fire continuously
-        }
+
+        return reader.decodeFromVideoDevice(device.deviceId, videoRef.current!, (result, err) => {
+          if (result) {
+            onScan(result.getText());
+            setScanning(false);
+            setTimeout(() => setScanning(true), 1000);
+          }
+          if (err && !(err.message?.includes("No MultiFormat"))) {
+            // Ignore continuous "no barcode found" errors
+          }
+        });
       })
       .then(() => setScanning(true))
       .catch((e: Error) => {

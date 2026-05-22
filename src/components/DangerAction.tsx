@@ -11,14 +11,19 @@ export function DangerAction({
   confirmLabel = "Confirm",
   onConfirm,
   busy = false,
+  size = "md",
 }: {
   label: string;
   description?: string;
   confirmLabel?: string;
   onConfirm: () => void;
   busy?: boolean;
+  size?: "sm" | "md";
 }) {
   const [confirming, setConfirming] = useState(false);
+  const btnStyle = size === "sm"
+    ? { padding: "3px 8px", fontSize: 11, fontWeight: 600 }
+    : { padding: "7px 12px", fontSize: 13, fontWeight: 600 };
 
   return (
     <>
@@ -27,9 +32,8 @@ export function DangerAction({
         onClick={() => setConfirming(true)}
         disabled={busy}
         style={{
-          border: "1px solid var(--line)", background: "var(--bg-surface)", color: "var(--negative)",
-          padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer",
-          borderRadius: "var(--radius)",
+          border: "1px solid var(--line)", background: "transparent", color: "var(--negative)",
+          cursor: "pointer", borderRadius: "var(--radius)", ...btnStyle,
         }}
       >
         {label}

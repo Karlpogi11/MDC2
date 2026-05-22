@@ -120,6 +120,8 @@ export function StockInPage() {
       );
     }
     await client.from("stock_in_batches").update({ success_rows: insertedRows.length, failed_rows: serials.length - insertedRows.length }).eq("id", batch.id);
+    // Refresh materialized view so inventory page shows new items immediately
+    await client.rpc("refresh_inventory_snapshot").then(() => {/* ok */}, () => {/* non-fatal */});
     return { ok: insertedRows.length, failed: serials.filter((r) => !insertedRows.some((ins) => ins.serial_number === r.serial)) };
   }
 
@@ -531,7 +533,7 @@ export function StockInPage() {
                   style={{ background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                   Import another file
                 </button>
-                <button type="button" onClick={() => navigate("/")}
+                <button type="button" onClick={() => navigate("/inventory")}
                   style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 10px", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
                   Back to Inventory
                 </button>
@@ -591,6 +593,7 @@ export function StockInPage() {
                     padding: "5px 8px",
                     fontSize: 13,
                     fontFamily: "monospace",
+                    fontWeight: 400,
                     outline: "none",
                     boxSizing: "border-box" as const,
                     background: "var(--bg-surface)",
@@ -647,7 +650,7 @@ export function StockInPage() {
                 {submitResult.ok} serial{submitResult.ok !== 1 ? "s" : ""} stocked in.
                 {submitResult.failed.length > 0 && <span style={{ color: "var(--negative)", marginLeft: 8 }}>{submitResult.failed.length} failed.</span>}
                 </span>
-                <button type="button" onClick={() => navigate("/")}
+                <button type="button" onClick={() => navigate("/inventory")}
                   style={{ marginLeft: "auto", background: "none", color: "var(--blue)", border: "none", padding: 0, fontSize: 13, fontWeight: 400, cursor: "pointer", whiteSpace: "nowrap" }}>
                   View
                 </button>

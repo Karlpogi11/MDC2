@@ -17,9 +17,9 @@ type AuditRow = {
 };
 
 const ACTION_COLORS: Record<string, { bg: string; color: string }> = {
-  insert:  { bg: "#dcfce7", color: "var(--text)" },
-  update:  { bg: "#dbeafe", color: "var(--blue)" },
-  delete:  { bg: "#fee2e2", color: "var(--negative)" },
+  insert:  { bg: "var(--bg-surface-elevated)", color: "var(--link)" },
+  update:  { bg: "var(--bg-surface-elevated)", color: "var(--blue)" },
+  delete:  { bg: "var(--bg-surface-elevated)", color: "var(--negative)" },
 };
 
 function formatDate(iso: string) {
@@ -187,7 +187,7 @@ export function AuditLogPage() {
                 {loading && <tr><td colSpan={5} className="empty-row">Loading…</td></tr>}
                 {!loading && rows.length === 0 && <tr><td colSpan={5} className="empty-row">No audit entries.</td></tr>}
                 {rows.map(row => {
-                  const ac = ACTION_COLORS[row.action] ?? { bg: "#f3f4f6", color: "var(--text)" };
+                  const ac = ACTION_COLORS[row.action] ?? { bg: "var(--bg-surface-elevated)", color: "var(--text)" };
                   const actor = row.actor?.full_name ?? row.actor?.username ?? "system";
                   const label = diffSummary(row.action, row.entity_type, row.old_value, row.new_value, row.note);
                   return (

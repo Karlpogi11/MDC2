@@ -4,6 +4,28 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MDC Inventory</title>
+    <!-- Must be first — runs sync before any paint -->
+    <script>
+      (function() {
+        try {
+          var dark = localStorage.getItem('mdc-theme') === 'dark';
+          var d = document.documentElement;
+          if (dark) {
+            d.classList.add('dark-theme');
+            d.setAttribute('data-theme', 'dark');
+          }
+          var bg = dark ? '#1a1a1a' : '#f5f5f7';
+          // Set on html element directly — highest priority, beats any stylesheet
+          d.style.setProperty('background', bg, 'important');
+          d.style.setProperty('color-scheme', dark ? 'dark' : 'light');
+          // Also cover body before React mounts
+          var s = document.createElement('style');
+          s.id = '__theme_init';
+          s.textContent = 'html,body,#root{background:' + bg + '!important}';
+          d.prepend(s);
+        } catch(e) {}
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Nunito:wght@700;800;900&display=swap" rel="stylesheet" />

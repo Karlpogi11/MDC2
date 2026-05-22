@@ -289,15 +289,15 @@ export function SitesTab() {
                             DC
                           </label>
                         : <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: "var(--radius-pill)",
-                            background: site.is_dc ? "#dbeafe" : "#f3f4f6",
-                            color: site.is_dc ? "#1d4ed8" : "#6b7a8d" }}>
+                            background: "var(--bg-surface-elevated)",
+                            color: site.is_dc ? "var(--blue)" : "var(--muted)" }}>
                             {site.is_dc ? "DC" : "Dest."}
                           </span>}
                     </td>
                     <td>
                       <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: "var(--radius-pill)",
-                        background: site.is_active ? "#dcfce7" : "#f3f4f6",
-                        color: site.is_active ? "#15803d" : "#9ca3af" }}>
+                        background: "var(--bg-surface-elevated)",
+                        color: site.is_active ? "var(--link)" : "var(--muted)" }}>
                         {site.is_active ? "Active" : "Inactive"}
                       </span>
                     </td>
@@ -322,7 +322,7 @@ export function SitesTab() {
                             </button>
                             <button type="button" onClick={() => void toggleActive(site)}
                               style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                                color: site.is_active ? "#b91c1c" : "#15803d" }}>
+                                color: site.is_active ? "var(--negative)" : "var(--link)" }}>
                               {site.is_active ? "Disable" : "Enable"}
                             </button>
                           </>

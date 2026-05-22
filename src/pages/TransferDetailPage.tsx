@@ -38,11 +38,11 @@ type TransferDetail = {
 const STATUS_ORDER: TransferStatus[] = ["draft", "packed", "in_transit", "received"];
 
 const STATUS_META: Record<TransferStatus, { label: string; icon: React.ReactNode; color: string; bg: string }> = {
-  draft:      { label: "Draft",      icon: <Package size={16} />,      color: "var(--muted)", bg: "#f3f4f6" },
-  packed:     { label: "Packed",     icon: <Package size={16} />,      color: "var(--blue)", bg: "#dbeafe" },
-  in_transit: { label: "In Transit", icon: <Truck size={16} />,        color: "var(--muted)", bg: "#fef9c3" },
-  received:   { label: "Received",   icon: <CheckCircle size={16} />,  color: "var(--text)", bg: "#dcfce7" },
-  cancelled:  { label: "Cancelled",  icon: <X size={16} />,            color: "var(--negative)", bg: "#fee2e2" },
+  draft:      { label: "Draft",      icon: <Package size={16} />,      color: "var(--muted)", bg: "var(--bg-surface-elevated)" },
+  packed:     { label: "Packed",     icon: <Package size={16} />,      color: "var(--blue)",  bg: "var(--bg-surface-elevated)" },
+  in_transit: { label: "In Transit", icon: <Truck size={16} />,        color: "var(--muted)",    bg: "var(--bg-surface-elevated)" },
+  received:   { label: "Received",   icon: <CheckCircle size={16} />,  color: "var(--text)",     bg: "var(--bg-surface-elevated)" },
+  cancelled:  { label: "Cancelled",  icon: <X size={16} />,            color: "var(--negative)", bg: "var(--bg-surface-elevated)" },
 };
 
 const NEXT_STATUS: Partial<Record<TransferStatus, TransferStatus>> = {
@@ -118,7 +118,7 @@ export function TransferDetailPage() {
       return;
     }
     if (serial.status !== "in_stock") {
-      setSerialErrors(p => ({ ...p, [itemId]: `Not available (${serial.status})` }));
+      setSerialErrors(p => ({ ...p, [itemId]: `Not available — ${serial.status === "in_transit" ? "Reserved for another transfer" : serial.status === "transferred" ? "Already transferred out" : serial.status.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())}` }));
       setSerialSaving(p => ({ ...p, [itemId]: false }));
       return;
     }
@@ -171,9 +171,9 @@ export function TransferDetailPage() {
     try {
       const client = getSupabaseClient();
 
-      // Ensure a receipt token exists for QR/barcode on packing list
+      // Always regenerate token + expiry to ensure the link is fresh
       let token = transfer.receipt_token;
-      if (!token && client) {
+      if (client) {
         const bytes = new Uint8Array(32);
         crypto.getRandomValues(bytes);
         token = Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -567,13 +567,13 @@ export function TransferDetailPage() {
               )}
               {transfer.status === "draft" && (
                 <button type="button" onClick={() => setScanMode(v => !v)}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 6, background: scanMode ? "#1a2a3a" : "#fff", color: scanMode ? "#fff" : "var(--blue)", border: "1px solid var(--blue)", borderRadius: "var(--radius)", padding: "4px 10px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", color: "var(--text)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                   <ScanLine size={14} /> {scanMode ? "Exit Scan Mode" : "Verify Serials"}
                 </button>
               )}
               {["received"].includes(transfer.status) && (
                 <button type="button" onClick={() => void generatePDF()} disabled={generatingPDF}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--bg-surface)", color: "var(--blue)", border: "1px solid var(--blue)", borderRadius: "var(--radius)", padding: "4px 10px", fontSize: 13, fontWeight: 600, cursor: generatingPDF ? "not-allowed" : "pointer", opacity: generatingPDF ? 0.7 : 1 }}>
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", color: "var(--text)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 12px", fontSize: 13, fontWeight: 600, cursor: generatingPDF ? "not-allowed" : "pointer", opacity: generatingPDF ? 0.7 : 1 }}>
                   <FileText size={14} /> {generatingPDF ? "Generating…" : "Packing List PDF"}
                 </button>
               )}
@@ -582,7 +582,7 @@ export function TransferDetailPage() {
                   <button
                     type="button"
                     onClick={() => setShowActionMenu((v) => !v)}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--bg-surface)", color: "var(--text)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 8px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", color: "var(--text)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
                     aria-haspopup="menu"
                     aria-expanded={showActionMenu}
                   >
@@ -638,7 +638,7 @@ export function TransferDetailPage() {
                 <button type="button"
                   onClick={() => { if (receivedItems.size === 0) { setActionError("Check at least one item as received."); return; } setShowReceiptConfirm(true); }}
                   disabled={advancing || receivedItems.size === 0}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 6, background: receivedItems.size > 0 ? "#15803d" : "#d1d5db", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "7px 18px", fontSize: 13, fontWeight: 600, cursor: receivedItems.size > 0 ? "pointer" : "not-allowed" }}>
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, background: receivedItems.size > 0 ? "var(--blue)" : "var(--bg-surface-elevated)", color: receivedItems.size > 0 ? "#fff" : "var(--muted)", border: "none", borderRadius: "var(--radius)", padding: "7px 18px", fontSize: 13, fontWeight: 600, cursor: receivedItems.size > 0 ? "pointer" : "not-allowed" }}>
                   Confirm receipt ({receivedItems.size}/{transfer.items.length})
                 </button>
               )}
@@ -673,18 +673,18 @@ export function TransferDetailPage() {
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
                     <div className="circle" style={{
                       width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center",
-                      background: done ? (active ? "var(--blue)" : "#dcfce7") : "#f3f4f6",
-                      color: done ? (active ? "#fff" : "#15803d") : "#9ca3af",
+                      background: done ? (active ? "var(--blue)" : "var(--bg-surface-elevated)") : "var(--bg-surface-elevated)",
+                      color: done ? (active ? "#fff" : "var(--text)") : "var(--muted)",
                       border: active ? "2px solid var(--blue)" : "2px solid transparent",
                     }}>
                       {done && !active ? <Check size={14} /> : sm.icon}
                     </div>
-                    <span style={{ fontSize: 11, fontWeight: active ? 700 : 400, color: active ? "var(--blue)" : done ? "#374151" : "#9ca3af", whiteSpace: "nowrap" }}>
+                    <span style={{ fontSize: 11, fontWeight: active ? 700 : 400, color: active ? "var(--blue)" : done ? "var(--text)" : "var(--muted)", whiteSpace: "nowrap" }}>
                       {sm.label}
                     </span>
                   </div>
                   {i < STATUS_ORDER.length - 1 && (
-                    <div style={{ flex: 1, height: 2, background: i < currentStep && transfer.status !== "cancelled" ? "var(--blue)" : "#e5e7eb", margin: "0 4px", marginBottom: 20 }} />
+                    <div style={{ flex: 1, height: 2, background: i < currentStep && transfer.status !== "cancelled" ? "var(--blue)" : "var(--line)", margin: "0 4px", marginBottom: 20 }} />
                   )}
                 </div>
               );
@@ -694,7 +694,7 @@ export function TransferDetailPage() {
 
         {/* Pre-pack scan verification panel */}
         {scanMode && transfer.status === "draft" && (
-          <div style={{ background: "#f0f7ff", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "14px 18px", marginBottom: 16 }}>
+          <div style={{ background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "14px 18px", marginBottom: 16 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <ScanLine size={16} color="var(--blue)" />
@@ -709,7 +709,7 @@ export function TransferDetailPage() {
             </div>
 
             {scanFeedback && (
-              <div style={{ marginBottom: 10, padding: "5px 8px", borderRadius: "var(--radius)", background: scanFeedback.ok ? "#dcfce7" : "#fee2e2", color: scanFeedback.ok ? "#15803d" : "#b91c1c", fontSize: 13, fontWeight: 600, fontFamily: "monospace" }}>
+              <div style={{ marginBottom: 10, padding: "5px 8px", borderRadius: "var(--radius)", background: "var(--bg-surface)", border: `1px solid ${scanFeedback.ok ? "var(--line)" : "var(--negative)"}`, color: scanFeedback.ok ? "var(--text)" : "var(--negative)", fontSize: 13, fontWeight: 600, fontFamily: "monospace" }}>
                 {scanFeedback.msg}
               </div>
             )}
@@ -719,7 +719,7 @@ export function TransferDetailPage() {
                 const sn = item.serial!.serial_number.toUpperCase();
                 const verified = scannedSerials.has(sn);
                 return (
-                  <span key={item.id} style={{ fontSize: 11, fontFamily: "monospace", fontWeight: 600, padding: "3px 8px", borderRadius: "var(--radius-sm)", background: verified ? "#dcfce7" : "#f3f4f6", color: verified ? "#15803d" : "#6b7a8d", border: `1px solid ${verified ? "#bbf7d0" : "#e5e7eb"}` }}>
+                  <span key={item.id} style={{ fontSize: 11, fontFamily: "monospace", fontWeight: 600, padding: "3px 8px", borderRadius: "var(--radius-sm)", background: "var(--bg-surface)", color: verified ? "var(--link)" : "var(--text)", border: `1px solid ${verified ? "var(--blue)" : "var(--line)"}` }}>
                     {verified ? "✓ " : ""}{item.serial!.serial_number}
                   </span>
                 );
@@ -918,7 +918,7 @@ export function TransferDetailPage() {
                   await load(true);
                   setAdvancing(false);
                 })(); }}
-                style={{ flex: 1, background: "#15803d", color: "#fff", border: "none", borderRadius: 0, padding: "5px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                style={{ flex: 1, background: "var(--blue)", color: "#fff", border: "none", borderRadius: 0, padding: "5px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                 Confirm
               </button>
               <button type="button" onClick={() => setShowReceiptConfirm(false)}

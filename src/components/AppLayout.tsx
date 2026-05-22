@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   BarChart3,
@@ -126,6 +126,13 @@ export function AppLayout({ children, activeModule }: Props) {
 
   const isSystemAdmin = authState.status === "authenticated" && authState.profile.role === "system_admin";
   const isAdmin = authState.status === "authenticated" && ["system_admin", "dc_admin"].includes(authState.profile.role);
+
+  // Force password change redirect
+  useEffect(() => {
+    if (authState.status === "authenticated" && authState.profile.force_password_change && location.pathname !== "/change-password") {
+      navigate("/change-password", { replace: true });
+    }
+  }, [authState.status, location.pathname]);
   const profileName =
     authState.status === "authenticated"
       ? (authState.profile.full_name ?? authState.profile.username ?? authState.profile.email ?? "User")
@@ -253,6 +260,22 @@ export function AppLayout({ children, activeModule }: Props) {
                 <div style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.5 }}>{body}</div>
               </div>
             ))}
+
+            {/* User Roles */}
+            <div style={{ padding: "10px 16px 4px", borderTop: "1px solid var(--line)" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>User Roles</div>
+              {[
+                { role: "System Admin", desc: "Full access — users, config, all operations." },
+                { role: "DC Admin", desc: "All inventory ops + corrections + audit log." },
+                { role: "DC Operator", desc: "Stock-in, transfers, analytics. No corrections." },
+                { role: "DC Viewer", desc: "Read-only. Inventory and reports only." },
+              ].map(({ role, desc }) => (
+                <div key={role} style={{ marginBottom: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text)" }}>{role}</div>
+                  <div style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.5 }}>{desc}</div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

@@ -116,14 +116,18 @@ export function ConfigPage() {
         <h1 style={{ margin: "0 0 20px", fontSize: 20, fontWeight: 700, color: "var(--text)" }}>Configuration</h1>
 
         {/* Tab bar */}
-        <div style={{ display: "flex", gap: 2, borderBottom: "2px solid #e5e7eb", marginBottom: 24 }}>
+        <div style={{ display: "flex", gap: 2, borderBottom: "1px solid var(--line)", marginBottom: 24 }}>
           {TABS.map((t) => (
             <button key={t.key} type="button" onClick={() => setTab(t.key)}
               style={{
                 border: "none", background: "transparent", padding: "5px 12px",
                 fontSize: 14, fontWeight: 600, cursor: "pointer",
-                color: tab === t.key ? "var(--blue)" : "#6b7a8d",
-                borderBottom: tab === t.key ? "2px solid var(--blue)" : "2px solid transparent",
+                color: tab === t.key
+                  ? (t.key === "danger" ? "var(--negative)" : "var(--blue)")
+                  : (t.key === "danger" ? "var(--negative)" : "var(--text)"),
+                borderBottom: tab === t.key
+                  ? `2px solid ${t.key === "danger" ? "var(--negative)" : "var(--blue)"}`
+                  : "2px solid transparent",
                 marginBottom: -2,
               }}>
               {t.label}
@@ -149,14 +153,14 @@ export function ConfigPage() {
                       src={val("brand_logo_url")}
                       alt="Logo"
                       onError={(e) => { (e.target as HTMLImageElement).style.outline = "2px solid #ef4444"; }}
-                      style={{ height: 40, maxWidth: 160, objectFit: "contain", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: 4, background: "var(--bg-surface)" }}
+                      style={{ height: 40, maxWidth: 160, objectFit: "contain", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: 4 }}
                     />
                   ) : (
                     <div style={{ width: 120, height: 40, border: "1px dashed var(--line)", borderRadius: "var(--radius)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <span style={{ fontSize: 11, color: "var(--muted)" }}>No logo</span>
                     </div>
                   )}
-                  <label style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 10px", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
+                  <label style={{ display: "inline-flex", alignItems: "center", gap: 6, border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 10px", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
                     <Upload size={14} />{uploadingLogo ? "Uploading…" : "Upload logo"}
                     <input ref={logoInputRef} type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" style={{ display: "none" }} onChange={(e) => void handleLogoUpload(e, "brand_logo_url")} disabled={uploadingLogo} />
                   </label>
@@ -346,7 +350,7 @@ function DigestTab({ actorId }: { actorId: string }) {
                 <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--muted)" }}>{(j.recipients ?? []).join(", ")}</p>
               </div>
               <button type="button" onClick={() => void toggleJob(j.id, !j.is_active)}
-                style={{ fontSize: 12, fontWeight: 600, padding: "4px 12px", borderRadius: "var(--radius)", border: "1px solid var(--line)", background: j.is_active ? "#dcfce7" : "#f3f4f6", color: j.is_active ? "#15803d" : "#6b7a8d", cursor: "pointer" }}>
+                style={{ fontSize: 12, fontWeight: 600, padding: "4px 12px", borderRadius: "var(--radius)", border: "1px solid var(--line)", background: "var(--bg-surface-elevated)", color: j.is_active ? "var(--link)" : "var(--muted)", cursor: "pointer" }}>
                 {j.is_active ? "Active" : "Paused"}
               </button>
             </div>
@@ -442,7 +446,7 @@ function WebhooksTab({ actorId }: { actorId: string }) {
                 <p style={{ margin: "2px 0 0", fontSize: 11, color: "var(--muted)" }}>{(w.events ?? []).join(", ")}</p>
               </div>
               <button type="button" onClick={() => void toggleWebhook(w.id, !w.is_active)}
-                style={{ flexShrink: 0, fontSize: 12, fontWeight: 600, padding: "4px 12px", borderRadius: "var(--radius)", border: "1px solid var(--line)", background: w.is_active ? "#dcfce7" : "#f3f4f6", color: w.is_active ? "#15803d" : "#6b7a8d", cursor: "pointer" }}>
+                style={{ flexShrink: 0, fontSize: 12, fontWeight: 600, padding: "4px 12px", borderRadius: "var(--radius)", border: "1px solid var(--line)", background: "var(--bg-surface-elevated)", color: w.is_active ? "var(--link)" : "var(--muted)", cursor: "pointer" }}>
                 {w.is_active ? "Active" : "Paused"}
               </button>
             </div>

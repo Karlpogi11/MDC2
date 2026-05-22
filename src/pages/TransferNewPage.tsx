@@ -74,7 +74,13 @@ export function TransferNewPage() {
       return;
     }
     const part = Array.isArray(data.parts) ? data.parts[0] : data.parts as { part_number: string; part_name: string } | null;
-    const statusErr = data.status !== "in_stock" ? `Not available (status: ${data.status})` : undefined;
+    const statusLabel = (s: string) =>
+      s === "in_transit" ? "Reserved for another transfer" :
+      s === "transferred" ? "Already transferred out" :
+      s === "consumed" ? "Consumed" :
+      s === "void" ? "Voided" :
+      s.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
+    const statusErr = data.status !== "in_stock" ? `Not available — ${statusLabel(data.status)}` : undefined;
     setLines((prev) => prev.map((l, idx) => idx === i ? {
       ...l,
       resolving: false,
@@ -161,7 +167,7 @@ export function TransferNewPage() {
             .maybeSingle();
 
           if (!serial) throw new Error(`Serial "${sn}" not found in inventory.`);
-          if (serial.status !== "in_stock") throw new Error(`Serial "${sn}" is not available (status: ${serial.status}).`);
+          if (serial.status !== "in_stock") throw new Error(`Serial "${sn}" is not available — ${serial.status === "in_transit" ? "Reserved for another transfer" : serial.status === "transferred" ? "Already transferred out" : serial.status.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())}.`);
           serialId = serial.id;
           partId = serial.part_id;
         } else if (pn) {
@@ -235,7 +241,7 @@ export function TransferNewPage() {
             </div>
             <div style={{ padding: "16px 20px" }}>
               {/* Column headers */}
-              <div style={{ display: "grid", gridTemplateColumns: "180px 160px 1fr 64px 32px", gap: 10, marginBottom: 6, paddingBottom: 6, borderBottom: "1px solid var(--line-soft)" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "180px 160px 1fr 80px 32px", gap: 10, marginBottom: 6, paddingBottom: 6, borderBottom: "1px solid var(--line-soft)" }}>
                 {["Serial number", "Part number", "Description", "Qty", ""].map((h) => (
                   <div key={h} style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</div>
                 ))}
@@ -245,18 +251,18 @@ export function TransferNewPage() {
                 const hasSerial = line.serial_number.trim().length > 0;
                 return (
                 <div key={i} style={{ marginBottom: 6 }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "180px 160px 1fr 64px 32px", gap: 10, alignItems: "center" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "180px 160px 1fr 80px 32px", gap: 10, alignItems: "center" }}>
                     <input
                       type="text"
                       placeholder="Scan or type serial"
                       value={line.serial_number}
                       onChange={(e) => updateLine(i, "serial_number", e.target.value)}
                       onBlur={(e) => void resolveSerial(i, e.target.value)}
-                      style={{ border: `1px solid ${line.error ? "#fca5a5" : "#d1d5db"}`, borderRadius: "var(--radius)", padding: "5px 8px", fontSize: 12, fontFamily: "monospace", outline: "none", width: "100%", boxSizing: "border-box" as const }}
+                      style={{ border: `1px solid ${line.error ? "#fca5a5" : "#d1d5db"}`, borderRadius: "var(--radius)", padding: "7px 8px", fontSize: 12, fontFamily: "monospace", outline: "none", width: "100%", boxSizing: "border-box" as const }}
                     />
                     {hasSerial && line.part_number ? (
                       <input type="text" readOnly value={line.part_number}
-                        style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 8px", fontSize: 12, fontFamily: "monospace", background: "var(--bg-surface-elevated)", color: "var(--blue)", width: "100%", boxSizing: "border-box" as const, outline: "none" }} />
+                        style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 8px", fontSize: 12, fontFamily: "monospace", background: "var(--bg-surface-elevated)", color: "var(--blue)", width: "100%", boxSizing: "border-box" as const, outline: "none" }} />
                     ) : (
                       <PartNumberInput value={line.part_number}
                         onChange={(pn, part) => { updateLine(i, "part_number", pn); if (part) updateLine(i, "part_name", part.part_name); }}
@@ -265,18 +271,18 @@ export function TransferNewPage() {
                     <input type="text" readOnly
                       value={line.resolving ? "Looking up…" : (line.part_name || "")}
                       placeholder="Auto-filled"
-                      style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 8px", fontSize: 12, background: "var(--bg-surface-elevated)", color: "var(--text)", outline: "none", width: "100%", boxSizing: "border-box" as const }}
+                      style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 8px", fontSize: 12, background: "var(--bg-surface-elevated)", color: "var(--text)", outline: "none", width: "100%", boxSizing: "border-box" as const }}
                     />
                     {hasSerial ? (
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "var(--muted)", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", height: 38 }}>1</div>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "var(--muted)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 8px" }}>1</div>
                     ) : (
                       <input type="number" min={1} value={line.qty}
                         onChange={(e) => updateLine(i, "qty", parseInt(e.target.value) || 1)}
-                        style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "9px 8px", fontSize: 13, outline: "none", width: "100%", boxSizing: "border-box" as const, textAlign: "center" }} />
+                        style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 8px", fontSize: 12, outline: "none", width: "100%", boxSizing: "border-box" as const, textAlign: "center" }} />
                     )}
                     <button type="button" onClick={() => removeLine(i)}
                       disabled={lines.length === 1}
-                      style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", background: "var(--bg-surface)", color: "var(--muted)", cursor: lines.length === 1 ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", height: 38, width: 32, opacity: lines.length === 1 ? 0.4 : 1, flexShrink: 0 }}>
+                      style={{ border: "none", borderRadius: "var(--radius)", background: "transparent", color: "var(--muted)", cursor: lines.length === 1 ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", height: 38, width: 32, opacity: lines.length === 1 ? 0.4 : 1, flexShrink: 0 }}>
                       <X size={13} />
                     </button>
                   </div>
@@ -298,13 +304,13 @@ export function TransferNewPage() {
             </div>
           )}
 
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "flex-end" }}>
             <button type="button" onClick={() => navigate("/transfers")}
               style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 12, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
               Cancel
             </button>
-            <button type="submit" disabled={submitting}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: submitting ? "var(--muted)" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "5px 14px", fontSize: 12, fontWeight: 600, cursor: submitting ? "not-allowed" : "pointer" }}>
+            <button type="submit" disabled={submitting || lines.some(l => l.error)}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--blue)", opacity: submitting || lines.some(l => l.error) ? 0.4 : 1, color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "5px 14px", fontSize: 12, fontWeight: 600, cursor: submitting || lines.some(l => l.error) ? "not-allowed" : "pointer" }}>
               {submitting ? "Creating…" : "Review & Create"}
             </button>
           </div>
@@ -326,7 +332,7 @@ export function TransferNewPage() {
               style={{
               position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
               background: "var(--bg-surface)", borderRadius: 0, padding: 28, width: 440, zIndex: 101,
-              boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.18)", border: "1px solid var(--line)",
             }}>
               <h2 id="confirm-transfer-title" style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700, color: "var(--text)" }}>Confirm Transfer</h2>
               <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--muted)" }}>
@@ -351,9 +357,9 @@ export function TransferNewPage() {
                 </div>
               </div>
               <div style={{ display: "flex", gap: 10 }}>
-                <button type="button" onClick={() => void confirmAndSubmit()}
-                  style={{ flex: 1, background: "var(--blue)", color: "#fff", border: "none", borderRadius: 0, padding: "5px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                  Confirm
+                <button type="button" onClick={() => void confirmAndSubmit()} disabled={submitting}
+                  style={{ flex: 1, background: "var(--blue)", opacity: submitting ? 0.6 : 1, color: "#fff", border: "none", borderRadius: 0, padding: "5px 0", fontSize: 13, fontWeight: 600, cursor: submitting ? "not-allowed" : "pointer" }}>
+                  {submitting ? "Creating…" : "Confirm"}
                 </button>
                 <button type="button" onClick={() => setShowConfirm(false)}
                   style={{ flex: 1, background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: 0, padding: "5px 0", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>

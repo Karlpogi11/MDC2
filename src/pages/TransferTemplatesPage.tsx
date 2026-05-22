@@ -260,7 +260,7 @@ export function TransferTemplatesPage() {
               <div style={{ flex: 1 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
                   <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{t.name}</span>
-                  <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: "var(--radius-pill)", background: t.is_active ? "#dcfce7" : "#f3f4f6", color: t.is_active ? "#15803d" : "#6b7a8d" }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: "var(--radius-pill)", background: "var(--bg-surface-elevated)", color: t.is_active ? "var(--link)" : "var(--muted)" }}>
                     {t.is_active ? "Active" : "Paused"}
                   </span>
                 </div>

@@ -1,12 +1,13 @@
 import { friendlyError } from "@/lib/friendlyError";
 import { useTableResize } from "@/components/ResizableColumns";
 import { DangerAction } from "@/components/DangerAction";
-import { useState, useEffect, type FormEvent } from "react";
+import { useState, useEffect, useRef, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Boxes, UserPlus, Check, X } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { getSupabaseClient } from "@/lib/supabase";
 import type { UserRole } from "@/lib/auth";
+import { getTheme } from "@/lib/theme";
 
 type UserRow = {
   id: string;
@@ -37,10 +38,90 @@ async function fetchUsers(): Promise<UserRow[]> {
   return (data ?? []) as UserRow[];
 }
 
+function RoleDropdown({ value, busy, onChange }: { value: UserRole; busy: boolean; onChange: (r: UserRole) => void }) {
+  const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState<UserRole | null>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node) && e.target !== btnRef.current) { setOpen(false); setPending(null); } };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+
+  function toggle() {
+    if (!btnRef.current) return;
+    const r = btnRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - r.bottom;
+    const menuHeight = 140;
+    const showAbove = spaceBelow < menuHeight;
+    setPos(showAbove ? { top: r.top - menuHeight - 4, left: r.left } : { top: r.bottom + 4, left: r.left });
+    setOpen((o) => !o);
+    setPending(null);
+  }
+
+  function select(r: UserRole) {
+    if (r === value) { setOpen(false); return; }
+    setPending(r);
+  }
+
+  function confirm() {
+    if (pending) { onChange(pending); }
+    setOpen(false);
+    setPending(null);
+  }
+
+  return (
+    <>
+      <button ref={btnRef} type="button" disabled={busy} onClick={toggle}
+        style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20, border: "none", background: "transparent", color: "var(--text)", cursor: busy ? "not-allowed" : "pointer", whiteSpace: "nowrap", opacity: busy ? 0.5 : 1 }}>
+        {ROLE_LABELS[value]} ▾
+      </button>
+      {open && (
+        <div ref={ref} style={{ position: "fixed", top: pos.top, left: pos.left, zIndex: 9999, background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", boxShadow: "0 4px 16px rgba(0,0,0,0.15)", minWidth: 150, overflow: "hidden" }}>
+          {ROLES.map((r) => {
+            const isCurrent = r === value;
+            const isSelected = r === pending;
+            return (
+              <button key={r} type="button" onClick={() => select(r)}
+                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", textAlign: "left", padding: "7px 12px", fontSize: 12, fontWeight: isCurrent ? 700 : 400, background: isSelected ? "var(--bg-surface-elevated)" : "transparent", color: "var(--text)", border: "none", cursor: "pointer", gap: 8 }}>
+                <span>{ROLE_LABELS[r]}</span>
+                {isCurrent && <span style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600 }}>current</span>}
+              </button>
+            );
+          })}
+          {pending && (
+            <div style={{ borderTop: "1px solid var(--line)", padding: "8px 12px", display: "flex", gap: 6, alignItems: "center" }}>
+              <span style={{ fontSize: 11, color: "var(--muted)", flex: 1 }}>Change to {ROLE_LABELS[pending]}?</span>
+              <button type="button" onClick={confirm}
+                style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", cursor: "pointer" }}>
+                Confirm
+              </button>
+              <button type="button" onClick={() => setPending(null)}
+                style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", background: "transparent", color: "var(--muted)", border: "1px solid var(--line)", borderRadius: "var(--radius)", cursor: "pointer" }}>
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
 export function UsersPage() {
   const tableRef = useTableResize();
   const { state: authState } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const t = getTheme();
+    document.documentElement.classList.toggle("dark-theme", t === "dark");
+    document.documentElement.setAttribute("data-theme", t);
+  }, []);
 
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,7 +135,22 @@ export function UsersPage() {
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
 
+  // Username availability check
+  const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "taken" | "available">("idle");
+  useEffect(() => {
+    if (username.length < 2) { setUsernameStatus("idle"); return; }
+    setUsernameStatus("checking");
+    const t = setTimeout(async () => {
+      const client = getSupabaseClient();
+      if (!client) return;
+      const { data } = await client.from("profiles").select("id").eq("username", username.trim()).maybeSingle();
+      setUsernameStatus(data ? "taken" : "available");
+    }, 350);
+    return () => clearTimeout(t);
+  }, [username]);
+
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [changingRoleId, setChangingRoleId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const currentUserId = authState.status === "authenticated" ? authState.user.id : null;
@@ -69,6 +165,8 @@ export function UsersPage() {
     setInviteSuccess(null);
     setInviting(true);
 
+    if (usernameStatus === "taken") { setInviteError("Username already taken."); setInviting(false); return; }
+
     const client = getSupabaseClient();
     if (!client) { setInviteError("Supabase not configured."); setInviting(false); return; }
 
@@ -77,13 +175,16 @@ export function UsersPage() {
     });
 
     if (error || data?.error) {
-      setInviteError(data?.error ?? friendlyError(error) ?? "Invite failed.");
+      setInviteError(data?.error ?? error?.message ?? "Invite failed.");
       setInviting(false);
       return;
     }
 
-    setInviteSuccess(`Invite sent to ${email}. User created with role ${role} and username "${username}".`);
-    setEmail(""); setUsername(""); setFullName(""); setRole("dc_operator");
+    const emailNote = data?.email_sent
+      ? `Credentials emailed to ${email}.`
+      : `Account created — email delivery failed (${data?.email_error ?? "unknown"}). Share credentials manually.`;
+    setInviteSuccess(`User "${username}" created as ${role.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())}. ${emailNote}`);
+    setEmail(""); setUsername(""); setFullName(""); setRole("dc_operator"); setUsernameStatus("idle");
     const rows = await fetchUsers();
     setUsers(rows);
     setInviting(false);
@@ -105,6 +206,17 @@ export function UsersPage() {
     setTogglingId(null);
   }
 
+  async function changeRole(user: UserRow, newRole: UserRole) {
+    setChangingRoleId(user.id);
+    setActionError(null);
+    const client = getSupabaseClient();
+    if (!client) { setChangingRoleId(null); return; }
+    const { error } = await client.from("profiles").update({ role: newRole }).eq("id", user.id);
+    if (error) setActionError(`Failed to change role: ${error.message}`);
+    else setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, role: newRole } : u));
+    setChangingRoleId(null);
+  }
+
   const inputStyle: React.CSSProperties = {
     width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)",
     padding: "5px 10px", fontSize: 13, color: "var(--text)",
@@ -115,18 +227,15 @@ export function UsersPage() {
     <div style={{ minHeight: "100vh", background: "var(--bg-page)" }}>
       {/* Header */}
       <header style={{
-        background: "linear-gradient(180deg, #13294b 0%, #0d1e38 100%)",
+        background: "var(--nav-bg)",
         padding: "14px 28px", display: "flex", alignItems: "center", gap: 16,
-        borderBottom: "1px solid #0a2f36",
+        borderBottom: "1px solid var(--nav-border)",
       }}>
         <button type="button" onClick={() => navigate("/")}
           style={{ background: "transparent", border: "none", color: "var(--muted)", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
           <ArrowLeft size={16} /> Back
         </button>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: "var(--radius)", background: "var(--nav-bg)", color: "var(--nav-active)" }}>
-            <Boxes size={17} />
-          </span>
           <span style={{ color: "#fff", fontWeight: 700, fontSize: 16 }}>MDC</span>
           <span style={{ color: "var(--muted)", fontSize: 14, marginLeft: 4 }}>/ Users</span>
         </div>
@@ -138,7 +247,7 @@ export function UsersPage() {
       <main style={{ maxWidth: 860, margin: "0 auto", padding: "32px 24px" }}>
         <h1 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "var(--text)" }}>User Management</h1>
         <p style={{ margin: "0 0 28px", fontSize: 13, color: "var(--muted)" }}>
-          Invite users and manage their access. Invited users receive an email to set their password.
+          Invite users and manage their access. A temporary password is auto-generated and emailed to the new user.
         </p>
 
         {/* Invite form */}
@@ -159,7 +268,23 @@ export function UsersPage() {
                 <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 5 }}>
                   Username <span style={{ color: "var(--negative)" }}>*</span>
                 </label>
-                <input type="text" required value={username} onChange={(e) => setUsername(e.target.value)} style={inputStyle} placeholder="e.g. jdoe" />
+                <div style={{ position: "relative" }}>
+                  <input type="text" required value={username} onChange={(e) => setUsername(e.target.value)}
+                    style={{ ...inputStyle, borderColor: usernameStatus === "taken" ? "var(--negative)" : usernameStatus === "available" ? "#16a34a" : undefined, paddingRight: 28 }}
+                    placeholder="e.g. jdoe" />
+                  {usernameStatus === "checking" && (
+                    <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "var(--muted)" }}>…</span>
+                  )}
+                  {usernameStatus === "taken" && (
+                    <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: "var(--negative)" }}>✕</span>
+                  )}
+                  {usernameStatus === "available" && (
+                    <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: "#16a34a" }}>✓</span>
+                  )}
+                </div>
+                {usernameStatus === "taken" && (
+                  <p style={{ margin: "3px 0 0", fontSize: 11, color: "var(--negative)" }}>Username already taken.</p>
+                )}
               </div>
               <div>
                 <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 5 }}>Full name</label>
@@ -174,6 +299,9 @@ export function UsersPage() {
                   {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
                 </select>
               </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <p style={{ margin: 0, fontSize: 12, color: "var(--muted)" }}>A temporary password will be auto-generated and emailed directly to the user. They will be required to change it on first login.</p>
+              </div>
             </div>
 
             {inviteError && (
@@ -182,13 +310,13 @@ export function UsersPage() {
               </div>
             )}
             {inviteSuccess && (
-              <div role="status" style={{ marginBottom: 14, padding: "5px 10px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", color: "var(--text)", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
+              <div role="status" style={{ marginBottom: 14, padding: "8px 12px", background: "var(--bg-surface-elevated)", border: "1px solid var(--link)", borderRadius: "var(--radius)", color: "var(--link)", fontSize: 13, display: "flex", alignItems: "center", gap: 8, fontWeight: 500 }}>
                 <Check size={14} /> {inviteSuccess}
               </div>
             )}
 
             <button type="submit" disabled={inviting}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: inviting ? "#6b8fc4" : "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: inviting ? "not-allowed" : "pointer" }}>
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: inviting ? "not-allowed" : "pointer", opacity: inviting ? 0.7 : 1 }}>
               <UserPlus size={14} />
               {inviting ? "Sending invite…" : "Send invite"}
             </button>
@@ -210,15 +338,15 @@ export function UsersPage() {
           )}
 
           <div className="table-scroll">
-          <table ref={tableRef}>
+          <table ref={tableRef} style={{ tableLayout: "fixed", width: "100%" }}>
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Username</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Status</th>
-                <th />
+                <th style={{ width: "18%" }}>Name</th>
+                <th style={{ width: "14%" }}>Username</th>
+                <th style={{ width: "25%" }}>Email</th>
+                <th style={{ width: "14%" }}>Role</th>
+                <th style={{ width: "10%" }}>Status</th>
+                <th style={{ width: "19%" }} />
               </tr>
             </thead>
             <tbody>
@@ -230,35 +358,48 @@ export function UsersPage() {
               )}
               {!loading && users.map((user) => (
                 <tr key={user.id} style={{ opacity: user.is_active ? 1 : 0.5 }}>
-                  <td style={{ fontWeight: 600 }}>
+                  <td style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {user.full_name ?? <span style={{ color: "var(--muted)" }}>—</span>}
                   </td>
-                  <td style={{ fontFamily: "monospace" }}>
+                  <td style={{ fontFamily: "monospace", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {user.username ?? <span style={{ color: "var(--muted)" }}>—</span>}
                   </td>
-                  <td style={{ color: "var(--muted)" }}>{user.email ?? "—"}</td>
-                  <td>
-                    <span className="status-badge" style={{
-                      background: user.role === "system_admin" ? "#1e3a5f" : user.role === "dc_admin" ? "#dbeafe" : user.role === "dc_operator" ? "#dcfce7" : "#f3f4f6",
-                      color: user.role === "system_admin" ? "#9fb4ba" : user.role === "dc_admin" ? "#1d4ed8" : user.role === "dc_operator" ? "#15803d" : "#6b7a8d",
-                    }}>
-                      {ROLE_LABELS[user.role]}
-                    </span>
+                  <td style={{ color: "var(--muted)", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {user.email ?? "—"}
+                  </td>
+                  <td style={{ padding: "0 8px" }}>
+                    {user.id === currentUserId ? (
+                      <span style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)" }}>
+                        {ROLE_LABELS[user.role]}
+                      </span>
+                    ) : (
+                      <RoleDropdown
+                        value={user.role}
+                        busy={changingRoleId === user.id}
+                        onChange={(r) => void changeRole(user, r)}
+                      />
+                    )}
                   </td>
                   <td>
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600, color: user.is_active ? "#15803d" : "#9ca3af" }}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600, color: user.is_active ? "var(--link)" : "var(--muted)", whiteSpace: "nowrap" }}>
                       {user.is_active ? <Check size={12} /> : <X size={12} />}
-                      {user.is_active ? "Active" : "Inactive"}
+                      {user.is_active ? "Enabled" : "Disabled"}
                     </span>
                   </td>
-                  <td>
+                  <td style={{ textAlign: "right", paddingRight: 16 }}>
                     {user.id !== currentUserId && (
                       user.is_active
-                        ? <DangerAction label="Deactivate" confirmLabel="Deactivate" description={`Deactivate ${user.full_name ?? user.username ?? "user"}?`}
-                            onConfirm={() => void toggleActive(user)} busy={togglingId === user.id} />
+                        ? <DangerAction
+                            size="sm"
+                            label="Disable"
+                            confirmLabel="Disable account"
+                            description={`Disable ${user.full_name ?? user.username ?? "this user"}? They will no longer be able to log in.`}
+                            onConfirm={() => void toggleActive(user)}
+                            busy={togglingId === user.id}
+                          />
                         : <button type="button" disabled={togglingId === user.id} onClick={() => void toggleActive(user)}
-                            style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", color: "var(--text)", fontSize: 12, fontWeight: 600, padding: "5px 12px", cursor: "pointer" }}>
-                            {togglingId === user.id ? "…" : "Activate"}
+                            style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", color: "var(--text)", fontSize: 11, fontWeight: 600, padding: "3px 8px", cursor: "pointer", borderRadius: "var(--radius)" }}>
+                            {togglingId === user.id ? "…" : "Enable"}
                           </button>
                     )}
                   </td>

@@ -326,7 +326,7 @@ function Spinner() {
 function RefreshBtn({ onClick, loading }: { onClick: () => void; loading: boolean }) {
   return (
     <button type="button" onClick={onClick} disabled={loading}
-      style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "transparent", color: loading ? "#cbd5e1" : MUTED, border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 12, fontWeight: 500, cursor: loading ? "not-allowed" : "pointer" }}>
+      style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "transparent", color: loading ? "var(--muted)" : "var(--text)", border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 12, fontWeight: 500, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1 }}>
       <RefreshCw size={11} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
       {loading ? "Loading…" : "Refresh"}
     </button>
@@ -1189,10 +1189,10 @@ export function AnalyticsPage() {
             {/* Filters — single flat toolbar, no nested containers */}
             <div style={{ background: "var(--bg-surface)", border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", padding: "16px 20px", display: "flex", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}>
               <FilterField label="From">
-                <DatePicker value={demandFrom} onChange={setDemandFrom} popperPlacement="bottom-start" />
+                <DatePicker value={demandFrom} onChange={setDemandFrom} />
               </FilterField>
               <FilterField label="To">
-                <DatePicker value={demandTo} onChange={setDemandTo} popperPlacement="bottom-start" />
+                <DatePicker value={demandTo} onChange={setDemandTo} />
               </FilterField>
               <FilterField label="Site">
                 <select value={demandSite} onChange={(e) => setDemandSite(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", padding: "0 10px", fontSize: 13, outline: "none", fontFamily: "inherit", background: "var(--bg-surface)", cursor: "pointer", height: 34, color: demandSite ? INK : MUTED, minWidth: 160 }}>

@@ -340,14 +340,15 @@ export function CorrectionsPage() {
     return () => { void client.removeChannel(ch); };
   }, []);
 
-  async function handleSearch(e: FormEvent) {
-    e.preventDefault();
-    if (!query.trim()) return;
+  async function handleSearch(e?: { preventDefault: () => void }, overrideQuery?: string) {
+    e?.preventDefault();
+    const q = (overrideQuery ?? query).trim();
+    if (!q) return;
     setSearching(true); setResult(null); setNotFound(false); setSuccessMsg(null);
     const client = getSupabaseClient(); if (!client) { setSearching(false); return; }
     const { data } = await client.from("serial_numbers")
       .select("id,serial_number,status,part:parts(part_number,part_name),transfer_items(transfer:transfers(transfer_no,id))")
-      .eq("serial_number", query.trim()).maybeSingle();
+      .eq("serial_number", q).maybeSingle();
     if (!data) { setNotFound(true); setSearching(false); return; }
     const d = data as any;
     const ti = (d.transfer_items ?? [])[0];
@@ -412,26 +413,24 @@ export function CorrectionsPage() {
           <span style={{ fontSize: 11, color: MUTED }}>All changes are audited and require peer approval.</span>
         </div>
 
-        {/* Search bar — full width, prominent */}
-        <form onSubmit={(e) => void handleSearch(e)} style={{ marginBottom: 24 }}>
-          <div style={{ display: "flex", gap: 0, border: `1px solid ${result ? BLUE : BORDER}`, borderRadius: 20, overflow: "hidden", boxShadow: result ? `0 0 0 3px rgba(37,99,235,.1)` : "none", transition: "box-shadow .15s" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 40, flexShrink: 0 }}>
-              <Search size={15} color={MUTED} />
-            </div>
-            <input
-              value={query}
-              onChange={(e) => { setQuery(e.target.value); setResult(null); setNotFound(false); }}
-              placeholder="Search serial number to correct…"
-              style={{ flex: 1, border: "none", borderRadius: 0, padding: "5px 8px", fontSize: 14, fontFamily: "monospace", color: INK, background: "var(--bg-surface)", outline: "none" }}
-              className="search-input"
-            />
-            <button type="submit" disabled={searching || !query.trim()}
-              style={{ border: "none", borderRadius: 0, background: BLUE, color: "#fff", padding: "0 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
-              {searching ? "Searching…" : "Find"}
-            </button>
-          </div>
-          {notFound && <div style={{ marginTop: 8, fontSize: 12, color: MUTED }}>Serial "{query.trim()}" not found in inventory.</div>}
-        </form>
+        {/* Search bar */}
+        <div style={{ display: "flex", alignItems: "center", border: "1px solid var(--line)", borderRadius: "var(--radius-pill)", overflow: "hidden", marginBottom: 24, width: 360, marginLeft: "auto", padding: "0 12px" }}>
+          <Search size={14} color="var(--muted)" style={{ flexShrink: 0 }} />
+          <input
+            value={query}
+            onChange={(e) => { setQuery(e.target.value); setResult(null); setNotFound(false); }}
+            onKeyDown={(e) => { if (e.key === "Enter" && query.trim()) void handleSearch(e as any); }}
+            onPaste={(e) => {
+              const val = e.clipboardData.getData("text").trim();
+              if (val) { setQuery(val); setResult(null); setNotFound(false); setTimeout(() => void handleSearch(undefined, val), 50); }
+            }}
+            placeholder="Scan or type serial number…"
+            data-plain
+            style={{ flex: 1, border: "none", outline: "none", padding: "7px 8px", fontSize: 12, fontFamily: "monospace", color: "var(--text)", background: "transparent", boxShadow: "none" }}
+          />
+          {searching && <span style={{ fontSize: 11, color: "var(--muted)", flexShrink: 0 }}>…</span>}
+        </div>
+        {notFound && <div style={{ marginBottom: 16, fontSize: 12, color: "var(--muted)", textAlign: "right" }}>Serial "{query.trim()}" not found.</div>}
 
         {/* Result card — inline, no nested boxes */}
         {result && !successMsg && (

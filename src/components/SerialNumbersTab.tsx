@@ -149,8 +149,8 @@ export function SerialNumbersTab() {
                     <td>
                       <span style={{
                         display: "inline-block", padding: "2px 8px", borderRadius: "var(--radius-sm)", fontSize: 12, fontWeight: 600,
-                        background: r.status === "in_stock" ? "#dcfce7" : r.status === "transferred" ? "#dbeafe" : (r.status === "in_transit" || r.status === "transit") ? "#fef9c3" : "#f3f4f6",
-                        color: r.status === "in_stock" ? "#15803d" : r.status === "transferred" ? "#1d4ed8" : (r.status === "in_transit" || r.status === "transit") ? "#a16207" : "#374151",
+                        background: "var(--bg-surface-elevated)",
+                        color: r.status === "in_stock" ? "var(--link)" : r.status === "transferred" ? "var(--muted)" : (r.status === "in_transit" || r.status === "transit") ? "var(--muted)" : "var(--muted)",
                       }}>
                         {STATUS_LABEL[r.status] ?? r.status}
                       </span>

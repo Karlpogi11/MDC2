@@ -4,11 +4,10 @@ import { useAuth, type UserRole } from "@/lib/auth";
 
 type Props = {
   allow: UserRole[];
-  requireMfa?: boolean; // default: true for dc_admin
   children: ReactNode;
 };
 
-export function RoleGuard({ allow, requireMfa, children }: Props) {
+export function RoleGuard({ allow, children }: Props) {
   const { state } = useAuth();
 
   if (state.status === "loading" || state.status === "connecting") {
@@ -46,21 +45,7 @@ export function RoleGuard({ allow, requireMfa, children }: Props) {
     );
   }
 
-  // MFA enforcement: dc_admin must have aal2 (TOTP verified)
-  const shouldEnforceMfa = requireMfa ?? state.profile.role === "dc_admin";
-  if (shouldEnforceMfa && state.aal !== "aal2") {
-    return (
-      <div style={{ position: "fixed", inset: 0, background: "var(--bg-surface-elevated)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
-        <p style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 700, color: "var(--text)" }}>MFA required</p>
-        <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--muted)", textAlign: "center", maxWidth: 320 }}>
-          Admin accounts must have two-factor authentication enabled and verified.
-        </p>
-        <a href="/login?mfa=setup" style={{ padding: "5px 12px", background: "var(--blue)", color: "#fff", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
-          Set up MFA
-        </a>
-      </div>
-    );
-  }
+
 
   return <>{children}</>;
 }

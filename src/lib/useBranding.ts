@@ -4,6 +4,8 @@ import { getSupabaseClient } from "./supabase";
 type BrandingData = {
   logoUrl: string | null;
   brandName: string | null;
+  supportEmail?: string | null;
+  loginNotice?: string | null;
   primary?: string;
   accent?: string;
 };
@@ -22,13 +24,15 @@ async function fetchBranding(): Promise<BrandingData> {
   inflight = client
     .from("app_config")
     .select("key,value")
-    .in("key", ["brand_primary_color", "brand_accent_color", "brand_logo_url", "brand_name"])
+    .in("key", ["brand_primary_color", "brand_accent_color", "brand_logo_url", "brand_name", "support_email", "login_notice"])
     .then(({ data }) => {
       const map: Record<string, string> = {};
       for (const row of data ?? []) if (row.value) map[row.key] = row.value;
       cache = {
         logoUrl: map.brand_logo_url ?? null,
         brandName: map.brand_name ?? null,
+        supportEmail: map.support_email ?? null,
+        loginNotice: map.login_notice ?? null,
         primary: map.brand_primary_color,
         accent: map.brand_accent_color,
       };

@@ -4,14 +4,14 @@
   --bg-surface: #ffffff;
   --bg-surface-elevated: #fbfbfd;
   --nav-bg: #1d1d1f;
-  --nav-text: rgba(255,255,255,0.65);
+  --nav-text: #ffffff;
   --nav-active: #ffffff;
   --nav-border: rgba(255,255,255,0.08);
   --line: rgba(0,0,0,0.08);
   --line-soft: transparent;
   --blue: #0071e3;
   --blue-hover: #0077ed;
-  --link: #0071e3;
+  --link: #0057d9;
   --text: #1d1d1f;
   --muted: #86868b;
   --negative: #ff3b30;
@@ -36,9 +36,9 @@ html.dark-theme {
   --nav-border:          #2a2a2a;
   --line:                #3a3a3a;
   --line-soft:           #2a2a2a;
-  --blue:                #0071e3;
-  --blue-hover:          #0077ed;
-  --link:                #2997ff;
+  --blue:                #4d9fff;
+  --blue-hover:          #5eaaff;
+  --link:                #3E8EF5;
   --text:                #e8e8e8;
   --muted:               #888888;
   --negative:            #ff453a;
@@ -89,10 +89,12 @@ body, .katana-app, header, nav, .sub-nav, .control-btn, .view-switch, .view-swit
 /* Remove browser default focus outline on buttons; keep subtle outline on inputs */
 button:focus { outline: none; }
 button:focus-visible { outline: 1px solid var(--focus-outline); outline-offset: 2px; }
-input:focus, select:focus, textarea:focus {
+input:focus:not([data-plain]), select:focus, textarea:focus {
   outline: 2px solid var(--focus-outline) !important;
   outline-offset: -1px;
 }
+
+input[data-plain]:focus { outline: none !important; box-shadow: none !important; }
 
 /* Autofill Overrides - prevents default bright yellow/blue autofill backgrounds */
 input:-webkit-autofill,
@@ -108,6 +110,17 @@ select:-webkit-autofill:focus {
   -webkit-box-shadow: 0 0 0px 1000px var(--bg-surface) inset !important;
   transition: background-color 5000s ease-in-out 0s;
 }
+
+/* Login page always light — override autofill for dark mode users */
+.login-right input:-webkit-autofill,
+.login-right input:-webkit-autofill:hover,
+.login-right input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #1d1d1f !important;
+  -webkit-box-shadow: 0 0 0px 1000px #ffffff inset !important;
+}
+
+/* Placeholder should never be bold */
+input::placeholder, textarea::placeholder { font-weight: 400 !important; }
 
 .circle {
   border-radius: 50% !important;
@@ -135,7 +148,7 @@ table {
 }
 
 /* Global input/select sizing — compact, consistent */
-input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([data-plain]),
 select,
 textarea {
   padding: 5px 8px !important;
@@ -462,10 +475,13 @@ html:not(.dark-theme) .global-nav {
 .segment-tabs {
   display: inline-flex;
   border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
 }
 
 .segment {
   border: none;
+  border-right: 1px solid var(--line);
   min-width: 120px;
   padding: 10px 16px;
   background: var(--blue);
@@ -473,7 +489,10 @@ html:not(.dark-theme) .global-nav {
   cursor: pointer;
   font-size: 13px;
   font-weight: 600;
+  border-radius: 0;
 }
+
+.segment:last-child { border-right: none; }
 
 .segment.ghost {
   background: var(--bg-surface-elevated);
@@ -1386,12 +1405,21 @@ html.dark-theme .status-badge {
 }
 
 /* ── Inputs / Selects ── */
-html.dark-theme input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+html.dark-theme input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([data-plain]),
 html.dark-theme select,
 html.dark-theme textarea {
   background: var(--bg-input);
   color: var(--text) !important;
   border: 1px solid rgba(255,255,255,0.25) !important;
+}
+
+html.dark-theme .correction-form input,
+html.dark-theme .drawer-search,
+html.dark-theme .correction-search {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
 }
 
 html.dark-theme input::placeholder,
@@ -1468,7 +1496,8 @@ html.dark-theme .sub-tab { color: var(--muted); background: transparent; border-
 html.dark-theme .sub-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
 
 /* ── Segment tabs ── */
-html.dark-theme .segment { background: var(--blue); color: #fff; }
+html.dark-theme .segment-tabs { border-color: var(--line); }
+html.dark-theme .segment { background: var(--blue); color: #fff; border-right-color: rgba(255,255,255,0.12); }
 html.dark-theme .segment.ghost { background: var(--bg-surface-elevated); color: var(--muted); }
 
 /* ── Sort / link buttons ── */
@@ -1482,7 +1511,8 @@ html.dark-theme h4, html.dark-theme h5, html.dark-theme h6 {
   color: var(--text) !important;
   background: transparent !important;
 }
-html.dark-theme p, html.dark-theme label, html.dark-theme li { color: var(--text); }
+html.dark-theme p, html.dark-theme li { color: var(--text); }
+html.dark-theme label:not([style*="background"]) { color: var(--text); }
 html.dark-theme span:not(.status-badge) { color: inherit; }
 html.dark-theme strong, html.dark-theme small, html.dark-theme code { color: inherit; }
 html.dark-theme div { color: inherit; }
@@ -1564,3 +1594,14 @@ html.dark-theme .react-datepicker__navigation-icon::before { border-color: var(-
 html.dark-theme ::-webkit-scrollbar-track { background: var(--bg-page); }
 html.dark-theme ::-webkit-scrollbar-thumb { background: var(--line); border: 2px solid var(--bg-page); }
 html.dark-theme ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+.drawer-search:focus, .correction-search:focus { outline: none !important; border: none !important; box-shadow: none !important; }
+
+/* Bold all monospace text (serial numbers, part numbers, transfer refs) */
+[style*="monospace"], code { font-weight: 700 !important; }
+
+input[type="file"] { appearance: none; background: transparent !important; border: none !important; box-shadow: none !important; color: transparent !important; }
+input[type="file"]::-webkit-file-upload-button { visibility: hidden; display: none; width: 0; height: 0; padding: 0; border: none; }
+input[type="file"]::file-selector-button { visibility: hidden; display: none; width: 0; height: 0; padding: 0; border: none; }
+
+html.dark-theme th { color: #ffffff !important; --muted: #ffffff; }

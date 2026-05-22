@@ -20,18 +20,24 @@ type Transfer = {
   item_count: number;
 };
 
-function getAgeDays(transfer: Transfer): number | null {
-  if (transfer.status !== "in_transit") return null;
+function getAge(transfer: Transfer): string | null {
+  if (transfer.status === "received" || transfer.status === "cancelled") return null;
   const from = transfer.packed_at ?? transfer.created_at;
-  return Math.floor((Date.now() - new Date(from).getTime()) / 86400000);
+  const ms = Date.now() - new Date(from).getTime();
+  const mins = Math.floor(ms / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(ms / 3600000);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.floor(ms / 86400000)}d`;
 }
 
 const STATUS_STYLE: Record<TransferStatus, { bg: string; color: string; label: string }> = {
-  draft:      { bg: "#f3f4f6", color: "var(--muted)", label: "Draft" },
-  packed:     { bg: "#dbeafe", color: "var(--blue)", label: "Packed" },
-  in_transit: { bg: "#fef9c3", color: "var(--muted)", label: "In Transit" },
-  received:   { bg: "#dcfce7", color: "var(--text)", label: "Received" },
-  cancelled:  { bg: "#fee2e2", color: "var(--negative)", label: "Cancelled" },
+  draft:      { bg: "var(--bg-surface-elevated)", color: "var(--muted)",    label: "Draft" },
+  packed:     { bg: "var(--bg-surface-elevated)", color: "var(--blue)",     label: "Packed" },
+  in_transit: { bg: "var(--bg-surface-elevated)", color: "var(--muted)",    label: "In Transit" },
+  received:   { bg: "var(--bg-surface-elevated)", color: "var(--text)",     label: "Received" },
+  cancelled:  { bg: "var(--bg-surface-elevated)", color: "var(--negative)", label: "Cancelled" },
 };
 
 async function fetchTransfers(): Promise<Transfer[]> {
@@ -158,7 +164,7 @@ export function TransfersPage() {
                 border: "none", borderBottom: `2px solid ${statusFilter === s ? "var(--blue)" : "transparent"}`,
                 borderRadius: 0, padding: "5px 10px", fontSize: 13, fontWeight: statusFilter === s ? 600 : 400,
                 cursor: "pointer", background: "transparent",
-                color: statusFilter === s ? "var(--blue)" : "#6b7a8d",
+                color: statusFilter === s ? "var(--blue)" : "var(--text)",
                 marginBottom: -1,
               }}
             >
@@ -223,13 +229,13 @@ export function TransfersPage() {
                     </td>
                     <td>
                       {(() => {
-                        const age = getAgeDays(t);
+                        const age = getAge(t);
                         if (age === null) return <span style={{ color: "var(--muted)" }}>—</span>;
-                        const overdue = age > 3;
+                        const overdue = age.endsWith("d") && parseInt(age) > 3;
                         return (
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontWeight: overdue ? 700 : 400, color: overdue ? "#b91c1c" : "#6b7a8d" }}>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontWeight: overdue ? 700 : 400, color: overdue ? "var(--negative)" : "var(--muted)" }}>
                             {overdue && <span title="Overdue — in transit more than 3 days">⚠️</span>}
-                            {age}d
+                            {age}
                           </span>
                         );
                       })()}

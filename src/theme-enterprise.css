@@ -13,7 +13,7 @@ html[data-theme="light"] {
 
   --nav-bg: #142f55;
   --nav-border: #0b2b4d;
-  --nav-text: rgba(243, 245, 248, 0.74);
+  --nav-text: #f3f5f8;
   --nav-active: #ffffff;
 
   --line: #cfd5dd;
@@ -24,7 +24,7 @@ html[data-theme="light"] {
 
   --blue: #0a57c7;
   --blue-hover: #1a67d4;
-  --link: #0c63cf;
+  --link: #0057d9;
 
   --positive: #267d4b;
   --warning: #9a6516;
@@ -53,7 +53,7 @@ html[data-theme="dark"] {
 
   --nav-bg:     #4a4a4a;
   --nav-border: #212121;
-  --nav-text:   rgba(220, 225, 232, 0.70);
+  --nav-text:   rgba(220, 225, 232, 1);
   --nav-active: #ffffff;
 
   --line:      #4a4a4a;
@@ -62,9 +62,9 @@ html[data-theme="dark"] {
   --text:  #e8eaed;
   --muted: #9aa0aa;
 
-  --blue:       #1a73e8;
-  --blue-hover: #2a82f8;
-  --link:       #8ab4f8;
+  --blue:       #4d9fff;
+  --blue-hover: #5eaaff;
+  --link:       #3E8EF5;
 
   --positive: #34a853;
   --warning:  #f29900;
@@ -249,7 +249,6 @@ html[data-theme="dark"] .global-nav {
 
 .breadcrumb-sep {
   color: var(--muted);
-  opacity: 0.72;
 }
 
 .breadcrumb-link {
@@ -402,17 +401,23 @@ html[data-theme="dark"] .global-nav {
 
 .segment-tabs {
   border: 1px solid var(--line);
-  border-radius: 3px;
+  border-radius: var(--radius);
   overflow: hidden;
 }
+
+html.dark-theme .segment-tabs { border-color: var(--line); }
 
 .segment {
   min-width: 106px;
   padding: 8px 13px;
   font-size: 12px;
+  border-radius: 0;
+  border-right: 1px solid rgba(255,255,255,0.12);
   background: linear-gradient(to bottom, #0f5fcc, #094da5);
   color: #fff;
 }
+
+.segment:last-child { border-right: none; }
 
 .segment.ghost {
   background: var(--bg-surface-elevated);
@@ -447,6 +452,9 @@ th,
   text-transform: uppercase;
 }
 
+html.dark-theme th,
+html.dark-theme .filters-row th { color: #ffffff !important; --muted: #ffffff; }
+
 td {
   background: var(--bg-surface);
   color: var(--text);
@@ -473,7 +481,7 @@ html.dark-theme .selected-row td {
   background: rgba(26, 115, 232, 0.20);
 }
 
-input,
+input:not([data-plain]):not([type="file"]):not([type="checkbox"]):not([type="radio"]),
 select,
 textarea {
   border: 1px solid var(--line) !important;

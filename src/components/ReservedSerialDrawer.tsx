@@ -24,8 +24,8 @@ type ReservedItemRow = {
 };
 
 const TRANSFER_STATUS_STYLE: Record<ReservedItemRow["transferStatus"], { bg: string; color: string; label: string }> = {
-  draft: { bg: "#f3f4f6", color: "var(--muted)", label: "Draft" },
-  packed: { bg: "#dbeafe", color: "var(--blue)", label: "Packed" },
+  draft: { bg: "var(--bg-surface-elevated)", color: "var(--muted)", label: "Draft" },
+  packed: { bg: "var(--bg-surface-elevated)", color: "var(--blue)", label: "Packed" },
 };
 
 const RESERVED_DRAWER_CACHE = new Map<string, ReservedItemRow[]>();

@@ -16,13 +16,14 @@ type Profile = {
   email: string | null;
   username: string | null;
   role: UserRole;
+  force_password_change?: boolean;
 };
 
 type AuthState =
   | { status: "loading" }
   | { status: "connecting" }
   | { status: "unauthenticated" }
-  | { status: "authenticated"; user: User; session: Session; profile: Profile; aal: "aal1" | "aal2" };
+  | { status: "authenticated"; user: User; session: Session; profile: Profile };
 
 type AuthContextValue = {
   state: AuthState;
@@ -64,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const client = getSupabaseClient()!;
     const { data } = await client
       .from("profiles")
-      .select("id,full_name,email,username,role,is_active")
+      .select("id,full_name,email,username,role,is_active,force_password_change")
       .eq("id", session.user.id)
       .maybeSingle();
 
@@ -89,7 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      setState({ status: "authenticated", user: session.user, session, profile: newProfile as Profile, aal: "aal1" });
+      setState({ status: "authenticated", user: session.user, session, profile: newProfile as Profile });
       return;
     }
 
@@ -99,10 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const { data: aalData } = await client.auth.mfa.getAuthenticatorAssuranceLevel();
-    const aal = aalData?.currentLevel === "aal2" ? "aal2" : "aal1";
-
-    setState({ status: "authenticated", user: session.user, session, profile: data as Profile, aal });
+    setState({ status: "authenticated", user: session.user, session, profile: data as Profile });
   }
 
   async function signInWithUsername(username: string, password: string): Promise<string | null> {
@@ -146,6 +144,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signOut() {
     const client = getSupabaseClient();
+    document.documentElement.classList.remove("dark-theme");
+    document.documentElement.removeAttribute("data-theme");
+    localStorage.removeItem("mdc-theme");
     await client?.auth.signOut();
   }
 

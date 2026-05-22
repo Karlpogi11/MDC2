@@ -47,7 +47,7 @@ function BatchItems({ batchId }: { batchId: string }) {
                       <td style={{ padding: "5px 12px", color: "var(--text)" }}>{part?.part_name ?? "—"}</td>
                       <td style={{ padding: "5px 16px", textAlign: "right" }}>{item.quantity}</td>
                       <td style={{ padding: "5px 16px" }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: "var(--radius-pill)", background: serial?.status === "in_stock" ? "#dcfce7" : "#f3f4f6", color: serial?.status === "in_stock" ? "#15803d" : "#6b7a8d" }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: "var(--radius-pill)", background: "var(--bg-surface-elevated)", color: serial?.status === "in_stock" ? "var(--link)" : "var(--muted)" }}>
                           {serial?.status ?? "—"}
                         </span>
                       </td>
@@ -105,13 +105,13 @@ export function ImportHistoryTab() {
               return (
                 <>
                   <tr key={b.id} onClick={() => setExpanded(isExpanded ? null : b.id)}
-                    style={{ cursor: "pointer", background: isExpanded ? "#f0f7ff" : undefined }}>
+                    style={{ cursor: "pointer", background: isExpanded ? "var(--bg-surface-elevated)" : undefined }}>
                     <td>{new Date(b.imported_at).toLocaleString("en-US", { month: "short", day: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</td>
-                    <td><span style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: "var(--radius-pill)", background: b.source_type === "manual" ? "#f3f4f6" : "#dbeafe", color: b.source_type === "manual" ? "#6b7a8d" : "#1d4ed8" }}>{b.source_type}</span></td>
+                    <td><span style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: "var(--radius-pill)", background: "var(--bg-surface-elevated)", color: b.source_type === "manual" ? "var(--muted)" : "var(--blue)" }}>{b.source_type}</span></td>
                     <td style={{ overflow: "hidden", textOverflow: "ellipsis" }} title={b.source_file_name ?? ""}>{b.source_type === "manual" ? <span style={{ color: "var(--muted)", fontStyle: "italic" }}>Manual entry</span> : (b.source_file_name ?? "—")}</td>
                     <td className="num">{b.total_rows}</td>
                     <td className="num" style={{ color: "var(--text)", fontWeight: 600 }}>{b.success_rows}</td>
-                    <td className="num" style={{ color: b.failed_rows > 0 ? "#b91c1c" : undefined, fontWeight: b.failed_rows > 0 ? 600 : undefined }}>{b.failed_rows}</td>
+                    <td className="num" style={{ color: b.failed_rows > 0 ? "var(--negative)" : undefined, fontWeight: b.failed_rows > 0 ? 600 : undefined }}>{b.failed_rows}</td>
                     <td style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{importer?.full_name ?? importer?.username ?? "—"}</td>
                   </tr>
                   {isExpanded && <BatchItems batchId={b.id} />}

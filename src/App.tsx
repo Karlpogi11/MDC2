@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { LoginPage } from "@/pages/LoginPage";
 import { DashboardPage } from "@/pages/DashboardPage";
+import { ChangePasswordPage } from "@/pages/ChangePasswordPage";
 import { InventoryPage } from "@/pages/InventoryPage";
 import { ConfigPage } from "@/pages/ConfigPage";
 import { UsersPage } from "@/pages/UsersPage";
@@ -27,8 +28,15 @@ export function App() {
   return (
     <Routes>
       <Route path="/login"                      element={<LoginPage />} />
+      <Route path="/change-password"            element={<ChangePasswordPage />} />
       <Route path="/dashboard"                  element={<RoleGuard allow={[...ALL]}><DashboardPage /></RoleGuard>} />
-      <Route path="/"                           element={<Navigate to="/dashboard" replace />} />
+      <Route path="/" element={
+        window.location.hash.includes("type=recovery") || window.location.hash.includes("type=invite")
+          ? <LoginPage />
+          : window.location.hash.includes("access_token") || window.location.hash.includes("error_description")
+          ? <LoginPage />
+          : <Navigate to="/dashboard" replace />
+      } />
       <Route path="/inventory"                  element={<RoleGuard allow={[...ALL]}><InventoryPage /></RoleGuard>} />
       <Route path="/stock-in"                   element={<RoleGuard allow={[...OPS]}><StockInPage /></RoleGuard>} />
       <Route path="/transfers"                  element={<RoleGuard allow={[...ALL]}><TransfersPage /></RoleGuard>} />
