@@ -1,1 +1,10 @@
 project_id = "ldgzyabotayrmkgyjbvp"
+
+[functions.health]
+verify_jwt = false
+
+[functions.weekly-digest]
+verify_jwt = false
+
+[functions.webhook-dispatch]
+verify_jwt = true

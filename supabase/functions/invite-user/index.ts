@@ -2,6 +2,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const GMAIL_USER = Deno.env.get("GMAIL_USER") ?? "";
 const GMAIL_APP_PASSWORD = Deno.env.get("GMAIL_APP_PASSWORD") ?? "";
 const APP_URL = Deno.env.get("APP_URL") ?? "https://mdc.app";
@@ -113,28 +114,29 @@ Deno.serve(async (req) => {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) return json({ error: "Unauthorized" }, 401);
 
+  const callerClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: authHeader } },
+  });
+  const { data: { user }, error: authErr } = await callerClient.auth.getUser();
+  if (authErr || !user) return json({ error: "Unauthorized" }, 401);
+
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  const { data: callerProfile } = await admin
+    .from("profiles")
+    .select("role,is_active")
+    .eq("id", user.id)
+    .maybeSingle();
 
-  // Decode JWT claims (Supabase gateway already verified the signature)
-  let jwtPayload: Record<string, string> = {};
-  try {
-    const b64 = authHeader.replace("Bearer ", "").split(".")[1];
-    jwtPayload = JSON.parse(atob(b64.replace(/-/g, "+").replace(/_/g, "/")));
-  } catch { return json({ error: "Unauthorized" }, 401); }
-
-  // service_role is fully trusted — skip profile check
-  if (jwtPayload.role !== "service_role") {
-    const callerId = jwtPayload.sub;
-    if (!callerId) return json({ error: "Unauthorized" }, 401);
-    const { data: callerProfile } = await admin.from("profiles").select("role").eq("id", callerId).single();
-    if (!["system_admin", "dc_admin"].includes(callerProfile?.role ?? "")) {
-      return json({ error: "Forbidden — insufficient role" }, 403);
-    }
+  if (!callerProfile?.is_active || callerProfile.role !== "system_admin") {
+    return json({ error: "Forbidden — system_admin required" }, 403);
   }
 
   const { email, username, full_name, role } = await req.json();
   if (!email || !username || !role) {
     return json({ error: "email, username, role required" }, 400);
+  }
+  if (!["system_admin", "dc_admin", "dc_operator", "dc_viewer"].includes(role)) {
+    return json({ error: "Invalid role" }, 400);
   }
 
   // Auto-generate temp password

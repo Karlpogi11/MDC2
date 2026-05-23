@@ -26,6 +26,18 @@ Deno.serve(async (req) => {
     const { data: { user }, error: userErr } = await userClient.auth.getUser();
     if (userErr || !user) return new Response("Unauthorized", { status: 401 });
 
+    const { data: profile } = await client
+      .from("profiles")
+      .select("role,is_active")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (!profile?.is_active || !["system_admin", "dc_admin", "dc_operator"].includes(profile.role)) {
+      return new Response(
+        JSON.stringify({ error: "Forbidden — DC staff only" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const { filePath, fileName, idempotencyKey } = await req.json() as { filePath: string; fileName: string; idempotencyKey?: string };
     if (!filePath || !fileName) return new Response("Missing filePath or fileName", { status: 400 });
 

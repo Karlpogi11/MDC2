@@ -75,6 +75,16 @@ Deno.serve(async (req) => {
   const { data: { user }, error: authError } = await userClient.auth.getUser();
   if (authError || !user) return jsonResp({ error: "Unauthorized" }, 401);
 
+  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("role,is_active")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (!profile?.is_active || !["system_admin", "dc_admin", "dc_operator", "dc_viewer"].includes(profile.role)) {
+    return jsonResp({ error: "Forbidden" }, 403);
+  }
+
   let transferId: string;
   try {
     const body = await req.json();
@@ -84,8 +94,7 @@ Deno.serve(async (req) => {
     return jsonResp({ error: (e as Error).message }, 400);
   }
 
-  // Fetch with service role — PDF generation needs full data regardless of RLS
-  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  // Fetch with service role — PDF generation needs complete transfer data after role verification.
   const { data: transfer, error: txErr } = await admin
     .from("transfers")
     .select(`

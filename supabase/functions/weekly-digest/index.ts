@@ -5,6 +5,22 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GMAIL_USER = Deno.env.get("GMAIL_USER")!;
 const GMAIL_APP_PASSWORD = Deno.env.get("GMAIL_APP_PASSWORD")!;
 
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "authorization, apikey, x-internal-key, content-type",
+};
+
+function isServiceRequest(req: Request): boolean {
+  const sharedSecret = Deno.env.get("INTERNAL_FUNCTION_SECRET") ?? "";
+  const suppliedSecret = req.headers.get("x-internal-key") ?? "";
+  if (sharedSecret && suppliedSecret === sharedSecret) return true;
+
+  const apiKey = req.headers.get("apikey") ?? "";
+  const bearer = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+  return apiKey === SUPABASE_SERVICE_ROLE_KEY || bearer === SUPABASE_SERVICE_ROLE_KEY;
+}
+
 async function sendGmailSmtp(opts: { to: string; from: string; subject: string; html: string; text: string }): Promise<{ ok: boolean; error?: string }> {
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
@@ -53,7 +69,10 @@ async function sendGmailSmtp(opts: { to: string; from: string; subject: string; 
   }
 }
 
-Deno.serve(async (_req) => {
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
+  if (!isServiceRequest(req)) return new Response("Unauthorized", { status: 401, headers: CORS });
+
   const client = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   // Get brand name
@@ -67,7 +86,7 @@ Deno.serve(async (_req) => {
     .eq("type", "weekly_digest")
     .eq("is_active", true);
 
-  if (!jobs?.length) return new Response(JSON.stringify({ skipped: true, reason: "No active digest jobs" }), { headers: { "Content-Type": "application/json" } });
+  if (!jobs?.length) return new Response(JSON.stringify({ skipped: true, reason: "No active digest jobs" }), { headers: { "Content-Type": "application/json", ...CORS } });
 
   // Gather stats
   const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
@@ -136,6 +155,6 @@ Deno.serve(async (_req) => {
   const sentCount = results.filter((r) => r.ok).length;
   console.log(`[weekly-digest] sent ${sentCount}/${allRecipients.length}`);
   return new Response(JSON.stringify({ sent: sentCount, total: allRecipients.length, results }), {
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...CORS },
   });
 });

@@ -36,7 +36,6 @@ export function ReceivePage() {
   const [invoiceRef, setInvoiceRef] = useState("");
   const [sourceSite, setSourceSite] = useState("");
   const [destSite, setDestSite] = useState("");
-  const [destSiteId, setDestSiteId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
@@ -72,7 +71,6 @@ export function ReceivePage() {
           setInvoiceRef(d.invoice_ref ?? "");
           setSourceSite(d.source_site_name ?? "DC");
           setDestSite(d.destination_site_name ?? "—");
-          setDestSiteId(d.destination_site_id ?? null);
           setItems((d.items ?? [])
             .filter((i: any) => i.serial_number)
             .map((i: any) => ({
@@ -105,7 +103,6 @@ export function ReceivePage() {
           setInvoiceRef(d.invoice_ref ?? "");
           setSourceSite(src?.site_name ?? "DC");
           setDestSite(dst?.site_name ?? "—");
-          setDestSiteId(dst?.id ?? null);
           setItems((d.transfer_items ?? []).map((item: any) => {
             const part = Array.isArray(item.part) ? item.part[0] : item.part;
             const serial = Array.isArray(item.serial) ? item.serial[0] : item.serial;
@@ -136,21 +133,12 @@ export function ReceivePage() {
         setSubmitting(false); return;
       }
     } else {
-      // Authenticated path
-      const { error: err } = await client.from("transfers")
-        .update({ status: "received", receipt_token: null })
-        .eq("id", id).eq("status", "in_transit");
+      // Authenticated path: use the same state-machine RPC as the main transfer flow.
+      const { error: err } = await client.rpc("transition_transfer_status", {
+        p_transfer_id: id,
+        p_new_status: "received",
+      });
       if (err) { setError(err.message); setSubmitting(false); return; }
-    }
-
-    // Update current_site_id for all serials (trigger handles status)
-    if (destSiteId) {
-      const allSerials = items.filter((i) => i.serial_number).map((i) => i.serial_number);
-      if (allSerials.length > 0) {
-        await client.from("serial_numbers")
-          .update({ current_site_id: destSiteId })
-          .in("serial_number", allSerials);
-      }
     }
     setDone(true); setSubmitting(false);
   }

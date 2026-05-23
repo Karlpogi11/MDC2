@@ -561,11 +561,11 @@ Deno.serve(async (req) => {
   const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   const { data: profile } = await adminClient
     .from("profiles")
-    .select("role")
+    .select("role,is_active")
     .eq("id", user.id)
     .maybeSingle();
 
-  if (!DC_ROLES.includes(profile?.role ?? "")) {
+  if (!profile?.is_active || !DC_ROLES.includes(profile.role)) {
     return jsonResp({ ok: false, reason: "Forbidden — DC staff only" }, 403, cors);
   }
 

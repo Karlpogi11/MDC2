@@ -43,6 +43,16 @@ Deno.serve(async (req) => {
   const { data: { user }, error: authErr } = await userClient.auth.getUser();
   if (authErr || !user) return json({ error: "Unauthorized" }, 401);
 
+  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("role,is_active")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (!profile?.is_active || !["system_admin", "dc_admin", "dc_operator"].includes(profile.role)) {
+    return json({ error: "Forbidden" }, 403);
+  }
+
   const body = await req.json().catch(() => ({}));
   const {
     date_from,
@@ -59,8 +69,6 @@ Deno.serve(async (req) => {
     part_numbers?: string[];
     top_n?: number;
   };
-
-  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   // ── Query analytics_summary ───────────────────────────────────────────────
   let q = admin

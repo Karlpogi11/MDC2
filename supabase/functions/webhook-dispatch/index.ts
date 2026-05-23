@@ -28,8 +28,8 @@ Deno.serve(async (req) => {
   if (authErr || !user) return new Response("Unauthorized", { status: 401, headers: CORS });
 
   const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-  const { data: profile } = await adminClient.from("profiles").select("role").eq("id", user.id).maybeSingle();
-  if (!["system_admin", "dc_admin"].includes(profile?.role ?? "")) {
+  const { data: profile } = await adminClient.from("profiles").select("role,is_active").eq("id", user.id).maybeSingle();
+  if (!profile?.is_active || !["system_admin", "dc_admin"].includes(profile.role)) {
     return new Response("Forbidden", { status: 403, headers: CORS });
   }
 
