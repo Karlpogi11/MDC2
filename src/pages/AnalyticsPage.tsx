@@ -1,20 +1,12 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTableResize } from "@/components/ResizableColumns";
 import { friendlyError } from "@/lib/friendlyError";
 import { BarChart3, Upload, RefreshCw, TrendingUp } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useSites } from "@/hooks/useSites";
+import { normalizeCsvHeader, parseCSV, parseDelimitedRows } from "@/lib/csv";
 
-// Module-level cache — survives tab switches, cleared after TTL
-const _cache: Record<string, { data: any; ts: number }> = {};
-function getCached<T>(key: string, ttlMs: number): T | null {
-  const entry = _cache[key];
-  if (entry && Date.now() - entry.ts < ttlMs) return entry.data as T;
-  return null;
-}
-function setCached(key: string, data: any) {
-  _cache[key] = { data, ts: Date.now() };
-}
 import { useAuth } from "@/lib/auth";
 import { AppLayout } from "@/components/AppLayout";
 import { CSVDropZone } from "@/components/CSVDropZone";
@@ -55,29 +47,6 @@ const GREEN      = "var(--text)";
 const AMBER      = "var(--muted)";
 
 // ── CSV helpers ───────────────────────────────────────────────────────────────
-
-function parseCSV(text: string): Record<string, string>[] {
-  const clean = text.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  const lines = clean.trim().split("\n").filter((l) => l.trim());
-  if (lines.length < 2) return [];
-  const delim = lines[0].includes("\t") ? "\t" : lines[0].includes(";") ? ";" : ",";
-  function split(line: string): string[] {
-    const r: string[] = []; let cur = ""; let q = false;
-    for (const ch of line) {
-      if (ch === '"') { q = !q; continue; }
-      if (ch === delim && !q) { r.push(cur.trim()); cur = ""; continue; }
-      cur += ch;
-    }
-    r.push(cur.trim()); return r;
-  }
-  const headers = split(lines[0]).map((h) => h.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, ""));
-  return lines.slice(1).filter((l) => l.trim()).map((line) => {
-    const vals = split(line);
-    const row: Record<string, string> = {};
-    headers.forEach((h, i) => { row[h] = vals[i] ?? ""; });
-    return row;
-  });
-}
 
 function normalizeFixably(row: Record<string, string>, uploadId: string) {
   return {
@@ -667,15 +636,8 @@ export function AnalyticsPage() {
   const [sourceType, setSourceType] = useState<"fixably" | "gsx">("fixably");
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ added: number; skipped: number; errors: string[] } | null>(null);
-  const [uploads, setUploads] = useState<UploadRecord[]>([]);
-  const [uploadsLoading, setUploadsLoading] = useState(true);
   const [mappingState, setMappingState] = useState<MappingState | null>(null);
   const [deletingUploadId, setDeletingUploadId] = useState<string | null>(null);
-
-  // DC Activity
-  const [dcData, setDcData] = useState<DCData | null>(null);
-  const [dcLoading, setDcLoading] = useState(false);
-  const [dcError, setDcError] = useState<string | null>(null);
 
   // Demand
   const [demandFrom, setDemandFrom] = useState("");
@@ -707,28 +669,43 @@ export function AnalyticsPage() {
   } | null>(null);
   const [velLoading, setVelLoading] = useState(false);
 
-  // Auto-detected device series list
-  const [seriesList, setSeriesList] = useState<string[]>([]);
+  const queryClient = useQueryClient();
 
   const sel: React.CSSProperties = { border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", padding: "5px 8px", fontSize: 13, outline: "none", fontFamily: "inherit", background: "var(--bg-surface)", cursor: "pointer" };
 
+  const uploadsQuery = useQuery<UploadRecord[]>({
+    queryKey: ["analytics", "uploads"],
+    queryFn: loadUploads,
+    staleTime: 60_000,
+  });
+  const dcQuery = useQuery<DCData, Error>({
+    queryKey: ["analytics", "dc-activity"],
+    queryFn: loadDC,
+    staleTime: 2 * 60_000,
+  });
+  const seriesQuery = useQuery<string[]>({
+    queryKey: ["analytics", "series-list"],
+    queryFn: loadSeriesList,
+    staleTime: 10 * 60_000,
+  });
+
+  const uploads = uploadsQuery.data ?? [];
+  const uploadsLoading = uploadsQuery.isLoading;
+  const dcData = dcQuery.data ?? null;
+  const dcLoading = dcQuery.isFetching;
+  const dcError = dcQuery.error?.message ?? null;
+  const seriesList = seriesQuery.data ?? [];
+
   // ── Loaders ──────────────────────────────────────────────────────────────────
 
-  async function loadUploads() {
-    const cached = getCached<UploadRecord[]>("uploads", 60_000);
-    if (cached) { setUploads(cached); setUploadsLoading(false); return; }
-    const client = getSupabaseClient(); if (!client) return;
+  async function loadUploads(): Promise<UploadRecord[]> {
+    const client = getSupabaseClient(); if (!client) return [];
     const { data } = await client.from("analytics_uploads").select("id,source_type,file_name,uploaded_at,row_count,status").order("uploaded_at", { ascending: false }).limit(20);
-    const rows = (data ?? []) as UploadRecord[];
-    setCached("uploads", rows);
-    setUploads(rows);
-    setUploadsLoading(false);
+    return (data ?? []) as UploadRecord[];
   }
 
-  async function loadSeriesList() {
-    const cached = getCached<string[]>("seriesList", 10 * 60_000);
-    if (cached) { setSeriesList(cached); return; }
-    const client = getSupabaseClient(); if (!client) return;
+  async function loadSeriesList(): Promise<string[]> {
+    const client = getSupabaseClient(); if (!client) return [];
     // Get distinct part names from analytics_summary, extract device series
     const { data } = await client.from("analytics_summary").select("part_name").limit(2000);
     const names = (data ?? []).map((r: any) => r.part_name ?? "").filter(Boolean) as string[];
@@ -754,15 +731,12 @@ export function AnalyticsPage() {
     }
     // Sort by PATTERNS order
     const sorted = PATTERNS.filter((p) => found.has(p));
-    setSeriesList(sorted);
-    setCached("seriesList", sorted);
+    return sorted;
   }
 
-  async function loadDC() {
-    const cached = getCached<any>("dcData", 2 * 60_000);
-    if (cached) { setDcData(cached); setDcLoading(false); return; }
-    setDcLoading(true); setDcError(null);
-    const client = getSupabaseClient(); if (!client) { setDcLoading(false); return; }
+  async function loadDC(): Promise<DCData> {
+    const client = getSupabaseClient();
+    if (!client) throw new Error("Supabase is not configured.");
     const [siRes, trRes, tiRes, snapRes] = await Promise.all([
       client.from("serial_numbers").select("stock_in_at").order("stock_in_at", { ascending: true }).limit(50000),
       client.from("transfers").select("id,status,created_at,destination_site:sites!destination_site_id(site_name)").neq("status", "cancelled").limit(10000),
@@ -770,8 +744,7 @@ export function AnalyticsPage() {
       client.from("inventory_snapshot").select("in_stock,committed,available"),
     ]);
     if (siRes.error || trRes.error || tiRes.error) {
-      setDcError((siRes.error ?? trRes.error ?? tiRes.error)!.message);
-      setDcLoading(false); return;
+      throw new Error((siRes.error ?? trRes.error ?? tiRes.error)!.message);
     }
     const serials   = (siRes.data ?? []) as { stock_in_at: string }[];
     const transfers = (trRes.data ?? []) as { id: string; status: string; created_at: string; destination_site: any }[];
@@ -828,9 +801,7 @@ export function AnalyticsPage() {
       kpi: { totalStockedIn: serials.length, totalStockedOut: items.reduce((s, i) => s + (i.qty ?? 1), 0), totalTransfers: total, receivedRate: total ? Math.round(received / total * 100) : 0, totalAvailable, totalCommitted },
       monthly, topParts, bySite, statusBreakdown,
     };
-    setCached("dcData", dcResult);
-    setDcData(dcResult);
-    setDcLoading(false);
+    return dcResult;
   }
 
   async function loadDemand() {
@@ -943,9 +914,6 @@ export function AnalyticsPage() {
   }
 
   useEffect(() => {
-    void loadUploads();
-    void loadDC();
-    void loadSeriesList();
     setDemandData(null);
   }, []);
 
@@ -963,11 +931,8 @@ export function AnalyticsPage() {
     const text = await file.text();
     const rows = parseCSV(text);
     if (!rows.length) { setImportResult({ added: 0, skipped: 0, errors: ["No rows found in file."] }); return; }
-    const clean = text.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-    const firstLine = clean.trim().split("\n")[0];
-    const delim = firstLine.includes("\t") ? "\t" : firstLine.includes(";") ? ";" : ",";
-    const rawHeaders = firstLine.split(delim).map((h) => h.trim().replace(/^"|"$/g, ""));
-    const headers = rawHeaders.map((h) => h.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, ""));
+    const rawHeaders = parseDelimitedRows(text)[0] ?? [];
+    const headers = rawHeaders.map(normalizeCsvHeader);
     setMappingState({ file, rawHeaders, headers, preview: rows.slice(0, 3), mapping: autoDetectMapping(headers, rows), totalRows: rows.length });
   }
 
@@ -976,7 +941,7 @@ export function AnalyticsPage() {
     setDeletingUploadId(id);
     const client = getSupabaseClient(); if (!client) { setDeletingUploadId(null); return; }
     await client.from("analytics_uploads").delete().eq("id", id);
-    setUploads((prev) => prev.filter((u) => u.id !== id));
+    await queryClient.invalidateQueries({ queryKey: ["analytics", "uploads"] });
     setDeletingUploadId(null);
     setDemandData(null);
   }
@@ -1056,7 +1021,7 @@ export function AnalyticsPage() {
     }
 
     setImporting(false); setMappingState(null);
-    void loadUploads();
+    void queryClient.invalidateQueries({ queryKey: ["analytics"] });
     setDemandData(null);
   }
 
@@ -1109,7 +1074,7 @@ export function AnalyticsPage() {
 
             {/* Top parts + Status side by side — works with any amount of data */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-              <Panel title="Most Transferred Parts" subtitle="Parts with highest outbound volume" action={<RefreshBtn onClick={() => void loadDC()} loading={dcLoading} />}>
+              <Panel title="Most Transferred Parts" subtitle="Parts with highest outbound volume" action={<RefreshBtn onClick={() => void dcQuery.refetch()} loading={dcLoading} />}>
                 {dcLoading ? <Spinner /> : !dcData?.topParts.length ? <Empty msg="No transfers yet." /> : (
                   <RankedBar data={dcData.topParts.map((p) => ({ name: p.part_number, value: p.qty, label: p.part_name ?? p.part_number }))} />
                 )}

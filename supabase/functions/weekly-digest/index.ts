@@ -1,15 +1,12 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { corsHeadersForRequest } from "../_shared/cors.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const GMAIL_USER = Deno.env.get("GMAIL_USER")!;
-const GMAIL_APP_PASSWORD = Deno.env.get("GMAIL_APP_PASSWORD")!;
+const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
+const RESEND_FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") ?? "";
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "authorization, apikey, x-internal-key, content-type",
-};
+const RESEND_ENDPOINT = "https://api.resend.com/emails";
 
 function isServiceRequest(req: Request): boolean {
   const sharedSecret = Deno.env.get("INTERNAL_FUNCTION_SECRET") ?? "";
@@ -21,57 +18,45 @@ function isServiceRequest(req: Request): boolean {
   return apiKey === SUPABASE_SERVICE_ROLE_KEY || bearer === SUPABASE_SERVICE_ROLE_KEY;
 }
 
-async function sendGmailSmtp(opts: { to: string; from: string; subject: string; html: string; text: string }): Promise<{ ok: boolean; error?: string }> {
-  const encoder = new TextEncoder();
-  const decoder = new TextDecoder();
-  const credentials = btoa(`\0${GMAIL_USER}\0${GMAIL_APP_PASSWORD}`);
-  const boundary = `b_${crypto.randomUUID().replace(/-/g, "")}`;
-  const rawMessage = [
-    `From: ${opts.from} <${GMAIL_USER}>`,
-    `To: ${opts.to}`,
-    `Subject: ${opts.subject}`,
-    "MIME-Version: 1.0",
-    `Content-Type: multipart/alternative; boundary="${boundary}"`,
-    "",
-    `--${boundary}`,
-    "Content-Type: text/plain; charset=UTF-8",
-    "Content-Transfer-Encoding: 8bit",
-    "",
-    opts.text,
-    "",
-    `--${boundary}`,
-    "Content-Type: text/html; charset=UTF-8",
-    "Content-Transfer-Encoding: 8bit",
-    "",
-    opts.html,
-    "",
-    `--${boundary}--`,
-  ].join("\r\n");
+async function sendDigestEmail(opts: { to: string; subject: string; html: string; text: string }): Promise<{ ok: boolean; error?: string }> {
+  if (!RESEND_API_KEY || !RESEND_FROM_EMAIL) {
+    return { ok: false, error: "Resend is not configured. Set RESEND_API_KEY and RESEND_FROM_EMAIL." };
+  }
 
-  let conn: Deno.TlsConn | null = null;
   try {
-    conn = await Deno.connectTls({ hostname: "smtp.gmail.com", port: 465 });
-    const read = async () => { const buf = new Uint8Array(4096); const n = await conn!.read(buf); return decoder.decode(buf.subarray(0, n ?? 0)); };
-    const write = async (cmd: string) => conn!.write(encoder.encode(`${cmd}\r\n`));
-    let r = await read(); if (!r.startsWith("220")) return { ok: false, error: `Greeting: ${r}` };
-    await write("EHLO mdc-inventory"); r = await read(); if (!r.includes("250")) return { ok: false, error: `EHLO: ${r}` };
-    await write(`AUTH PLAIN ${credentials}`); r = await read(); if (!r.startsWith("235")) return { ok: false, error: `AUTH: ${r}` };
-    await write(`MAIL FROM:<${GMAIL_USER}>`); r = await read(); if (!r.startsWith("250")) return { ok: false, error: `MAIL FROM: ${r}` };
-    await write(`RCPT TO:<${opts.to}>`); r = await read(); if (!r.startsWith("250")) return { ok: false, error: `RCPT TO: ${r}` };
-    await write("DATA"); r = await read(); if (!r.startsWith("354")) return { ok: false, error: `DATA: ${r}` };
-    await write(`${rawMessage}\r\n.`); r = await read(); if (!r.startsWith("250")) return { ok: false, error: `Send: ${r}` };
-    await write("QUIT");
+    const res = await fetch(RESEND_ENDPOINT, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: RESEND_FROM_EMAIL,
+        to: [opts.to],
+        subject: opts.subject,
+        html: opts.html,
+        text: opts.text,
+      }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      return { ok: false, error: `Resend ${res.status}: ${body.slice(0, 500)}` };
+    }
+
     return { ok: true };
-  } catch (e: any) {
-    return { ok: false, error: e?.message ?? String(e) };
-  } finally {
-    try { conn?.close(); } catch { /* noop */ }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
-  if (!isServiceRequest(req)) return new Response("Unauthorized", { status: 401, headers: CORS });
+  const cors = corsHeadersForRequest(req, {
+    methods: "POST, OPTIONS",
+    headers: "authorization, apikey, x-internal-key, content-type",
+  });
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
+  if (!isServiceRequest(req)) return new Response("Unauthorized", { status: 401, headers: cors });
 
   const client = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -86,7 +71,7 @@ Deno.serve(async (req) => {
     .eq("type", "weekly_digest")
     .eq("is_active", true);
 
-  if (!jobs?.length) return new Response(JSON.stringify({ skipped: true, reason: "No active digest jobs" }), { headers: { "Content-Type": "application/json", ...CORS } });
+  if (!jobs?.length) return new Response(JSON.stringify({ skipped: true, reason: "No active digest jobs" }), { headers: { "Content-Type": "application/json", ...cors } });
 
   // Gather stats
   const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
@@ -103,10 +88,10 @@ Deno.serve(async (req) => {
   const stockInCount = stockInRes.count ?? 0;
 
   const dateStr = new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-  const subject = `${brandName} — Weekly Digest · ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+  const subject = `${brandName} - Weekly Digest - ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
 
   const text = [
-    `${brandName} — Weekly Digest`,
+    `${brandName} - Weekly Digest`,
     `Week ending ${dateStr}`,
     ``,
     `In Stock:            ${inStockCount} serials`,
@@ -114,7 +99,7 @@ Deno.serve(async (req) => {
     `Pending Transfers:   ${pendingCount}`,
     `Corrections:         ${correctionCount}`,
     ``,
-    `${brandName} — automated report`,
+    `${brandName} - automated report`,
   ].join("\n");
 
   const html = `<!DOCTYPE html>
@@ -132,7 +117,7 @@ Deno.serve(async (req) => {
       <tr><td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;color:#6b7a8d;">Corrections this week</td><td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-weight:700;text-align:right;">${correctionCount}</td></tr>
     </table>
 
-    <p style="margin:0;font-size:11px;color:#aaa;">${brandName} — automated report</p>
+    <p style="margin:0;font-size:11px;color:#aaa;">${brandName} - automated report</p>
   </div>
 </body></html>`;
 
@@ -141,7 +126,7 @@ Deno.serve(async (req) => {
   const results: { to: string; ok: boolean; error?: string }[] = [];
 
   for (const to of allRecipients) {
-    const res = await sendGmailSmtp({ to, from: brandName, subject, html, text });
+    const res = await sendDigestEmail({ to, subject, html, text });
     results.push({ to, ...res });
     if (!res.ok) console.error(`[weekly-digest] failed for ${to}: ${res.error}`);
   }
@@ -155,6 +140,6 @@ Deno.serve(async (req) => {
   const sentCount = results.filter((r) => r.ok).length;
   console.log(`[weekly-digest] sent ${sentCount}/${allRecipients.length}`);
   return new Response(JSON.stringify({ sent: sentCount, total: allRecipients.length, results }), {
-    headers: { "Content-Type": "application/json", ...CORS },
+    headers: { "Content-Type": "application/json", ...cors },
   });
 });

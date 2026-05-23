@@ -23,6 +23,35 @@ const ERROR_MESSAGES: Record<string, string> = {
   INVALID_STATUS: "This transfer is not ready to receive.",
 };
 
+const RECEIPT_DRAFT_PREFIX = "mdc_receive_draft";
+
+function receiptDraftKey(id?: string, token?: string | null): string | null {
+  if (!id) return null;
+  return `${RECEIPT_DRAFT_PREFIX}:${id}:${token ?? "auth"}`;
+}
+
+function readReceivedDraft(key: string | null): Set<string> {
+  if (!key) return new Set();
+  try {
+    const ids = JSON.parse(localStorage.getItem(key) ?? "[]");
+    return new Set(Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function applyReceivedDraft(items: Item[], key: string | null): Item[] {
+  const receivedIds = readReceivedDraft(key);
+  if (receivedIds.size === 0) return items;
+  return items.map((item) => ({ ...item, received: receivedIds.has(item.id) }));
+}
+
+function writeReceivedDraft(key: string | null, items: Item[]) {
+  if (!key) return;
+  const ids = items.filter((item) => item.received).map((item) => item.id);
+  localStorage.setItem(key, JSON.stringify(ids));
+}
+
 export function ReceivePage() {
   const tableRef = useTableResize();
   const { id } = useParams<{ id: string }>();
@@ -40,6 +69,15 @@ export function ReceivePage() {
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const draftKey = receiptDraftKey(id, token);
+
+  const updateItems = (updater: (prev: Item[]) => Item[]) => {
+    setItems((prev) => {
+      const next = updater(prev);
+      writeReceivedDraft(draftKey, next);
+      return next;
+    });
+  };
 
   useEffect(() => {
     const client = getSupabaseClient();
@@ -71,13 +109,14 @@ export function ReceivePage() {
           setInvoiceRef(d.invoice_ref ?? "");
           setSourceSite(d.source_site_name ?? "DC");
           setDestSite(d.destination_site_name ?? "—");
-          setItems((d.items ?? [])
+          const receivedItems = (d.items ?? [])
             .filter((i: any) => i.serial_number)
             .map((i: any) => ({
               id: i.id, serial_number: i.serial_number,
               part_number: i.part_number ?? "—", part_name: i.part_name ?? "—",
               qty: i.qty, received: false,
-            })));
+            }));
+          setItems(applyReceivedDraft(receivedItems, draftKey));
           setLoading(false);
         });
     } else if (isLoggedIn) {
@@ -103,11 +142,12 @@ export function ReceivePage() {
           setInvoiceRef(d.invoice_ref ?? "");
           setSourceSite(src?.site_name ?? "DC");
           setDestSite(dst?.site_name ?? "—");
-          setItems((d.transfer_items ?? []).map((item: any) => {
+          const receivedItems = (d.transfer_items ?? []).map((item: any) => {
             const part = Array.isArray(item.part) ? item.part[0] : item.part;
             const serial = Array.isArray(item.serial) ? item.serial[0] : item.serial;
             return { id: item.id, serial_number: serial?.serial_number ?? null, part_number: part?.part_number ?? "—", part_name: part?.part_name ?? "—", qty: item.qty, received: false };
-          }).filter((i: any) => i.serial_number !== null));
+          }).filter((i: any) => i.serial_number !== null);
+          setItems(applyReceivedDraft(receivedItems, draftKey));
           setLoading(false);
         });
     } else {
@@ -140,6 +180,7 @@ export function ReceivePage() {
       });
       if (err) { setError(err.message); setSubmitting(false); return; }
     }
+    if (draftKey) localStorage.removeItem(draftKey);
     setDone(true); setSubmitting(false);
   }
 
@@ -181,9 +222,32 @@ export function ReceivePage() {
 
         {error && <div role="alert" style={{ marginBottom: 16, padding: "10px 14px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", color: "var(--negative)", fontSize: 13 }}>{error}</div>}
 
-        <button type="button" onClick={() => void handleConfirm()} disabled={submitting}
-          style={{ width: "100%", padding: "14px", fontSize: 15, fontWeight: 700, background: "#15803d", color: "#fff", border: "none", cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.7 : 1 }}>
-          {submitting ? "Confirming…" : "Confirm Received"}
+        {items.length > 0 && (
+          <div style={{ border: "1px solid var(--line)", marginBottom: 16 }}>
+            <div style={{ padding: "8px 10px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>Items ({receivedCount}/{items.length})</span>
+              <button type="button" onClick={() => updateItems((p) => p.map((item) => ({ ...item, received: true })))} style={{ border: "none", background: "transparent", color: "var(--blue)", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                Select all
+              </button>
+            </div>
+            {items.map((item) => (
+              <button key={item.id} type="button" onClick={() => updateItems((p) => p.map((x) => x.id === item.id ? { ...x, received: !x.received } : x))}
+                style={{ width: "100%", border: "none", borderBottom: "1px solid var(--line-soft)", background: item.received ? "#f0fdf4" : "var(--bg-surface)", padding: "8px 10px", display: "grid", gridTemplateColumns: "24px 1fr", gap: 8, textAlign: "left", cursor: "pointer" }}>
+                <span style={{ width: 18, height: 18, marginTop: 1, background: item.received ? "#16a34a" : "#f3f4f6", border: `2px solid ${item.received ? "#16a34a" : "#d1d5db"}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {item.received && <Check size={10} color="#fff" strokeWidth={3} />}
+                </span>
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: "block", fontFamily: "monospace", fontSize: 12, color: item.received ? "#15803d" : "var(--blue)", overflow: "hidden", textOverflow: "ellipsis" }}>{item.serial_number}</span>
+                  <span style={{ display: "block", fontSize: 12, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis" }}>{item.part_name} · {item.part_number}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        <button type="button" onClick={() => void handleConfirm()} disabled={confirmDisabled}
+          style={{ width: "100%", padding: "14px", fontSize: 15, fontWeight: 700, background: confirmDisabled ? "#d1d5db" : "#15803d", color: confirmDisabled ? "#6b7280" : "#fff", border: "none", cursor: confirmDisabled ? "not-allowed" : "pointer", opacity: submitting ? 0.7 : 1 }}>
+          {submitting ? "Confirming..." : (!allReceived ? `${items.length - receivedCount} remaining` : "Confirm Received")}
         </button>
       </StandalonePage>
     );
@@ -223,13 +287,13 @@ export function ReceivePage() {
             </p>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <button type="button" onClick={() => setItems((p) => p.map((i) => ({ ...i, received: true })))}
+            <button type="button" onClick={() => updateItems((p) => p.map((i) => ({ ...i, received: true })))}
               style={{ fontSize: 12, fontWeight: 600, color: "var(--blue)", background: "none", border: "1px solid var(--blue)", padding: "5px 12px", cursor: "pointer" }}>
               Select all
             </button>
             <button type="button" onClick={() => void handleConfirm()} disabled={confirmDisabled}
               style={{ display: "inline-flex", alignItems: "center", gap: 6, background: confirmDisabled ? "#d1d5db" : "#15803d", color: confirmDisabled ? "#9ca3af" : "#fff", border: "none", padding: "7px 18px", fontSize: 13, fontWeight: 700, cursor: confirmDisabled ? "not-allowed" : "pointer" }}>
-              {submitting ? "Confirming…" : (!allReceived ? `${items.length - receivedCount} remaining` : "Confirm Received")}
+          {submitting ? "Confirming..." : (!allReceived ? `${items.length - receivedCount} remaining` : "Confirm Received")}
             </button>
           </div>
         </div>
@@ -248,7 +312,7 @@ export function ReceivePage() {
                 {items.length === 0 && <tr><td colSpan={5} style={{ padding: 20, textAlign: "center", color: "var(--muted)", fontSize: 13 }}>No serialized items.</td></tr>}
                 {items.map((item) => (
                   <tr key={item.id}
-                    onClick={() => setItems((p) => p.map((x) => x.id === item.id ? { ...x, received: !x.received } : x))}
+                    onClick={() => updateItems((p) => p.map((x) => x.id === item.id ? { ...x, received: !x.received } : x))}
                     style={{ cursor: "pointer", background: item.received ? "#f0fdf4" : undefined }}>
                     <td style={{ padding: "5px 8px" }}>
                       <div style={{ width: 22, height: 22, background: item.received ? "#16a34a" : "#f3f4f6", border: `2px solid ${item.received ? "#16a34a" : "#d1d5db"}`, display: "flex", alignItems: "center", justifyContent: "center" }}>

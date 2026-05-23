@@ -58,4 +58,14 @@ See `docs/implementation-blueprint.md` for full architecture and execution plan.
 2. Install deps: `npm install`
 3. Start app: `npm run dev`
 4. Typecheck: `npm run typecheck`
-5. Build: `npm run build`
+5. Test: `npm test`
+6. Build: `npm run build`
+
+## Hostinger Deployment Notes
+- Build the static app with `npm run build` and deploy the `dist/` folder to Hostinger.
+- Set Supabase Edge Function secrets before go-live:
+  - `APP_URL=https://your-hostinger-domain.com`
+  - `CORS_ALLOWED_ORIGINS=https://your-hostinger-domain.com`
+  - `RESEND_API_KEY=...`
+  - `RESEND_FROM_EMAIL=MDC Inventory <reports@your-domain.com>`
+- `jspdf` and `jspdf-autotable` remain frontend dependencies because transfer packing lists are generated in-browser before download/upload. `pdf-lib` is used only by Supabase Edge Functions via URL imports, so it is not part of the frontend package.

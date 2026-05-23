@@ -43,6 +43,7 @@ export function App() {
       <Route path="/transfers/new"              element={<RoleGuard allow={[...OPS]}><TransferNewPage /></RoleGuard>} />
       <Route path="/transfers/templates"        element={<RoleGuard allow={[...ADMIN]}><TransferTemplatesPage /></RoleGuard>} />
       <Route path="/transfers/:id"              element={<RoleGuard allow={[...ALL]}><TransferDetailPage /></RoleGuard>} />
+      {/* Public receipt link: ReceivePage validates signed token via get_transfer_by_token; logged-in DC staff use RLS-backed access. */}
       <Route path="/transfers/:id/receive"      element={<ReceivePage />} />
       <Route path="/corrections"                element={<RoleGuard allow={[...ADMIN]}><CorrectionsPage /></RoleGuard>} />
       <Route path="/exports"                    element={<Navigate to="/reports" replace />} />

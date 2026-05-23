@@ -1,15 +1,10 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { PDFDocument, rgb, StandardFonts, type PDFPage, type PDFFont } from "https://esm.sh/pdf-lib@1.17.1";
+import { corsHeadersForRequest } from "../_shared/cors.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
 
 const PAGE_W = 595;
 const PAGE_H = 842;
@@ -17,10 +12,10 @@ const MARGIN = 40;
 const ROW_H = 14;
 const FOOTER_RESERVE = 100; // space needed for totals + signatures
 
-function jsonResp(body: unknown, status = 200) {
+function jsonResp(body: unknown, status: number, cors: Record<string, string>) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json", ...CORS },
+    headers: { "Content-Type": "application/json", ...cors },
   });
 }
 
@@ -62,18 +57,19 @@ async function newPage(ctx: DrawCtx): Promise<DrawCtx> {
 // ── Main handler ──────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
-  if (req.method !== "POST") return jsonResp({ error: "Method not allowed" }, 405);
+  const cors = corsHeadersForRequest(req, { methods: "POST, OPTIONS" });
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
+  if (req.method !== "POST") return jsonResp({ error: "Method not allowed" }, 405, cors);
 
   const authHeader = req.headers.get("authorization");
-  if (!authHeader) return jsonResp({ error: "Missing authorization header" }, 401);
+  if (!authHeader) return jsonResp({ error: "Missing authorization header" }, 401, cors);
 
   // Verify caller is authenticated
   const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: { headers: { authorization: authHeader } },
   });
   const { data: { user }, error: authError } = await userClient.auth.getUser();
-  if (authError || !user) return jsonResp({ error: "Unauthorized" }, 401);
+  if (authError || !user) return jsonResp({ error: "Unauthorized" }, 401, cors);
 
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   const { data: profile } = await admin
@@ -82,7 +78,7 @@ Deno.serve(async (req) => {
     .eq("id", user.id)
     .maybeSingle();
   if (!profile?.is_active || !["system_admin", "dc_admin", "dc_operator", "dc_viewer"].includes(profile.role)) {
-    return jsonResp({ error: "Forbidden" }, 403);
+    return jsonResp({ error: "Forbidden" }, 403, cors);
   }
 
   let transferId: string;
@@ -91,7 +87,7 @@ Deno.serve(async (req) => {
     if (!body?.transfer_id) throw new Error("transfer_id required");
     transferId = body.transfer_id;
   } catch (e) {
-    return jsonResp({ error: (e as Error).message }, 400);
+    return jsonResp({ error: (e as Error).message }, 400, cors);
   }
 
   // Fetch with service role — PDF generation needs complete transfer data after role verification.
@@ -111,7 +107,7 @@ Deno.serve(async (req) => {
     .eq("id", transferId)
     .single();
 
-  if (txErr || !transfer) return jsonResp({ error: "Transfer not found" }, 404);
+  if (txErr || !transfer) return jsonResp({ error: "Transfer not found" }, 404, cors);
 
   // ── Build PDF ───────────────────────────────────────────────────────────────
   const doc = await PDFDocument.create();
@@ -243,7 +239,7 @@ Deno.serve(async (req) => {
     headers: {
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="packing-list-${invoiceRef}.pdf"`,
-      ...CORS,
+      ...cors,
     },
   });
 });

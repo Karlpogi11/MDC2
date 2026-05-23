@@ -1,5 +1,6 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { PDFDocument, rgb, StandardFonts } from "https://esm.sh/pdf-lib@1.17.1";
+import { corsHeadersForRequest } from "../_shared/cors.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -7,13 +8,6 @@ const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const GMAIL_USER = Deno.env.get("GMAIL_USER")!;
 const GMAIL_APP_PASSWORD = Deno.env.get("GMAIL_APP_PASSWORD")!;
 const APP_URL = normalizeAppUrl(Deno.env.get("APP_URL"));
-
-const BASE_CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Max-Age": "86400",
-};
 
 const LOGO_FETCH_TIMEOUT_MS = 2500;
 const PDF_BUILD_TIMEOUT_MS = 25000;
@@ -26,18 +20,7 @@ const SMTP_ATTACHMENT_RETRY_COUNT = 2;
 const SMTP_RETRY_DELAY_MS = 500;
 const DUPLICATE_EMAIL_COOLDOWN_MS = 10 * 60 * 1000;
 
-function corsForRequest(req: Request) {
-  const requestedHeaders = req.headers.get("Access-Control-Request-Headers");
-  if (requestedHeaders && requestedHeaders.trim().length > 0) {
-    return {
-      ...BASE_CORS,
-      "Access-Control-Allow-Headers": requestedHeaders,
-    };
-  }
-  return BASE_CORS;
-}
-
-function jsonResp(body: unknown, status = 200, cors: Record<string, string> = BASE_CORS) {
+function jsonResp(body: unknown, status: number, cors: Record<string, string>) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { "Content-Type": "application/json", ...cors },
@@ -546,7 +529,7 @@ async function sendGmailSmtp(opts: {
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
-  const cors = corsForRequest(req);
+  const cors = corsHeadersForRequest(req, { methods: "POST, OPTIONS" });
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
 
   const authHeader = req.headers.get("Authorization") ?? "";

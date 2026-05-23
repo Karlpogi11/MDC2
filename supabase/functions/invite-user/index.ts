@@ -1,4 +1,5 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { corsHeadersForRequest } from "../_shared/cors.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -7,13 +8,8 @@ const GMAIL_USER = Deno.env.get("GMAIL_USER") ?? "";
 const GMAIL_APP_PASSWORD = Deno.env.get("GMAIL_APP_PASSWORD") ?? "";
 const APP_URL = Deno.env.get("APP_URL") ?? "https://mdc.app";
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
-const json = (data: unknown, status = 200) =>
-  new Response(JSON.stringify(data), { status, headers: { ...CORS, "Content-Type": "application/json" } });
+const json = (data: unknown, status: number, cors: Record<string, string>) =>
+  new Response(JSON.stringify(data), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
 /** Generate a secure temp password: 3 words + number + symbol pattern */
 function generateTempPassword(): string {
@@ -109,16 +105,17 @@ async function sendWelcomeEmail(opts: {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
+  const cors = corsHeadersForRequest(req, { methods: "POST, OPTIONS" });
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   const authHeader = req.headers.get("Authorization");
-  if (!authHeader) return json({ error: "Unauthorized" }, 401);
+  if (!authHeader) return json({ error: "Unauthorized" }, 401, cors);
 
   const callerClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: { headers: { Authorization: authHeader } },
   });
   const { data: { user }, error: authErr } = await callerClient.auth.getUser();
-  if (authErr || !user) return json({ error: "Unauthorized" }, 401);
+  if (authErr || !user) return json({ error: "Unauthorized" }, 401, cors);
 
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   const { data: callerProfile } = await admin
@@ -128,15 +125,15 @@ Deno.serve(async (req) => {
     .maybeSingle();
 
   if (!callerProfile?.is_active || callerProfile.role !== "system_admin") {
-    return json({ error: "Forbidden — system_admin required" }, 403);
+    return json({ error: "Forbidden — system_admin required" }, 403, cors);
   }
 
   const { email, username, full_name, role } = await req.json();
   if (!email || !username || !role) {
-    return json({ error: "email, username, role required" }, 400);
+    return json({ error: "email, username, role required" }, 400, cors);
   }
   if (!["system_admin", "dc_admin", "dc_operator", "dc_viewer"].includes(role)) {
-    return json({ error: "Invalid role" }, 400);
+    return json({ error: "Invalid role" }, 400, cors);
   }
 
   // Auto-generate temp password
@@ -154,21 +151,21 @@ Deno.serve(async (req) => {
   if (createErr) {
     const isDuplicate = createErr.message?.toLowerCase().includes("already") ||
                         createErr.message?.toLowerCase().includes("registered");
-    if (!isDuplicate) return json({ error: createErr.message }, 400);
+    if (!isDuplicate) return json({ error: createErr.message }, 400, cors);
 
     const { data: listData, error: listErr } = await admin.auth.admin.listUsers({ perPage: 1000 });
-    if (listErr) return json({ error: listErr.message }, 400);
+    if (listErr) return json({ error: listErr.message }, 400, cors);
     const existing = listData.users.find((u) => u.email === email);
-    if (!existing) return json({ error: "User exists but could not be located." }, 400);
+    if (!existing) return json({ error: "User exists but could not be located." }, 400, cors);
 
     const { error: updateErr } = await admin.auth.admin.updateUserById(existing.id, {
       password: tempPassword,
       email_confirm: true,
     });
-    if (updateErr) return json({ error: updateErr.message }, 400);
+    if (updateErr) return json({ error: updateErr.message }, 400, cors);
     userId = existing.id;
   } else {
-    if (!created.user) return json({ error: "Failed to create user" }, 400);
+    if (!created.user) return json({ error: "Failed to create user" }, 400, cors);
     userId = created.user.id;
   }
 
@@ -183,7 +180,7 @@ Deno.serve(async (req) => {
     force_password_change: true,
   }, { onConflict: "id" });
 
-  if (profileErr) return json({ error: profileErr.message }, 400);
+  if (profileErr) return json({ error: profileErr.message }, 400, cors);
 
   // Fetch brand name from app_config
   const { data: brandRow } = await admin.from("app_config").select("value").eq("key", "brand_name").single();
@@ -203,5 +200,5 @@ Deno.serve(async (req) => {
     id: userId,
     email_sent: emailResult.ok,
     email_error: emailResult.ok ? null : emailResult.error,
-  });
+  }, 200, cors);
 });

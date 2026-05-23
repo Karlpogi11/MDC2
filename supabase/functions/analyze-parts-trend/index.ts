@@ -12,36 +12,32 @@
  *   top_n?        number    top N parts by qty (default 20)
  */
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { corsHeadersForRequest } from "../_shared/cors.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
-function json(body: unknown, status = 200) {
+function json(body: unknown, status: number, cors: Record<string, string>) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json", ...CORS },
+    headers: { "Content-Type": "application/json", ...cors },
   });
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
-  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+  const cors = corsHeadersForRequest(req, { methods: "POST, OPTIONS" });
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
+  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
 
   const authHeader = req.headers.get("authorization");
-  if (!authHeader) return json({ error: "Unauthorized" }, 401);
+  if (!authHeader) return json({ error: "Unauthorized" }, 401, cors);
 
   const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: { headers: { authorization: authHeader } },
   });
   const { data: { user }, error: authErr } = await userClient.auth.getUser();
-  if (authErr || !user) return json({ error: "Unauthorized" }, 401);
+  if (authErr || !user) return json({ error: "Unauthorized" }, 401, cors);
 
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   const { data: profile } = await admin
@@ -50,7 +46,7 @@ Deno.serve(async (req) => {
     .eq("id", user.id)
     .maybeSingle();
   if (!profile?.is_active || !["system_admin", "dc_admin", "dc_operator"].includes(profile.role)) {
-    return json({ error: "Forbidden" }, 403);
+    return json({ error: "Forbidden" }, 403, cors);
   }
 
   const body = await req.json().catch(() => ({}));
@@ -82,7 +78,7 @@ Deno.serve(async (req) => {
   if (part_numbers?.length) q = q.in("part_number", part_numbers);
 
   const { data: rows, error: qErr } = await q.order("month").order("total_qty", { ascending: false });
-  if (qErr) return json({ error: qErr.message }, 500);
+  if (qErr) return json({ error: qErr.message }, 500, cors);
 
   const summary = rows ?? [];
 
@@ -125,5 +121,5 @@ Deno.serve(async (req) => {
     .map(([site_code, total_qty]) => ({ site_code, total_qty }))
     .sort((a, b) => b.total_qty - a.total_qty);
 
-  return json({ topParts, monthlyTrend, bySite, totalRows: summary.length });
+  return json({ topParts, monthlyTrend, bySite, totalRows: summary.length }, 200, cors);
 });

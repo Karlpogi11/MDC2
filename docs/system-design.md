@@ -10,7 +10,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                    Vercel (CDN)                      │
+│                 Hostinger static CDN                 │
 │         React + TypeScript SPA (Vite build)          │
 │                                                      │
 │  ┌──────────┐  ┌──────────┐  ┌────────────────────┐ │
@@ -226,8 +226,8 @@ All buckets are private. No public access. Download links are signed URLs with 5
 ## 8. Deployment
 
 ```
-Branch: main → Vercel production (auto-deploy on merge)
-Branch: staging → Vercel preview (UAT environment)
+Branch: main -> Hostinger production build after CI passes
+Branch: staging -> Hostinger staging/UAT build when available
 
 Supabase: one project per environment
   - staging: mdc-staging.supabase.co
@@ -237,11 +237,13 @@ Supabase: one project per environment
 ### Environment variables
 
 ```
-# Frontend (Vercel)
+# Frontend (Hostinger static app)
 VITE_SUPABASE_URL=
 VITE_SUPABASE_ANON_KEY=
 
 # Edge Functions (Supabase secrets)
+APP_URL=
+CORS_ALLOWED_ORIGINS=
 SUPABASE_SERVICE_ROLE_KEY=
 RESEND_API_KEY=
 RESEND_FROM_EMAIL=
@@ -269,8 +271,8 @@ RESEND_FROM_EMAIL=
 **Alternatives rejected:** MUI DataGrid — opinionated styling fights the dense Katana-like layout. AG Grid — overkill and license cost.
 **Consequences:** More initial setup. Full control over behavior and appearance.
 
-### ADR-004: pdf-lib in Edge Function over client-side PDF
-**Context:** Packing list PDF must be generated and stored server-side.
-**Decision:** pdf-lib inside the Edge Function. PDF is stored in Supabase Storage, not sent as a data URI.
-**Alternatives rejected:** Client-side jsPDF — can't store the file server-side without sending it back up. @react-pdf/renderer — React-only, doesn't run in Deno.
-**Consequences:** PDF generation is async. UI shows a loading state until the signed URL is ready.
+### ADR-004: PDF generation split by runtime
+**Context:** Packing list PDFs are downloaded by operators, uploaded to storage, and may be attached by Edge Functions.
+**Decision:** Use `jspdf`/`jspdf-autotable` in the browser for the operator-facing packing-list layout, and use `pdf-lib` only inside Supabase Edge Functions through URL imports when Deno has to build or attach PDFs.
+**Alternatives rejected:** Shipping `pdf-lib` in the frontend bundle when it is only needed by Deno. `@react-pdf/renderer` because it does not run in Supabase Edge Functions.
+**Consequences:** Frontend dependencies stay limited to the browser PDF path; Edge Function PDF code owns its own Deno import.

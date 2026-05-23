@@ -1,16 +1,13 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeadersForRequest } from "../_shared/cors.ts";
 
 Deno.serve(async (req) => {
+  const corsHeaders = corsHeadersForRequest(req, { methods: "POST, OPTIONS" });
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return new Response("Unauthorized", { status: 401 });
+    if (!authHeader) return new Response("Unauthorized", { status: 401, headers: corsHeaders });
 
     const client = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -24,7 +21,7 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } },
     );
     const { data: { user }, error: userErr } = await userClient.auth.getUser();
-    if (userErr || !user) return new Response("Unauthorized", { status: 401 });
+    if (userErr || !user) return new Response("Unauthorized", { status: 401, headers: corsHeaders });
 
     const { data: profile } = await client
       .from("profiles")
@@ -39,7 +36,7 @@ Deno.serve(async (req) => {
     }
 
     const { filePath, fileName, idempotencyKey } = await req.json() as { filePath: string; fileName: string; idempotencyKey?: string };
-    if (!filePath || !fileName) return new Response("Missing filePath or fileName", { status: 400 });
+    if (!filePath || !fileName) return new Response("Missing filePath or fileName", { status: 400, headers: corsHeaders });
 
     // Rate limiting: 10 imports per 60s per user
     const { data: allowed } = await client.rpc("check_rate_limit", {

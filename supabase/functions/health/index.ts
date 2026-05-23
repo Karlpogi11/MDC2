@@ -1,13 +1,8 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { corsHeadersForRequest } from "../_shared/cors.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, x-health-key",
-};
 
 function isServiceRequest(req: Request): boolean {
   const sharedSecret = Deno.env.get("HEALTH_CHECK_KEY") ?? Deno.env.get("INTERNAL_FUNCTION_SECRET") ?? "";
@@ -20,8 +15,12 @@ function isServiceRequest(req: Request): boolean {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
-  if (!isServiceRequest(req)) return new Response("Unauthorized", { status: 401, headers: CORS });
+  const cors = corsHeadersForRequest(req, {
+    methods: "GET, OPTIONS",
+    headers: "authorization, x-client-info, apikey, x-health-key",
+  });
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
+  if (!isServiceRequest(req)) return new Response("Unauthorized", { status: 401, headers: cors });
 
   const client = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   const checks: Record<string, "ok" | "error"> = {};
@@ -55,6 +54,6 @@ Deno.serve(async (req) => {
 
   return new Response(
     JSON.stringify({ status: allOk ? "ok" : "degraded", ...checks, ts: new Date().toISOString() }),
-    { status, headers: { "Content-Type": "application/json", ...CORS } }
+    { status, headers: { "Content-Type": "application/json", ...cors } }
   );
 });

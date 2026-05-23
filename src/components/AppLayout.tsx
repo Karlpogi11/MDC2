@@ -141,6 +141,9 @@ export function AppLayout({ children, activeModule }: Props) {
 
   const activePath = activeModule ?? location.pathname;
   const onlineStatus = useOnlineStatus();
+  const offlineMessage = location.pathname.startsWith("/stock-in")
+    ? "No connection. Stock-in batches will sync when connection restores."
+    : "No connection. Stock-in has offline queueing; other changes will not save until connection restores.";
 
   return (
     <div className="katana-app">
@@ -220,7 +223,7 @@ export function AppLayout({ children, activeModule }: Props) {
       {onlineStatus === "offline" && (
         <div role="alert" className="connection-banner connection-banner-offline">
           <span className="circle connection-dot connection-dot-offline" />
-          No connection. Changes may not save.
+          {offlineMessage}
         </div>
       )}
       {onlineStatus === "restored" && (

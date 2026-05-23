@@ -1,6 +1,6 @@
 import { friendlyError } from "@/lib/friendlyError";
 import { useExportInventory } from "@/hooks/useExportInventory";
-import { useEffect, useMemo, useState, useCallback, useRef, type ReactElement } from "react";
+import { useEffect, useMemo, useState, useCallback, type ReactElement } from "react";
 import { useTableResize } from "@/components/ResizableColumns";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
@@ -87,36 +87,13 @@ function InventoryTab() {
   const realtimeEnabled = useFeatureFlag("enable_realtime");
   const realtimeStatus = useRealtimeTable(["serial_numbers", "transfers", "transfer_items"], () => void loadInventory(page), realtimeEnabled);
 
-  // Cache all rows in memory — filter client-side for instant search
-  const allRowsRef = useRef<InventoryRow[]>([]);
-
   const loadInventory = async (p = page, searchOverride?: string) => {
     const q = (searchOverride !== undefined ? searchOverride : search).trim();
     setState((prev) => ({ ...prev, loading: true, error: null }));
     try {
-      // Only hit DB when no search (full load) or on explicit refresh
-      // For search: filter the cached allRows client-side
-      if (q && allRowsRef.current.length > 0) {
-        const ql = q.toLowerCase();
-        const filtered = allRowsRef.current.filter((r) =>
-          r.partName.toLowerCase().includes(ql) ||
-          r.partNumber.toLowerCase().includes(ql) ||
-          r.category.toLowerCase().includes(ql)
-        );
-        setState((prev) => ({ ...prev, rows: filtered, loading: false, error: null, total: filtered.length }));
-        if (q.length >= 6 && !q.includes(" ") && filtered.length <= 2) setSerialLookup(q);
-        return;
-      }
-      const result = await fetchInventoryRows(0, 5000, { segment });
-      if (!q) allRowsRef.current = result.rows; // cache on full load
-      const filtered = q
-        ? result.rows.filter((r) => {
-            const ql = q.toLowerCase();
-            return r.partName.toLowerCase().includes(ql) || r.partNumber.toLowerCase().includes(ql) || r.category.toLowerCase().includes(ql);
-          })
-        : result.rows;
-      setState({ rows: filtered, source: result.source, loading: false, error: null, total: filtered.length });
-      if (q.length >= 6 && !q.includes(" ") && filtered.length <= 2) setSerialLookup(q);
+      const result = await fetchInventoryRows(p, PAGE_SIZE, { segment, search: q });
+      setState({ rows: result.rows, source: result.source, loading: false, error: null, total: result.total ?? result.rows.length });
+      if (q.length >= 6 && !q.includes(" ") && result.rows.length <= 2) setSerialLookup(q);
       else if (!q) setSerialLookup(null);
     } catch (error) {
       const reason = error instanceof Error ? friendlyError(error) : "Failed to load inventory";
@@ -124,27 +101,13 @@ function InventoryTab() {
     }
   };
 
-  useEffect(() => { void loadInventory(page); }, [page, segment]);
 
-  // Client-side filter on search change — instant, no DB
   useEffect(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) {
-      if (allRowsRef.current.length > 0) {
-        setState((prev) => ({ ...prev, rows: allRowsRef.current, total: allRowsRef.current.length }));
-        setSerialLookup(null);
-      }
-      return;
-    }
-    if (allRowsRef.current.length === 0) return; // not loaded yet
-    const filtered = allRowsRef.current.filter((r) =>
-      r.partName.toLowerCase().includes(q) ||
-      r.partNumber.toLowerCase().includes(q) ||
-      r.category.toLowerCase().includes(q)
-    );
-    setState((prev) => ({ ...prev, rows: filtered, total: filtered.length }));
-    if (q.length >= 6 && !q.includes(" ") && filtered.length <= 2) setSerialLookup(search.trim());
-  }, [search]);
+    const handle = window.setTimeout(() => {
+      void loadInventory(page);
+    }, search.trim() ? 300 : 0);
+    return () => window.clearTimeout(handle);
+  }, [page, segment, search]);
 
   const sortedRows = useMemo(() => {
     const rows = [...state.rows];
