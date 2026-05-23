@@ -87,6 +87,17 @@ export function TransferDetailPage() {
   const [trackingAwb, setTrackingAwb] = useState("");
   const [showReceiptConfirm, setShowReceiptConfirm] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
+  const RESEND_COOLDOWN_MS = 3 * 60 * 1000; // 3 minutes
+  const resendCooldownKey = `mdc_resend_cooldown:${transfer?.id ?? ""}`;
+  const [resendCooldownSec, setResendCooldownSec] = useState<number>(() => {
+    const ts = parseInt(localStorage.getItem(`mdc_resend_cooldown:${id ?? ""}`) ?? "0", 10);
+    return ts ? Math.max(0, Math.ceil((ts - Date.now()) / 1000)) : 0;
+  });
+  useEffect(() => {
+    if (resendCooldownSec <= 0) return;
+    const t = setInterval(() => setResendCooldownSec((s) => (s <= 1 ? (clearInterval(t), 0) : s - 1)), 1000);
+    return () => clearInterval(t);
+  }, [resendCooldownSec > 0]);
   const [showActionMenu, setShowActionMenu] = useState(false);
   const actionMenuRef = useRef<HTMLDivElement | null>(null);
 
@@ -425,6 +436,9 @@ export function TransferDetailPage() {
           ? "Email resent with packing list."
           : `Email resent — packing list could not be attached.${detail ? " Error: " + detail : ""}`
       );
+      const cooldownUntil = Date.now() + RESEND_COOLDOWN_MS;
+      localStorage.setItem(resendCooldownKey, String(cooldownUntil));
+      setResendCooldownSec(Math.ceil(RESEND_COOLDOWN_MS / 1000));
     }
     setSendingEmail(false);
   }
@@ -553,8 +567,10 @@ export function TransferDetailPage() {
               </span>
             </div>
             <p style={{ margin: 0, fontSize: 13, color: "var(--muted)" }}>
-              {transfer.source_site?.site_name ?? "DC"} → {transfer.destination_site?.site_name ?? "—"}
-              {transfer.destination_site?.address && <span style={{ marginLeft: 8, color: "var(--muted)" }}>· {transfer.destination_site.address}</span>}
+              <span>From <strong style={{ color: "var(--text)" }}>{transfer.source_site?.site_name ?? "DC"}</strong></span>
+              <span style={{ margin: "0 6px" }}>·</span>
+              <span>To <strong style={{ color: "var(--text)" }}>{transfer.destination_site?.site_name ?? "—"}</strong></span>
+              {transfer.destination_site?.address && <span style={{ marginLeft: 8 }}>· {transfer.destination_site.address}</span>}
             </p>
           </div>
 
@@ -594,9 +610,9 @@ export function TransferDetailPage() {
                         style={{ width: "100%", textAlign: "left", background: "var(--bg-surface)", border: "none", padding: "5px 8px", fontSize: 13, color: "var(--text)", cursor: generatingPDF ? "not-allowed" : "pointer", opacity: generatingPDF ? 0.6 : 1 }}>
                         {generatingPDF ? "Generating PDF…" : "Packing List PDF"}
                       </button>
-                      <button type="button" onClick={() => void resendTransferEmail(transfer.id)} disabled={sendingEmail}
-                        style={{ width: "100%", textAlign: "left", background: "var(--bg-surface)", border: "none", padding: "5px 8px", fontSize: 13, color: "var(--text)", cursor: sendingEmail ? "not-allowed" : "pointer", opacity: sendingEmail ? 0.6 : 1 }}>
-                        {sendingEmail ? "Sending…" : "Resend Email"}
+                      <button type="button" onClick={() => void resendTransferEmail(transfer.id)} disabled={sendingEmail || resendCooldownSec > 0}
+                        style={{ width: "100%", textAlign: "left", background: "var(--bg-surface)", border: "none", padding: "5px 8px", fontSize: 13, color: (sendingEmail || resendCooldownSec > 0) ? "var(--muted)" : "var(--text)", cursor: (sendingEmail || resendCooldownSec > 0) ? "not-allowed" : "pointer" }}>
+                        {sendingEmail ? "Sending…" : resendCooldownSec > 0 ? `Resend Email (${Math.floor(resendCooldownSec / 60)}:${String(resendCooldownSec % 60).padStart(2, "0")})` : "Resend Email"}
                       </button>
                       <a href={`/transfers/${transfer.id}/receive`} target="_blank" rel="noopener noreferrer" onClick={() => setShowActionMenu(false)}
                         style={{ display: "block", textAlign: "left", padding: "5px 8px", fontSize: 13, color: "var(--text)", textDecoration: "none" }}>
@@ -841,7 +857,10 @@ export function TransferDetailPage() {
       {/* Tracking number modal */}
       {showTrackingModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-          <div style={{ background: "var(--bg-surface)", borderRadius: 0, width: "100%", maxWidth: 420, padding: 24, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
+          <form
+            onSubmit={(e) => { e.preventDefault(); if (!trackingAwb.trim() || advancing) return; setShowTrackingModal(false); void advanceStatus(trackingCourier, trackingAwb); }}
+            style={{ background: "var(--bg-surface)", borderRadius: 0, width: "100%", maxWidth: 420, padding: 24, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
+          >
             <h2 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700, color: "var(--text)" }}>Mark as In Transit</h2>
             <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--muted)" }}>Enter tracking details before dispatching.</p>
 
@@ -874,14 +893,13 @@ export function TransferDetailPage() {
                 style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: 0, padding: "4px 10px", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
                 Cancel
               </button>
-              <button type="button"
+              <button type="submit"
                 disabled={!trackingAwb.trim() || advancing}
-                onClick={() => { setShowTrackingModal(false); void advanceStatus(trackingCourier, trackingAwb); }}
                 style={{ background: trackingAwb.trim() ? "var(--blue)" : "#d1d5db", color: "#fff", border: "none", borderRadius: 0, padding: "7px 18px", fontSize: 13, fontWeight: 600, cursor: trackingAwb.trim() ? "pointer" : "not-allowed" }}>
                 Dispatch
               </button>
             </div>
-          </div>
+          </form>
         </div>
       )}
 

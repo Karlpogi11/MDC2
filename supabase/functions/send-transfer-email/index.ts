@@ -723,13 +723,27 @@ Deno.serve(async (req) => {
   }
 
   const token = generateToken();
-  await adminClient.from("transfers").update({
+  const { error: tokenUpdateErr } = await adminClient.from("transfers").update({
     receipt_token: token,
     receipt_token_expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
   }).eq("id", transfer_id);
 
+  // If the token update failed, read whatever token is already in the DB.
+  let activeToken = token;
+  if (tokenUpdateErr) {
+    console.error("[send-transfer-email] token update failed:", tokenUpdateErr.message);
+    const { data: existing } = await adminClient
+      .from("transfers")
+      .select("receipt_token")
+      .eq("id", transfer_id)
+      .single();
+    if (existing?.receipt_token) {
+      activeToken = existing.receipt_token;
+    }
+  }
+
   const receiptLink = new URL(`transfers/${transfer_id}/receive`, `${APP_URL}/`);
-  receiptLink.searchParams.set("token", token);
+  receiptLink.searchParams.set("token", activeToken);
   const receiptUrl = receiptLink.toString();
 
   const items = normalizedItems.map((item) => ({

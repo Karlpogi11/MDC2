@@ -2,7 +2,10 @@
  * Translates raw Supabase/network error messages into user-friendly strings.
  */
 export function friendlyError(raw: unknown, fallback = "Something went wrong. Please try again."): string {
-  const msg = raw instanceof Error ? raw.message : typeof raw === "string" ? raw : fallback;
+  const msg = raw instanceof Error ? raw.message
+    : typeof raw === "string" ? raw
+    : (typeof raw === "object" && raw !== null && "message" in raw && typeof (raw as any).message === "string") ? (raw as any).message
+    : fallback;
   const m = msg.toLowerCase();
 
   // Network / connectivity
