@@ -294,6 +294,7 @@ function CorrectionModal({ serial, onClose, onDone, actorId }: {
 export function CorrectionsPage() {
   const { state: authState } = useAuth();
   const actorId = authState.status === "authenticated" ? authState.user.id : null;
+  const canApprove = authState.status === "authenticated" && ["system_admin", "dc_admin"].includes(authState.profile.role);
 
   const [query, setQuery]       = useState("");
   const [searching, setSearching] = useState(false);
@@ -500,11 +501,11 @@ export function CorrectionsPage() {
                 </div>
                 <span style={{ fontSize: 11, color: MUTED, flexShrink: 0 }}>by {req.requester?.full_name ?? req.requester?.username ?? "—"}</span>
                 <button type="button" onClick={() => void handleApprove(req)} disabled={approvingId === req.id}
-                  style={{ fontSize: 12, fontWeight: 600, padding: "5px 14px", borderRadius: "var(--radius)", border: "none", background: BLUE, color: "#fff", cursor: approvingId === req.id ? "not-allowed" : "pointer", opacity: approvingId === req.id ? 0.5 : 1, flexShrink: 0 }}>
+                  style={{ fontSize: 12, fontWeight: 600, padding: "5px 14px", borderRadius: "var(--radius)", border: "none", background: BLUE, color: "#fff", cursor: approvingId === req.id ? "not-allowed" : "pointer", opacity: approvingId === req.id ? 0.5 : 1, flexShrink: 0, display: canApprove ? undefined : "none" }}>
                   {approvingId === req.id ? "…" : "Approve"}
                 </button>
-                <DangerAction label="Reject" confirmLabel="Reject" description="Reject this correction?"
-                  onConfirm={() => void handleReject(req.id)} />
+                {canApprove && <DangerAction label="Reject" confirmLabel="Reject" description="Reject this correction?"
+                  onConfirm={() => void handleReject(req.id)} />}
               </div>
             ))}
           </div>

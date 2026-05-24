@@ -271,7 +271,7 @@ export function SitesTab() {
                               {(site.contact_emails ?? [])[0]}
                               {(site.contact_emails ?? []).length > 1 && <span style={{ color: "var(--muted)" }}> +{(site.contact_emails ?? []).length - 1}</span>}
                             </span>
-                          : <span style={{ color: "#aaa" }}>—</span>}
+                          : <span style={{ color: "#f59e0b", fontSize: 11, fontWeight: 600 }} title="No contact email — dispatch emails won't be sent to this site">⚠ No email</span>}
                     </td>
                     <td style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
                       {isEditing

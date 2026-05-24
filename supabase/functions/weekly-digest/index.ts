@@ -3,10 +3,8 @@ import { corsHeadersForRequest } from "../_shared/cors.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
-const RESEND_FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") ?? "";
-
-const RESEND_ENDPOINT = "https://api.resend.com/emails";
+const GMAIL_USER = Deno.env.get("GMAIL_USER") ?? "";
+const GMAIL_APP_PASSWORD = Deno.env.get("GMAIL_APP_PASSWORD") ?? "";
 
 function isServiceRequest(req: Request): boolean {
   const sharedSecret = Deno.env.get("INTERNAL_FUNCTION_SECRET") ?? "";
@@ -19,34 +17,59 @@ function isServiceRequest(req: Request): boolean {
 }
 
 async function sendDigestEmail(opts: { to: string; subject: string; html: string; text: string }): Promise<{ ok: boolean; error?: string }> {
-  if (!RESEND_API_KEY || !RESEND_FROM_EMAIL) {
-    return { ok: false, error: "Resend is not configured. Set RESEND_API_KEY and RESEND_FROM_EMAIL." };
+  if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
+    return { ok: false, error: "Gmail SMTP not configured. Set GMAIL_USER and GMAIL_APP_PASSWORD." };
   }
 
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+  const credentials = btoa(`\0${GMAIL_USER}\0${GMAIL_APP_PASSWORD}`);
+  const boundary = `----=_Part_${Date.now()}`;
+  const date = new Date().toUTCString();
+  const rawMessage = [
+    `From: MDC Inventory <${GMAIL_USER}>`,
+    `To: ${opts.to}`,
+    `Subject: ${opts.subject}`,
+    `Date: ${date}`,
+    `MIME-Version: 1.0`,
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    ``,
+    `--${boundary}`,
+    `Content-Type: text/plain; charset=UTF-8`,
+    ``,
+    opts.text,
+    `--${boundary}`,
+    `Content-Type: text/html; charset=UTF-8`,
+    ``,
+    opts.html,
+    `--${boundary}--`,
+  ].join("\r\n");
+
+  let conn: Deno.TlsConn | undefined;
   try {
-    const res = await fetch(RESEND_ENDPOINT, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${RESEND_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: RESEND_FROM_EMAIL,
-        to: [opts.to],
-        subject: opts.subject,
-        html: opts.html,
-        text: opts.text,
-      }),
-    });
+    conn = await Deno.connectTls({ hostname: "smtp.gmail.com", port: 465 });
+    const read = async () => {
+      const buf = new Uint8Array(4096);
+      const n = await conn!.read(buf);
+      if (n === null) throw new Error("SMTP socket closed");
+      return decoder.decode(buf.subarray(0, n));
+    };
+    const write = (cmd: string) => conn!.write(encoder.encode(`${cmd}\r\n`));
 
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      return { ok: false, error: `Resend ${res.status}: ${body.slice(0, 500)}` };
-    }
-
+    let r = await read(); if (!r.startsWith("220")) throw new Error(`Greeting: ${r}`);
+    await write("EHLO mdc-inventory"); r = await read(); if (!r.includes("250")) throw new Error(`EHLO: ${r}`);
+    await write(`AUTH PLAIN ${credentials}`); r = await read(); if (!r.startsWith("235")) throw new Error(`AUTH: ${r}`);
+    await write(`MAIL FROM:<${GMAIL_USER}>`); r = await read(); if (!r.startsWith("250")) throw new Error(`MAIL FROM: ${r}`);
+    await write(`RCPT TO:<${opts.to}>`); r = await read(); if (!r.startsWith("250")) throw new Error(`RCPT TO: ${r}`);
+    await write("DATA"); r = await read(); if (!r.startsWith("354")) throw new Error(`DATA: ${r}`);
+    await conn!.write(encoder.encode(`${rawMessage}\r\n.\r\n`));
+    r = await read(); if (!r.startsWith("250")) throw new Error(`Send: ${r}`);
+    await write("QUIT");
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  } finally {
+    try { conn?.close(); } catch { /* noop */ }
   }
 }
 

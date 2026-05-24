@@ -21,7 +21,7 @@ Reason:
 - Inventory-first UI similar to Katana-style operational grid
 
 ## Build Strategy
-1. `MDC` = separate app + separate Supabase project + separate Vercel project
+1. `MDC` = separate app + separate Supabase project + separate Hostinger site
 2. Reuse inventory domain logic from IDS only (not billing/subscription/system-admin modules)
 3. Implement strict RBAC (`dc_admin`, `dc_operator`, `dc_viewer`)
 4. Migration-first DB workflow (`supabase migration new ...`), never DB push-all
@@ -66,6 +66,6 @@ See `docs/implementation-blueprint.md` for full architecture and execution plan.
 - Set Supabase Edge Function secrets before go-live:
   - `APP_URL=https://your-hostinger-domain.com`
   - `CORS_ALLOWED_ORIGINS=https://your-hostinger-domain.com`
-  - `RESEND_API_KEY=...`
-  - `RESEND_FROM_EMAIL=MDC Inventory <reports@your-domain.com>`
+  - `GMAIL_USER=your-gmail@gmail.com`
+  - `GMAIL_APP_PASSWORD=your-16-char-app-password`
 - `jspdf` and `jspdf-autotable` remain frontend dependencies because transfer packing lists are generated in-browser before download/upload. `pdf-lib` is used only by Supabase Edge Functions via URL imports, so it is not part of the frontend package.
