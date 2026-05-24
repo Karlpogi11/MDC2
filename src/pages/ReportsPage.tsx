@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { BarChart3, Download, FileDown } from "lucide-react";
+import { BarChart3, Download } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { getSupabaseClient } from "@/lib/supabase";
 import { AppLayout } from "@/components/AppLayout";
 import { useTableResize } from "@/components/ResizableColumns";
@@ -292,136 +293,6 @@ function TopMovedPartsReport() {
   );
 }
 
-// ─── Exports (inline, no AppLayout wrapper) ──────────────────────────────────
-
-type Site = { id: string; site_name: string; site_code: string };
-
-function toCSV(headers: string[], rows: string[][]): string {
-  const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
-  return [headers.map(escape), ...rows.map((r) => r.map(escape))].join("\n");
-}
-function dlCSV(filename: string, content: string) {
-  const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
-}
-function fmtDate(iso: string | null) {
-  if (!iso) return "";
-  return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "2-digit" });
-}
-
-function ExportsInline() {
-  const [sites, setSites] = useState<Site[]>([]);
-  const [siFrom, setSiFrom] = useState(""); const [siTo, setSiTo] = useState("");
-  const [siExporting, setSiExporting] = useState(false); const [siCount, setSiCount] = useState<number | null>(null);
-  const [trFrom, setTrFrom] = useState(""); const [trTo, setTrTo] = useState("");
-  const [trSite, setTrSite] = useState(""); const [trStatus, setTrStatus] = useState("");
-  const [trExporting, setTrExporting] = useState(false); const [trCount, setTrCount] = useState<number | null>(null);
-
-  useEffect(() => {
-    const client = getSupabaseClient();
-    if (!client) return;
-    client.from("sites").select("id,site_name,site_code").eq("is_active", true).eq("is_dc", false).order("site_name")
-      .then(({ data }) => setSites((data ?? []) as Site[]));
-  }, []);
-
-  async function exportStockedIn() {
-    setSiExporting(true); setSiCount(null);
-    const client = getSupabaseClient(); if (!client) { setSiExporting(false); return; }
-    let q = client.from("serial_numbers").select("serial_number,status,stock_in_at,part:parts(part_number,part_name,category),site:sites!current_site_id(site_name),batch:stock_in_batches(source_type)").order("stock_in_at",{ascending:false}).limit(10000);
-    if (siFrom) q = q.gte("stock_in_at", siFrom);
-    if (siTo)   q = q.lte("stock_in_at", siTo + "T23:59:59");
-    const { data } = await q;
-    const rows = (data ?? []) as any[];
-    setSiCount(rows.length);
-    dlCSV(`mdc-stocked-in-${new Date().toISOString().slice(0,10)}.csv`, toCSV(
-      ["Serial Number","Part Number","Part Name","Category","Status","Site","Stock-In Date","Import Type"],
-      rows.map((r) => { const p=Array.isArray(r.part)?r.part[0]:r.part; const s=Array.isArray(r.site)?r.site[0]:r.site; const b=Array.isArray(r.batch)?r.batch[0]:r.batch; return [r.serial_number??"",p?.part_number??"",p?.part_name??"",p?.category??"",r.status??"",s?.site_name??"",fmtDate(r.stock_in_at),b?.source_type??""]; })
-    ));
-    setSiExporting(false);
-  }
-
-  async function exportTransferred() {
-    setTrExporting(true); setTrCount(null);
-    const client = getSupabaseClient(); if (!client) { setTrExporting(false); return; }
-    const { data } = await client.from("transfer_items").select("qty,part:parts(part_number,part_name,category),serial:serial_numbers(serial_number),transfer:transfers(transfer_no,status,created_at,packed_at,destination:sites!destination_site_id(site_name,site_code,id),requester:profiles!requested_by(full_name,username))").limit(10000);
-    let rows = (data ?? []) as any[];
-    rows = rows.filter((r) => { const t=Array.isArray(r.transfer)?r.transfer[0]:r.transfer; if(!t) return false; if(trStatus&&t.status!==trStatus) return false; if(trFrom&&t.created_at<trFrom) return false; if(trTo&&t.created_at>trTo+"T23:59:59") return false; if(trSite){const d=Array.isArray(t.destination)?t.destination[0]:t.destination; if(d?.id!==trSite) return false;} return true; });
-    setTrCount(rows.length);
-    dlCSV(`mdc-transferred-${new Date().toISOString().slice(0,10)}.csv`, toCSV(
-      ["Transfer #","Serial Number","Part Number","Part Name","Category","Qty","Destination","Status","Created Date","Packed Date","Requested By"],
-      rows.map((r) => { const p=Array.isArray(r.part)?r.part[0]:r.part; const sn=Array.isArray(r.serial)?r.serial[0]:r.serial; const t=Array.isArray(r.transfer)?r.transfer[0]:r.transfer; const d=Array.isArray(t?.destination)?t.destination[0]:t?.destination; const rq=Array.isArray(t?.requester)?t.requester[0]:t?.requester; return [t?.transfer_no??"",sn?.serial_number??"",p?.part_number??"",p?.part_name??"",p?.category??"",String(r.qty??1),d?.site_name??"",t?.status??"",fmtDate(t?.created_at),fmtDate(t?.packed_at),rq?.full_name??rq?.username??""]; })
-    ));
-    setTrExporting(false);
-  }
-
-  const cardStyle: React.CSSProperties = { background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", overflow: "hidden" };
-  const headStyle: React.CSSProperties = { padding: "14px 20px", borderBottom: "1px solid var(--line)", background: "var(--bg-surface-elevated)" };
-  const selStyle: React.CSSProperties = { border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 8px", fontSize: 13, background: "var(--bg-surface-elevated)", color: "var(--text)", cursor: "pointer" };
-
-  return (
-    <main style={{ maxWidth: 860, margin: "0 auto", padding: "28px 24px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 24 }}>
-        <FileDown size={20} color="var(--blue)" />
-        <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text)" }}>Exports</h1>
-      </div>
-      <div style={{ display: "grid", gap: 20 }}>
-        {/* Stocked-in */}
-        <div style={cardStyle}>
-          <div style={headStyle}>
-            <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text)" }}>Stocked-In Records</h2>
-            <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--muted)" }}>All serials imported into DC inventory</p>
-          </div>
-          <div style={{ padding: 20 }}>
-            <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
-              <DatePicker label="From date" value={siFrom} onChange={setSiFrom} />
-              <DatePicker label="To date" value={siTo} onChange={setSiTo} />
-              <button type="button" onClick={() => void exportStockedIn()} disabled={siExporting}
-                style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: siExporting ? "not-allowed" : "pointer", opacity: siExporting ? 0.7 : 1 }}>
-                <Download size={14} /> {siExporting ? "Exporting…" : "Download CSV"}
-              </button>
-              {siCount !== null && <span style={{ fontSize: 13, color: "var(--muted)", fontWeight: 600 }}>✓ {siCount} rows</span>}
-            </div>
-          </div>
-        </div>
-        {/* Transferred */}
-        <div style={cardStyle}>
-          <div style={headStyle}>
-            <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text)" }}>Stocked-Out Records</h2>
-            <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--muted)" }}>All items sent to destination sites</p>
-          </div>
-          <div style={{ padding: 20 }}>
-            <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
-              <DatePicker label="From date" value={trFrom} onChange={setTrFrom} />
-              <DatePicker label="To date" value={trTo} onChange={setTrTo} />
-              <div>
-                <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--muted)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>Site</label>
-                <select value={trSite} onChange={(e) => setTrSite(e.target.value)} style={selStyle}>
-                  <option value="">All sites</option>
-                  {sites.map((s) => <option key={s.id} value={s.id}>{s.site_name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--muted)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>Status</label>
-                <select value={trStatus} onChange={(e) => setTrStatus(e.target.value)} style={selStyle}>
-                  <option value="">All</option>
-                  {["draft","packed","in_transit","received","cancelled"].map((s) => <option key={s} value={s}>{s.replace("_"," ")}</option>)}
-                </select>
-              </div>
-              <button type="button" onClick={() => void exportTransferred()} disabled={trExporting}
-                style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: trExporting ? "not-allowed" : "pointer", opacity: trExporting ? 0.7 : 1 }}>
-                <Download size={14} /> {trExporting ? "Exporting…" : "Download CSV"}
-              </button>
-              {trCount !== null && <span style={{ fontSize: 13, color: "var(--muted)", fontWeight: 600 }}>✓ {trCount} rows</span>}
-            </div>
-          </div>
-        </div>
-      </div>
-    </main>
-  );
-}
-
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 const REPORTS: { id: ReportId; label: string; description: string }[] = [
@@ -431,27 +302,18 @@ const REPORTS: { id: ReportId; label: string; description: string }[] = [
 ];
 
 export function ReportsPage() {
-  const [tab, setTab] = useState<"reports" | "exports">("reports");
+  const navigate = useNavigate();
   const [active, setActive] = useState<ReportId>("transfers_by_site");
 
   return (
     <AppLayout activeModule="/reports">
       {/* Top tab bar */}
       <nav className="sub-nav" aria-label="Reports pages">
-        {(["reports", "exports"] as const).map((t) => (
-          <button key={t} type="button"
-            className={tab === t ? "sub-tab active" : "sub-tab"}
-            onClick={() => setTab(t)}
-            style={{ textTransform: "capitalize" }}>
-            {t === "reports" ? "Reports" : "Exports"}
-          </button>
-        ))}
+        <button type="button" className="sub-tab active">Reports</button>
+        <button type="button" className="sub-tab" onClick={() => navigate("/exports")}>Exports</button>
       </nav>
 
-      {tab === "exports" ? (
-        <ExportsInline />
-      ) : (
-        <main style={{ maxWidth: 960, margin: "0 auto", padding: "28px 24px" }}>
+      <main style={{ maxWidth: 960, margin: "0 auto", padding: "28px 24px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 24 }}>
             <BarChart3 size={20} color="var(--blue)" />
             <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text)" }}>Reports</h1>
@@ -487,7 +349,6 @@ export function ReportsPage() {
             {active === "top_moved_parts"    && <TopMovedPartsReport />}
           </div>
         </main>
-      )}
     </AppLayout>
   );
 }

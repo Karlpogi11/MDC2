@@ -1251,23 +1251,26 @@ th .col-resize-handle:active::after {
 .search-input,
 input.search-input {
   border-radius: 20px !important;
-  background: var(--bg-surface-elevated) !important;
+  background: var(--bg-surface-elevated) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E") no-repeat 12px center !important;
   border: 1px solid var(--line) !important;
-  padding: 5px 14px !important;
+  padding: 5px 14px 5px 32px !important;
 }
 
 html.dark-theme .search-input,
 html.dark-theme input.search-input,
 html.dark-theme input[class*="search-input"] {
   background: #111111 !important;
-  border: 1px solid rgba(255,255,255,0.25) !important;
   border-radius: 20px !important;
 }
 
+
+
 /* Inner input inside global search — no styling, container handles it */
-html .global-search-box input,
+.global-search-box input,
 html.dark-theme .global-search-box input {
   all: unset !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
   display: inline-block !important;
   font-size: 13px !important;
   color: var(--text) !important;
@@ -1279,11 +1282,6 @@ html.dark-theme .global-search-box input {
   padding: 0 !important;
   outline: none !important;
   box-shadow: none !important;
-}
-
-html.dark-theme .global-search-box {
-  background: #111111 !important;
-  border-color: rgba(255,255,255,0.10) !important;
 }
 
 .global-search-box [contenteditable]:empty::before {
@@ -1603,5 +1601,21 @@ html.dark-theme ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 input[type="file"] { appearance: none; background: transparent !important; border: none !important; box-shadow: none !important; color: transparent !important; }
 input[type="file"]::-webkit-file-upload-button { visibility: hidden; display: none; width: 0; height: 0; padding: 0; border: none; }
 input[type="file"]::file-selector-button { visibility: hidden; display: none; width: 0; height: 0; padding: 0; border: none; }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--blue); }
+input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none;
+  width: 15px; height: 15px; border-radius: 3px; flex-shrink: 0;
+  border: 1.5px solid var(--line); background: var(--bg-surface-elevated);
+  cursor: pointer; position: relative; vertical-align: middle;
+  transition: background 0.15s, border-color 0.15s;
+}
+input[type="checkbox"]:checked {
+  background: var(--blue); border-color: var(--blue);
+}
+input[type="checkbox"]:checked::after {
+  content: ""; position: absolute; left: 4px; top: 1px;
+  width: 4px; height: 8px; border: 2px solid #fff;
+  border-top: none; border-left: none; transform: rotate(45deg);
+}
 
 html.dark-theme th { color: #ffffff !important; --muted: #ffffff; }

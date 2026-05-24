@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Download, FileDown } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { getSupabaseClient } from "@/lib/supabase";
 import { AppLayout } from "@/components/AppLayout";
 import { DatePicker } from "@/components/DatePicker";
@@ -25,6 +26,7 @@ function formatDate(iso: string | null) {
 }
 
 export function ExportsPage() {
+  const navigate = useNavigate();
   const [sites, setSites] = useState<Site[]>([]);
 
   // Stocked-in filters
@@ -167,6 +169,10 @@ export function ExportsPage() {
 
   return (
     <AppLayout>
+      <nav className="sub-nav" aria-label="Reports pages">
+        <button type="button" className="sub-tab" onClick={() => navigate("/reports")}>Reports</button>
+        <button type="button" className="sub-tab active">Exports</button>
+      </nav>
       <main style={{ maxWidth: 860, margin: "0 auto", padding: "28px 24px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 24 }}>
           <FileDown size={20} color="var(--blue)" />

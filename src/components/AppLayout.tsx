@@ -1,5 +1,6 @@
-import { type ReactNode, useState, useEffect } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   BarChart3,
   Boxes,
@@ -24,6 +25,7 @@ import { useBranding } from "@/lib/useBranding";
 import { NotificationBell } from "@/components/NotificationBell";
 import { getTheme, applyTheme, type Theme } from "@/lib/theme";
 import { useOnlineStatus } from "@/lib/useOnlineStatus";
+import { prefetchRouteData } from "@/services/navigationCache";
 
 type Module = { label: string; icon: LucideIcon; path: string };
 
@@ -51,6 +53,7 @@ const ROUTE_LABELS: Record<string, string> = {
   "/transfers": "Transfers",
   "/transfers/new": "Create Transfer",
   "/corrections": "Corrections",
+  "/reports": "Reports",
   "/exports": "Exports",
   "/analytics": "Analytics",
   "/config": "Configuration",
@@ -62,15 +65,15 @@ function Breadcrumb() {
   const navigate = useNavigate();
   const path = location.pathname;
 
+  const PARENT_MAP: Record<string, string> = { "/exports": "/reports" };
+
   const crumbs: { label: string; path: string }[] = [{ label: "Home", path: "/" }];
 
   if (path !== "/") {
     const parts = path.split("/").filter(Boolean);
-    if (parts.length > 1) {
-      const parentPath = "/" + parts[0];
-      if (ROUTE_LABELS[parentPath]) {
-        crumbs.push({ label: ROUTE_LABELS[parentPath], path: parentPath });
-      }
+    const parentPath = PARENT_MAP[path] ?? (parts.length > 1 ? "/" + parts[0] : null);
+    if (parentPath && ROUTE_LABELS[parentPath]) {
+      crumbs.push({ label: ROUTE_LABELS[parentPath], path: parentPath });
     }
 
     const label = ROUTE_LABELS[path] ?? (parts.length > 1 ? "Detail" : undefined);
@@ -103,6 +106,7 @@ function Breadcrumb() {
 export function AppLayout({ children, activeModule }: Props) {
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const { state: authState, signOut } = useAuth();
   const { brandName } = useBranding();
   const [showHelp, setShowHelp] = useState(false);
@@ -126,6 +130,15 @@ export function AppLayout({ children, activeModule }: Props) {
 
   const isSystemAdmin = authState.status === "authenticated" && authState.profile.role === "system_admin";
   const isAdmin = authState.status === "authenticated" && ["system_admin", "dc_admin"].includes(authState.profile.role);
+  const warmRoute = useCallback((path: string) => {
+    if (authState.status !== "authenticated") return;
+    void prefetchRouteData(queryClient, path);
+  }, [authState.status, queryClient]);
+  const goToRoute = useCallback((path: string) => {
+    warmRoute(path);
+    if (location.pathname === path && !location.search) return;
+    navigate(path);
+  }, [location.pathname, location.search, navigate, warmRoute]);
 
   // Force password change redirect
   useEffect(() => {
@@ -139,7 +152,7 @@ export function AppLayout({ children, activeModule }: Props) {
       : "User";
   const userRole = authState.status === "authenticated" ? authState.profile.role : "";
 
-  const activePath = activeModule ?? location.pathname;
+  const activePath = activeModule ?? (location.pathname === "/exports" ? "/reports" : location.pathname);
   const onlineStatus = useOnlineStatus();
   const offlineMessage = location.pathname.startsWith("/stock-in")
     ? "No connection. Stock-in batches will sync when connection restores."
@@ -149,7 +162,14 @@ export function AppLayout({ children, activeModule }: Props) {
     <div className="katana-app">
       <header className="global-nav">
         <div className="nav-left">
-          <button type="button" className="brand-word brand-trigger" onClick={() => navigate("/")}>
+          <button
+            type="button"
+            className="brand-word brand-trigger"
+            onPointerEnter={() => warmRoute("/dashboard")}
+            onPointerDown={() => warmRoute("/dashboard")}
+            onFocus={() => warmRoute("/dashboard")}
+            onClick={() => goToRoute("/dashboard")}
+          >
             {headerBrandName}
           </button>
           <nav className="main-modules" aria-label="Main modules">
@@ -161,7 +181,10 @@ export function AppLayout({ children, activeModule }: Props) {
                   key={item.label}
                   className={isActive ? "module active" : "module"}
                   type="button"
-                  onClick={() => navigate(item.path)}
+                  onPointerEnter={() => warmRoute(item.path)}
+                  onPointerDown={() => warmRoute(item.path)}
+                  onFocus={() => warmRoute(item.path)}
+                  onClick={() => goToRoute(item.path)}
                 >
                   <Icon className="module-icon-svg" aria-hidden="true" />
                   <span>{item.label}</span>
@@ -285,4 +308,3 @@ export function AppLayout({ children, activeModule }: Props) {
     </div>
   );
 }
-

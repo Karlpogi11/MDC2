@@ -121,7 +121,7 @@ export function ConfigPage() {
             <button key={t.key} type="button" onClick={() => setTab(t.key)}
               style={{
                 border: "none", background: "transparent", padding: "5px 12px",
-                fontSize: 14, fontWeight: 600, cursor: "pointer",
+                fontSize: 14, fontWeight: 600, cursor: "pointer", borderRadius: 0,
                 color: tab === t.key
                   ? (t.key === "danger" ? "var(--negative)" : "var(--blue)")
                   : (t.key === "danger" ? "var(--negative)" : "var(--text)"),

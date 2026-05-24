@@ -46,7 +46,7 @@ export function App() {
       {/* Public receipt link: ReceivePage validates signed token via get_transfer_by_token; logged-in DC staff use RLS-backed access. */}
       <Route path="/transfers/:id/receive"      element={<ReceivePage />} />
       <Route path="/corrections"                element={<RoleGuard allow={[...ADMIN]}><CorrectionsPage /></RoleGuard>} />
-      <Route path="/exports"                    element={<Navigate to="/reports" replace />} />
+      <Route path="/exports"                    element={<RoleGuard allow={[...ALL]}><ExportsPage /></RoleGuard>} />
       <Route path="/analytics"                  element={<RoleGuard allow={[...OPS]}><AnalyticsPage /></RoleGuard>} />
       <Route path="/physical-count"             element={<RoleGuard allow={[...OPS]}><PhysicalCountPage /></RoleGuard>} />
       <Route path="/config"                     element={<RoleGuard allow={[...SYS]}><ConfigPage /></RoleGuard>} />

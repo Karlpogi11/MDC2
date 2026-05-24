@@ -7,6 +7,7 @@ import { App } from "./App";
 import "./styles.css";
 import "./theme-enterprise.css";
 import { getSupabaseClient } from "@/lib/supabase";
+import { NAVIGATION_CACHE_GC_TIME, NAVIGATION_CACHE_STALE_TIME } from "@/services/navigationCache";
 
 // Remove the flash-prevention style now that real CSS is loaded
 document.getElementById("__theme_init")?.remove();
@@ -32,7 +33,12 @@ if (client) {
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { staleTime: 30_000, retry: 1 },
+    queries: {
+      staleTime: NAVIGATION_CACHE_STALE_TIME,
+      gcTime: NAVIGATION_CACHE_GC_TIME,
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
   },
 });
 

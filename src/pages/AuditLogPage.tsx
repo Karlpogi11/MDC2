@@ -112,12 +112,13 @@ export function AuditLogPage() {
   const [loading, setLoading] = useState(true);
   const [filterAction, setFilterAction] = useState("");
   const [filterEntity, setFilterEntity] = useState("");
+  const [filterSerial, setFilterSerial] = useState("");
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
 
   useEffect(() => {
     void load();
-  }, [filterAction, filterEntity, page]);
+  }, [filterAction, filterEntity, filterSerial, page]);
 
   async function load() {
     const client = getSupabaseClient();
@@ -132,6 +133,7 @@ export function AuditLogPage() {
 
     if (filterAction) q = q.eq("action", filterAction);
     if (filterEntity) q = q.eq("entity_type", filterEntity);
+    if (filterSerial.trim()) q = q.or(`old_value->>serial_number.ilike.%${filterSerial.trim()}%,new_value->>serial_number.ilike.%${filterSerial.trim()}%`);
 
     const { data, count, error } = await q;
     if (!error && data) {
@@ -169,6 +171,13 @@ export function AuditLogPage() {
             <option value="">All entities</option>
             {entityTypes.map(e => <option key={e} value={e}>{e}</option>)}
           </select>
+          <input
+            value={filterSerial}
+            onChange={e => { setFilterSerial(e.target.value); setPage(0); }}
+            placeholder="Filter by serial…"
+            className="search-input"
+            style={{ fontSize: 13, width: 200, color: "var(--text)" }}
+          />
         </div>
 
         <div className="table-card">

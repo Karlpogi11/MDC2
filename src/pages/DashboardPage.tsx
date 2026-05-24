@@ -4,23 +4,13 @@ import { PackagePlus, ArrowRightLeft, AlertTriangle, Search, CheckCircle2 } from
 import { getSupabaseClient } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { AppLayout } from "@/components/AppLayout";
-import { friendlyError } from "@/lib/friendlyError";
-
-type Metrics = {
-  inStock: number;
-  inTransit: number;
-  awaitingReceipt: number;
-  overdue: number; // in_transit > 3 days
-};
-
-type PipelineItem = { status: string; count: number; overdueCount: number };
-
-type ActivityItem = {
-  id: string;
-  type: "transfer_dispatched" | "transfer_received" | "stock_in" | "correction";
-  label: string;
-  time: string;
-};
+import { useQuery } from "@tanstack/react-query";
+import {
+  dashboardQueryKey,
+  fetchDashboardData,
+  NAVIGATION_CACHE_GC_TIME,
+  NAVIGATION_CACHE_STALE_TIME,
+} from "@/services/navigationCache";
 
 const STATUS_LABEL: Record<string, string> = {
   draft: "Draft",
@@ -139,128 +129,19 @@ export function DashboardPage() {
       ? (authState.profile.full_name ?? authState.profile.username ?? "there")
       : "there";
 
-  const [metrics, setMetrics] = useState<Metrics | null>(null);
-  const [pipeline, setPipeline] = useState<PipelineItem[]>([]);
-  const [activity, setActivity] = useState<ActivityItem[]>([]);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    void load();
-  }, []);
-
-  async function load() {
-    const client = getSupabaseClient();
-    if (!client) {
-      // Demo mode — show placeholder zeros
-      setMetrics({ inStock: 0, inTransit: 0, awaitingReceipt: 0, overdue: 0 });
-      setPipeline([]);
-      setActivity([]);
-      return;
-    }
-
-    try {
-      const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
-
-      const [stockRes, transfersRes, stockInRes, correctionsRes] = await Promise.all([
-        // in_stock count
-        client.from("serial_numbers").select("id", { count: "exact", head: true }).eq("status", "in_stock"),
-        // all active transfers
-        client
-          .from("transfers")
-          .select("id, status, packed_at, created_at, transfer_no, destination_site:sites!destination_site_id(site_name)")
-          .in("status", ["draft", "packed", "in_transit"])
-          .order("created_at", { ascending: false })
-          .limit(200),
-        // recent stock-in batches
-        client
-          .from("stock_in_batches")
-          .select("id, created_at, total_rows")
-          .order("created_at", { ascending: false })
-          .limit(5),
-        // recent corrections
-        client
-          .from("serial_corrections")
-          .select("id, created_at, old_serial, new_serial")
-          .order("created_at", { ascending: false })
-          .limit(5),
-      ]);
-
-      if (stockRes.error) throw new Error(friendlyError(stockRes.error));
-      if (transfersRes.error) throw new Error(friendlyError(transfersRes.error));
-
-      const transfers = (transfersRes.data ?? []) as any[];
-
-      // Metrics
-      const inTransitList = transfers.filter((t) => t.status === "in_transit");
-      const overdueList = inTransitList.filter((t) => {
-        const dispatchedAt = t.packed_at ?? t.created_at;
-        return dispatchedAt < threeDaysAgo;
-      });
-
-      setMetrics({
-        inStock: stockRes.count ?? 0,
-        inTransit: inTransitList.length,
-        awaitingReceipt: inTransitList.length, // same — in_transit = awaiting receipt
-        overdue: overdueList.length,
-      });
-
-      // Pipeline counts
-      const pipelineMap: Record<string, { count: number; overdueCount: number }> = {};
-      for (const t of transfers) {
-        if (!pipelineMap[t.status]) pipelineMap[t.status] = { count: 0, overdueCount: 0 };
-        pipelineMap[t.status].count++;
-        if (t.status === "in_transit") {
-          const dispatchedAt = t.packed_at ?? t.created_at;
-          if (dispatchedAt < threeDaysAgo) pipelineMap[t.status].overdueCount++;
-        }
-      }
-      setPipeline(
-        ["draft", "packed", "in_transit"].map((s) => ({
-          status: s,
-          count: pipelineMap[s]?.count ?? 0,
-          overdueCount: pipelineMap[s]?.overdueCount ?? 0,
-        }))
-      );
-
-      // Recent activity feed — merge transfers + stock-in + corrections, sort by time
-      const activityItems: ActivityItem[] = [];
-
-      for (const t of transfers.slice(0, 5)) {
-        const site = Array.isArray(t.destination_site) ? t.destination_site[0] : t.destination_site;
-        if (t.status === "in_transit") {
-          activityItems.push({
-            id: t.id,
-            type: "transfer_dispatched",
-            label: `${t.transfer_no} dispatched → ${site?.site_name ?? "unknown"}`,
-            time: t.packed_at ?? t.created_at,
-          });
-        }
-      }
-
-      for (const b of (stockInRes.data ?? []) as any[]) {
-        activityItems.push({
-          id: b.id,
-          type: "stock_in",
-          label: `${b.total_rows ?? "?"} serials stocked in`,
-          time: b.created_at,
-        });
-      }
-
-      for (const c of (correctionsRes.data ?? []) as any[]) {
-        activityItems.push({
-          id: c.id,
-          type: "correction",
-          label: `Correction: ${c.old_serial} → ${c.new_serial}`,
-          time: c.created_at,
-        });
-      }
-
-      activityItems.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
-      setActivity(activityItems.slice(0, 8));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load dashboard");
-    }
-  }
+  const { data, error } = useQuery({
+    queryKey: dashboardQueryKey,
+    queryFn: fetchDashboardData,
+    staleTime: NAVIGATION_CACHE_STALE_TIME,
+    gcTime: NAVIGATION_CACHE_GC_TIME,
+  });
+  const metrics = data?.metrics ?? null;
+  const pipeline = data?.pipeline ?? [];
+  const activity = data?.activity ?? [];
+  const stockInThisWeek = data?.stockInThisWeek ?? null;
+  const pendingCorrections = data?.pendingCorrections ?? null;
+  const topParts = data?.topParts ?? [];
+  const loadError = error instanceof Error ? error.message : null;
 
   const ACTIVITY_ICON: Record<string, React.ReactNode> = {
     transfer_dispatched: <ArrowRightLeft size={13} color="var(--muted)" />,
@@ -285,9 +166,9 @@ export function DashboardPage() {
           <GlobalSearch />
         </div>
 
-        {error && (
+        {loadError && (
           <div role="alert" style={{ marginBottom: 16, padding: "10px 14px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", color: "var(--negative)", fontSize: 13 }}>
-            {error}
+            {loadError}
           </div>
         )}
 
@@ -295,12 +176,8 @@ export function DashboardPage() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
           <MetricCard label="In Stock" value={metrics?.inStock ?? "—"} />
           <MetricCard label="In Transit" value={metrics?.inTransit ?? "—"} />
-          <MetricCard label="Awaiting Receipt" value={metrics?.awaitingReceipt ?? "—"} />
-          <MetricCard
-            label="Overdue (>3d)"
-            value={metrics?.overdue ?? "—"}
-            alert={!!metrics?.overdue}
-          />
+          <MetricCard label="Overdue (>3d)" value={metrics?.overdue ?? "—"} alert={!!metrics?.overdue} />
+          <MetricCard label="Stocked In This Week" value={stockInThisWeek ?? "—"} />
         </div>
 
         {/* Pipeline + Activity */}
@@ -362,6 +239,33 @@ export function DashboardPage() {
           </section>
         </div>
 
+        {/* Top Parts by Movement */}
+        <section className="table-card" style={{ padding: 0, marginBottom: 20 }}>
+          <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>Top Parts This Week</span>
+            <button type="button" onClick={() => navigate("/inventory")}
+              style={{ fontSize: 12, color: "var(--blue)", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>
+              View inventory →
+            </button>
+          </div>
+          {topParts.length === 0 ? (
+            <div style={{ padding: "16px", fontSize: 13, color: "var(--muted)", textAlign: "center" }}>No movement this week</div>
+          ) : (
+            <div>
+              {topParts.map((p, i) => (
+                <div key={p.part_number} style={{ display: "flex", alignItems: "center", gap: 12, padding: "7px 16px", borderBottom: i < topParts.length - 1 ? "1px solid var(--line)" : "none" }}>
+                  <span style={{ fontSize: 11, color: "var(--muted)", width: 16, textAlign: "right", flexShrink: 0 }}>{i + 1}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", fontFamily: "monospace" }}>{p.part_number}</div>
+                    <div style={{ fontSize: 11, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.part_name}</div>
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--blue)", flexShrink: 0 }}>{p.movement}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
         {/* Quick Actions */}
         <section className="table-card" style={{ padding: "14px 16px" }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 12 }}>Quick Actions</div>
@@ -391,13 +295,14 @@ function getGreeting(): string {
   return "evening";
 }
 
-function MetricCard({ label, value, alert }: { label: string; value: number | string; alert?: boolean }) {
+function MetricCard({ label, value, alert, onClick }: { label: string; value: number | string; alert?: boolean; onClick?: () => void }) {
   return (
-    <div style={{
+    <div onClick={onClick} style={{
       background: "var(--bg-surface)",
       borderRadius: "var(--radius)",
       padding: "22px 24px",
       border: `1px solid ${alert && value !== 0 ? "var(--negative)" : "var(--line)"}`,
+      cursor: onClick ? "pointer" : "default",
     }}>
       <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 500, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>
         {label}
@@ -418,12 +323,11 @@ function QuickAction({ label, onClick, primary }: { label: string; onClick: () =
       fontSize: 13,
       fontWeight: primary ? 600 : 400,
       cursor: "pointer",
-      textDecoration: primary ? "none" : "none",
+      textDecoration: primary ? "none" : "underline",
     }}>
       {label}
     </button>
   );
 }
-
 
 

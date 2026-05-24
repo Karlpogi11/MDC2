@@ -2,23 +2,18 @@ import { friendlyError } from "@/lib/friendlyError";
 import { useTableResize } from "@/components/ResizableColumns";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileText } from "lucide-react";
+import { FileText, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase";
 import { AppLayout } from "@/components/AppLayout";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-
-type TransferStatus = "draft" | "packed" | "in_transit" | "received" | "cancelled";
-
-type Transfer = {
-  id: string;
-  transfer_no: string;
-  status: TransferStatus;
-  destination_site: { site_name: string; site_code: string } | null;
-  requested_by_profile: { full_name: string | null; username: string | null } | null;
-  created_at: string;
-  packed_at: string | null;
-  item_count: number;
-};
+import {
+  fetchTransfers,
+  NAVIGATION_CACHE_GC_TIME,
+  NAVIGATION_CACHE_STALE_TIME,
+  transfersQueryKey,
+  type Transfer,
+  type TransferStatus,
+} from "@/services/navigationCache";
 
 function getAge(transfer: Transfer): string | null {
   if (transfer.status === "received" || transfer.status === "cancelled") return null;
@@ -40,36 +35,6 @@ const STATUS_STYLE: Record<TransferStatus, { bg: string; color: string; label: s
   cancelled:  { bg: "var(--bg-surface-elevated)", color: "var(--negative)", label: "Cancelled" },
 };
 
-async function fetchTransfers(): Promise<Transfer[]> {
-  const client = getSupabaseClient();
-  if (!client) return [];
-
-  const { data, error } = await client
-    .from("transfers")
-    .select(`
-      id, transfer_no, status, created_at, packed_at,
-      destination_site:sites!destination_site_id(site_name, site_code),
-      requested_by_profile:profiles!requested_by(full_name, username),
-      transfer_items(id)
-    `)
-    .order("created_at", { ascending: false })
-    .limit(100);
-
-  if (error) throw new Error(friendlyError(error));
-  if (!data) return [];
-
-  return data.map((t: any) => ({
-    id: t.id,
-    transfer_no: t.transfer_no,
-    status: t.status,
-    destination_site: Array.isArray(t.destination_site) ? t.destination_site[0] ?? null : t.destination_site,
-    requested_by_profile: Array.isArray(t.requested_by_profile) ? t.requested_by_profile[0] ?? null : t.requested_by_profile,
-    created_at: t.created_at,
-    packed_at: t.packed_at,
-    item_count: Array.isArray(t.transfer_items) ? t.transfer_items.length : 0,
-  }));
-}
-
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "2-digit" });
 }
@@ -79,11 +44,22 @@ export function TransfersPage() {
   const tableRef = useTableResize();
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<TransferStatus | "all">("all");
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<{ key: "transfer_no" | "destination" | "items" | "date"; dir: "asc" | "desc" }>({ key: "date", dir: "desc" });
+
+  function toggleSort(key: typeof sort.key) {
+    setSort(s => s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" });
+  }
+  function SortIcon({ k }: { k: typeof sort.key }) {
+    if (sort.key !== k) return <ArrowUpDown size={12} style={{ opacity: 0.4 }} />;
+    return sort.dir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />;
+  }
 
   const { data: transfers = [], isLoading: loading, error } = useQuery({
-    queryKey: ["transfers"],
+    queryKey: transfersQueryKey,
     queryFn: fetchTransfers,
-    staleTime: 30_000,
+    staleTime: NAVIGATION_CACHE_STALE_TIME,
+    gcTime: NAVIGATION_CACHE_GC_TIME,
     refetchOnWindowFocus: true,
   });
 
@@ -94,7 +70,7 @@ export function TransfersPage() {
     const channel = client
       .channel("transfers-list")
       .on("postgres_changes", { event: "*", schema: "public", table: "transfers" }, () => {
-        void queryClient.invalidateQueries({ queryKey: ["transfers"] });
+        void queryClient.invalidateQueries({ queryKey: transfersQueryKey });
       })
       .subscribe();
     return () => { void client.removeChannel(channel); };
@@ -112,30 +88,49 @@ export function TransfersPage() {
       if (error) throw new Error(friendlyError(error));
     },
     onMutate: async ({ id, status }) => {
-      await queryClient.cancelQueries({ queryKey: ["transfers"] });
-      const previous = queryClient.getQueryData<Transfer[]>(["transfers"]);
-      queryClient.setQueryData<Transfer[]>(["transfers"], (old = []) =>
+      await queryClient.cancelQueries({ queryKey: transfersQueryKey });
+      const previous = queryClient.getQueryData<Transfer[]>(transfersQueryKey);
+      queryClient.setQueryData<Transfer[]>(transfersQueryKey, (old = []) =>
         old.map((t) => t.id === id ? { ...t, status } : t)
       );
       return { previous };
     },
     onError: (_err, _vars, ctx) => {
-      if (ctx?.previous) queryClient.setQueryData(["transfers"], ctx.previous);
+      if (ctx?.previous) queryClient.setQueryData(transfersQueryKey, ctx.previous);
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ["transfers"] }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: transfersQueryKey }),
   });
 
   const fetchError = error instanceof Error ? friendlyError(error) : null;
-  const filtered = statusFilter === "all" ? transfers : transfers.filter((t) => t.status === statusFilter);
+  const filtered = transfers.filter((t) => {
+    if (statusFilter !== "all" && t.status !== statusFilter) return false;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      return (
+        t.transfer_no.toLowerCase().includes(q) ||
+        (t.destination_site?.site_name ?? "").toLowerCase().includes(q) ||
+        (t.destination_site?.site_code ?? "").toLowerCase().includes(q)
+      );
+    }
+    return true;
+  });
+
+  const sorted = [...filtered].sort((a, b) => {
+    const mul = sort.dir === "asc" ? 1 : -1;
+    if (sort.key === "transfer_no") return mul * a.transfer_no.localeCompare(b.transfer_no);
+    if (sort.key === "destination") return mul * ((a.destination_site?.site_name ?? "").localeCompare(b.destination_site?.site_name ?? ""));
+    if (sort.key === "items") return mul * (a.item_count - b.item_count);
+    return mul * (new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  });
 
   return (
     <AppLayout>
       <main style={{ maxWidth: 960, margin: "0 auto", padding: "32px 24px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
           <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text)" }}>
             Transfers {!loading && <span style={{ fontSize: 14, fontWeight: 400, color: "var(--muted)" }}>({filtered.length})</span>}
           </h1>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <button
               type="button"
               onClick={() => navigate("/transfers/templates")}
@@ -153,8 +148,9 @@ export function TransfersPage() {
           </div>
         </div>
 
-        {/* Status filter tabs */}
-        <div style={{ display: "flex", gap: 4, marginBottom: 16, borderBottom: "1px solid #e5e7eb", paddingBottom: 0 }}>
+        {/* Status filter tabs + search */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--line)", marginBottom: 16 }}>
+          <div style={{ display: "flex" }}>
           {(["all", "draft", "packed", "in_transit", "received", "cancelled"] as const).map((s) => (
             <button
               key={s}
@@ -171,6 +167,14 @@ export function TransfersPage() {
               {s === "all" ? "All" : STATUS_STYLE[s].label}
             </button>
             ))}
+          </div>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search transfers…"
+            className="search-input"
+            style={{ fontSize: 13, width: 200, color: "var(--text)", marginBottom: 4 }}
+          />
         </div>
 
         <section className="table-card">
@@ -178,13 +182,13 @@ export function TransfersPage() {
           <table ref={tableRef}>
             <thead>
               <tr>
-                <th>Transfer #</th>
-                <th>Destination</th>
-                <th className="num">Items</th>
+                <th><button className="col-sort" type="button" onClick={() => toggleSort("transfer_no")}><span>Transfer #</span><SortIcon k="transfer_no" /></button></th>
+                <th><button className="col-sort" type="button" onClick={() => toggleSort("destination")}><span>Destination</span><SortIcon k="destination" /></button></th>
+                <th className="num"><button className="col-sort" type="button" onClick={() => toggleSort("items")}><span>Items</span><SortIcon k="items" /></button></th>
                 <th>Status</th>
                 <th>Age</th>
                 <th>Requested by</th>
-                <th>Date</th>
+                <th><button className="col-sort" type="button" onClick={() => toggleSort("date")}><span>Date</span><SortIcon k="date" /></button></th>
                 <th />
               </tr>
             </thead>
@@ -209,7 +213,7 @@ export function TransfersPage() {
                   </td>
                 </tr>
               )}
-              {!loading && filtered.map((t) => {
+              {!loading && sorted.map((t) => {
                 const s = STATUS_STYLE[t.status];
                 return (
                   <tr key={t.id}>
@@ -261,6 +265,4 @@ export function TransfersPage() {
     </AppLayout>
   );
 }
-
-
 

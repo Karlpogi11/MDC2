@@ -1,6 +1,6 @@
-import { friendlyError } from "@/lib/friendlyError";
 import { useExportInventory } from "@/hooks/useExportInventory";
 import { useEffect, useMemo, useState, useCallback, type ReactElement } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTableResize } from "@/components/ResizableColumns";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
@@ -12,13 +12,17 @@ import { SerialNumbersTab } from "@/components/SerialNumbersTab";
 import {
   ArrowDown, ArrowUp, ArrowUpDown, RefreshCw, Download, CheckSquare,
 } from "lucide-react";
-import { demoInventoryRows } from "../data/demoInventory";
-import { fetchInventoryRows } from "../services/inventory";
 import { getSupabaseClient } from "@/lib/supabase";
-import type { InventoryRow, InventorySource } from "../types";
 import { useRealtimeTable } from "@/lib/useRealtimeTable";
 import { useFeatureFlag } from "@/lib/useFeatureFlag";
 import { toCapitalized } from "@/lib/format";
+import {
+  fetchInventoryRowsCached,
+  INVENTORY_PAGE_SIZE,
+  inventoryRowsQueryKey,
+  NAVIGATION_CACHE_GC_TIME,
+  NAVIGATION_CACHE_STALE_TIME,
+} from "@/services/navigationCache";
 
 type SortKey =
   | "partName" | "partNumber" | "category"
@@ -26,14 +30,6 @@ type SortKey =
   | "lastStockInAt" | "lastStockOutAt";
 
 type SortState = { key: SortKey; direction: "asc" | "desc" };
-
-type LoadState = {
-  rows: InventoryRow[];
-  source: InventorySource;
-  loading: boolean;
-  error: string | null;
-  total: number | null;
-};
 
 type SegmentFilter = "all" | "in_stock" | "stocked_out";
 
@@ -62,18 +58,19 @@ function InventoryTab() {
   const { state: authState } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const queryClient = useQueryClient();
   const isDCAdmin = authState.status === "authenticated" && authState.profile.role === "dc_admin";
 
   // URL-persisted filter state — survives navigation and browser back/forward
   const segment = (searchParams.get("seg") as SegmentFilter) ?? "all";
   const search = searchParams.get("q") ?? "";
   const page = Math.max(0, parseInt(searchParams.get("page") ?? "0", 10) || 0);
-  const PAGE_SIZE = 50;
+  const PAGE_SIZE = INVENTORY_PAGE_SIZE;
 
   const setSegment = (v: SegmentFilter) => setSearchParams((p) => { p.set("seg", v); p.delete("page"); return p; }, { replace: true });
   const setSearch = (v: string) => setSearchParams((p) => { if (v) p.set("q", v); else p.delete("q"); p.delete("page"); return p; }, { replace: true });
   const setPage = (fn: (p: number) => number) => setSearchParams((p) => { const next = fn(page); if (next > 0) p.set("page", String(next)); else p.delete("page"); return p; }, { replace: true });
-  const [state, setState] = useState<LoadState>({ rows: [], source: "demo", loading: true, error: null, total: null });
+  const [debouncedSearch, setDebouncedSearch] = useState(search.trim());
   const [sortState, setSortState] = useState<SortState>({ key: "partName", direction: "asc" });
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [focusedRowId, setFocusedRowId] = useState<string | null>(null);
@@ -85,29 +82,45 @@ function InventoryTab() {
   const closeReservedDrawer = useCallback(() => setReservedDrawerPart(null), []);
 
   const realtimeEnabled = useFeatureFlag("enable_realtime");
-  const realtimeStatus = useRealtimeTable(["serial_numbers", "transfers", "transfer_items"], () => void loadInventory(page), realtimeEnabled);
-
-  const loadInventory = async (p = page, searchOverride?: string) => {
-    const q = (searchOverride !== undefined ? searchOverride : search).trim();
-    setState((prev) => ({ ...prev, loading: true, error: null }));
-    try {
-      const result = await fetchInventoryRows(p, PAGE_SIZE, { segment, search: q });
-      setState({ rows: result.rows, source: result.source, loading: false, error: null, total: result.total ?? result.rows.length });
-      if (q.length >= 6 && !q.includes(" ") && result.rows.length <= 2) setSerialLookup(q);
-      else if (!q) setSerialLookup(null);
-    } catch (error) {
-      const reason = error instanceof Error ? friendlyError(error) : "Failed to load inventory";
-      setState({ rows: demoInventoryRows, source: "demo", loading: false, error: `Unable to load project inventory (${reason}).`, total: null });
-    }
-  };
-
+  const refreshInventoryCache = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ["inventoryRows"] });
+  }, [queryClient]);
+  const realtimeStatus = useRealtimeTable(["serial_numbers", "transfers", "transfer_items"], refreshInventoryCache, realtimeEnabled);
 
   useEffect(() => {
     const handle = window.setTimeout(() => {
-      void loadInventory(page);
+      setDebouncedSearch(search.trim());
     }, search.trim() ? 300 : 0);
     return () => window.clearTimeout(handle);
-  }, [page, segment, search]);
+  }, [search]);
+
+  const inventoryQuery = useQuery({
+    queryKey: inventoryRowsQueryKey(page, segment, debouncedSearch),
+    queryFn: () => fetchInventoryRowsCached(page, PAGE_SIZE, { segment, search: debouncedSearch }),
+    staleTime: NAVIGATION_CACHE_STALE_TIME,
+    gcTime: NAVIGATION_CACHE_GC_TIME,
+  });
+
+  const state = useMemo(() => {
+    const data = inventoryQuery.data;
+    return {
+      rows: data?.rows ?? [],
+      source: data?.source ?? "demo",
+      loading: inventoryQuery.isLoading && !data,
+      error: data?.errorMessage ?? null,
+      total: data?.total ?? (data ? data.rows.length : null),
+    };
+  }, [inventoryQuery.data, inventoryQuery.isLoading]);
+
+  useEffect(() => {
+    const rows = inventoryQuery.data?.rows;
+    if (!rows) return;
+    if (debouncedSearch.length >= 6 && !debouncedSearch.includes(" ") && rows.length <= 2) {
+      setSerialLookup(debouncedSearch);
+    } else if (!debouncedSearch) {
+      setSerialLookup(null);
+    }
+  }, [debouncedSearch, inventoryQuery.data]);
 
   const sortedRows = useMemo(() => {
     const rows = [...state.rows];
@@ -238,11 +251,11 @@ function InventoryTab() {
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); if (!e.target.value) { setSerialLookup(null); setPage(() => 0); } }}
                 onKeyDown={(e) => { if (e.key === "Enter" && search.trim()) setSerialLookup(search.trim()); }}
-                style={{ fontSize: 13, width: 280, color: "var(--text)" }}
                 className="search-input"
+                style={{ fontSize: 13, width: 280, color: "var(--text)" }}
               />
             {search && (
-              <button type="button" className="clear-btn" onClick={() => { setSearch(""); setSerialLookup(null); void loadInventory(0, ""); }}
+              <button type="button" className="clear-btn" onClick={() => { setSearch(""); setSerialLookup(null); }}
                 aria-label="Clear search">
                 ×
               </button>
@@ -254,7 +267,7 @@ function InventoryTab() {
             onClick={() => void exportCSV(sortedRows)}>
             <Download aria-hidden="true" />
           </button>
-          <button className="icon-btn blue" type="button" aria-label="Refresh inventory" title="Refresh" onClick={() => void loadInventory(page)}>
+          <button className="icon-btn blue" type="button" aria-label="Refresh inventory" title="Refresh" onClick={() => void inventoryQuery.refetch()}>
             <RefreshCw aria-hidden="true" />
           </button>
           {realtimeEnabled && (
@@ -687,5 +700,3 @@ function SiteInventoryTab() {
     </main>
   );
 }
-
-

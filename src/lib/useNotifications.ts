@@ -13,11 +13,15 @@ export type Notification = {
   created_at: string;
 };
 
+const NOTIFICATION_CACHE_TTL = 60_000;
+const notificationsByUser = new Map<string, Notification[]>();
+const notificationsFetchedAt = new Map<string, number>();
+
 export function useNotifications() {
   const { state } = useAuth();
   const userId = state.status === "authenticated" ? state.user.id : null;
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   const unreadCount = notifications.filter((n) => !n.read_at).length;
 
@@ -30,13 +34,30 @@ export function useNotifications() {
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(50);
-    setNotifications((data ?? []) as Notification[]);
+    const next = (data ?? []) as Notification[];
+    notificationsByUser.set(userId, next);
+    notificationsFetchedAt.set(userId, Date.now());
+    setNotifications(next);
     setLoading(false);
   }, [userId]);
 
   // Initial fetch
   useEffect(() => {
-    if (!userId) return;
+    if (!userId) {
+      setNotifications([]);
+      setLoading(false);
+      return;
+    }
+    const cached = notificationsByUser.get(userId);
+    const fetchedAt = notificationsFetchedAt.get(userId) ?? 0;
+    const isFresh = cached && Date.now() - fetchedAt < NOTIFICATION_CACHE_TTL;
+    if (cached) {
+      setNotifications(cached);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+    if (isFresh) return;
     void fetchNotifications();
   }, [fetchNotifications, userId]);
 
@@ -51,7 +72,11 @@ export function useNotifications() {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
         (payload) => {
-          setNotifications((prev) => [payload.new as Notification, ...prev]);
+          setNotifications((prev) => {
+            const next = [payload.new as Notification, ...prev];
+            notificationsByUser.set(userId, next);
+            return next;
+          });
         }
       )
       .subscribe();
@@ -68,7 +93,11 @@ export function useNotifications() {
       .update({ read_at: now })
       .eq("user_id", userId)
       .is("read_at", null);
-    setNotifications((prev) => prev.map((n) => ({ ...n, read_at: n.read_at ?? now })));
+    setNotifications((prev) => {
+      const next = prev.map((n) => ({ ...n, read_at: n.read_at ?? now }));
+      notificationsByUser.set(userId, next);
+      return next;
+    });
   }, [userId]);
 
   const markRead = useCallback(async (id: string) => {
@@ -76,8 +105,12 @@ export function useNotifications() {
     if (!client) return;
     const now = new Date().toISOString();
     await client.from("notifications").update({ read_at: now }).eq("id", id);
-    setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read_at: now } : n));
-  }, []);
+    setNotifications((prev) => {
+      const next = prev.map((n) => n.id === id ? { ...n, read_at: now } : n);
+      if (userId) notificationsByUser.set(userId, next);
+      return next;
+    });
+  }, [userId]);
 
   return { notifications, unreadCount, loading, markAllRead, markRead };
 }

@@ -587,7 +587,7 @@ export function TransferDetailPage() {
                   <ScanLine size={14} /> {scanMode ? "Exit Scan Mode" : "Verify Serials"}
                 </button>
               )}
-              {["received"].includes(transfer.status) && (
+              {["packed", "received"].includes(transfer.status) && (
                 <button type="button" onClick={() => void generatePDF()} disabled={generatingPDF}
                   style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", color: "var(--text)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 12px", fontSize: 13, fontWeight: 600, cursor: generatingPDF ? "not-allowed" : "pointer", opacity: generatingPDF ? 0.7 : 1 }}>
                   <FileText size={14} /> {generatingPDF ? "Generating…" : "Packing List PDF"}
