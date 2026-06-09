@@ -456,7 +456,6 @@ function WebhooksTab({ actorId }: { actorId: string }) {
     </div>
   );
 }
-
 function DangerZoneTab({ role }: { role: string | null }) {
   const [confirm, setConfirm] = useState("");
   const [running, setRunning] = useState(false);
@@ -471,24 +470,14 @@ function DangerZoneTab({ role }: { role: string | null }) {
     );
   }
 
-  const TABLES = [
-    "audit_logs", "serial_part_reassignments", "serial_corrections",
-    "packing_lists", "transfer_items", "transfers",
-    "stock_in_items", "stock_in_batches", "serial_numbers",
-    "analytics_rows", "analytics_uploads",
-  ];
-
   async function handleReset() {
     if (confirm !== "RESET") return;
     setRunning(true); setErr(null);
     const client = getSupabaseClient();
     if (!client) { setErr("Supabase not configured."); setRunning(false); return; }
     try {
-      // Delete in FK-safe order
-      for (const table of TABLES) {
-        const { error } = await client.from(table as any).delete().neq("id", "00000000-0000-0000-0000-000000000000");
-        if (error) throw new Error(`Failed on ${table}: ${error.message}`);
-      }
+      const { data, error } = await client.rpc("reset_all_test_data");
+      if (error) throw new Error(error.message);
       setDone(true);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Reset failed.");
@@ -500,7 +489,7 @@ function DangerZoneTab({ role }: { role: string | null }) {
     return (
       <div style={{ padding: 32, textAlign: "center" }}>
         <p style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>✓ Test data cleared.</p>
-        <p style={{ fontSize: 13, color: "var(--muted)" }}>Sites, parts, and user accounts are intact. You're ready for go-live.</p>
+        <p style={{ fontSize: 13, color: "var(--muted)" }}>Sites, parts, and system admin accounts are intact. Ready for go-live.</p>
       </div>
     );
   }
@@ -516,10 +505,10 @@ function DangerZoneTab({ role }: { role: string | null }) {
         </div>
         <div style={{ padding: 20 }}>
           <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--text)" }}>
-            <strong>Will delete:</strong> all serials, transfers, stock-in batches, corrections, audit logs, analytics data.
+            <strong>Will delete:</strong> all serials, transfers, stock-in batches, corrections, audit logs, analytics, test user profiles.
           </p>
           <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--text)" }}>
-            <strong>Will keep:</strong> sites, parts list, user accounts, branding, config.
+            <strong>Will keep:</strong> sites, parts list, your admin account, branding, config.
           </p>
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 6 }}>

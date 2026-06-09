@@ -1,9 +1,9 @@
 import { friendlyError } from "@/lib/friendlyError";
 import { useTableResize } from "@/components/ResizableColumns";
 import { DangerAction } from "@/components/DangerAction";
-import { useState, useEffect, useRef, type FormEvent } from "react";
+import { useState, useEffect, useRef, type FormEvent, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Boxes, UserPlus, Check, X } from "lucide-react";
+import { ArrowLeft, Boxes, UserPlus, Check, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { getSupabaseClient } from "@/lib/supabase";
 import type { UserRole } from "@/lib/auth";
@@ -20,23 +20,13 @@ type UserRow = {
 };
 
 const ROLES: UserRole[] = ["system_admin", "dc_admin", "dc_operator", "dc_viewer"];
-
 const ROLE_LABELS: Record<UserRole, string> = {
   system_admin: "System Admin",
   dc_admin: "DC Admin",
   dc_operator: "DC Operator",
   dc_viewer: "DC Viewer",
 };
-
-async function fetchUsers(): Promise<UserRow[]> {
-  const client = getSupabaseClient();
-  if (!client) return [];
-  const { data } = await client
-    .from("profiles")
-    .select("id,full_name,email,username,role,is_active,created_at")
-    .order("created_at", { ascending: false });
-  return (data ?? []) as UserRow[];
-}
+const PAGE_SIZE = 50;
 
 function RoleDropdown({ value, busy, onChange }: { value: UserRole; busy: boolean; onChange: (r: UserRole) => void }) {
   const [open, setOpen] = useState(false);
@@ -125,6 +115,33 @@ export function UsersPage() {
 
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [totalCount, setTotalCount] = useState(0);
+  const [page, setPage] = useState(0);
+  const pageCount = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+
+  const loadPage = useCallback(async (p: number) => {
+    setLoading(true);
+    setActionError(null);
+    const client = getSupabaseClient();
+    if (!client) { setLoading(false); return; }
+    const from = p * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+    try {
+      const { data, error, count } = await client
+        .from("profiles")
+        .select("id,full_name,email,username,role,is_active,created_at", { count: "exact", head: false })
+        .order("email", { ascending: true })
+        .range(from, to);
+      if (error) { setActionError(error.message); setLoading(false); return; }
+      if (data) setUsers(data as UserRow[]);
+      if (count !== null) setTotalCount(count);
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Failed to load users.");
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { loadPage(0); }, [loadPage]);
 
   // Invite form state
   const [email, setEmail] = useState("");
@@ -155,10 +172,6 @@ export function UsersPage() {
 
   const currentUserId = authState.status === "authenticated" ? authState.user.id : null;
 
-  useEffect(() => {
-    fetchUsers().then((rows) => { setUsers(rows); setLoading(false); });
-  }, []);
-
   async function handleInvite(e: FormEvent) {
     e.preventDefault();
     setInviteError(null);
@@ -185,8 +198,8 @@ export function UsersPage() {
       : `Account created — email delivery failed (${data?.email_error ?? "unknown"}). Share credentials manually.`;
     setInviteSuccess(`User "${username}" created as ${role.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())}. ${emailNote}`);
     setEmail(""); setUsername(""); setFullName(""); setRole("dc_operator"); setUsernameStatus("idle");
-    const rows = await fetchUsers();
-    setUsers(rows);
+    setPage(0);
+    await loadPage(0);
     setInviting(false);
   }
 
@@ -325,9 +338,9 @@ export function UsersPage() {
 
         {/* User list */}
         <div className="table-card">
-          <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--line)" }}>
+          <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text)" }}>
-              All users {!loading && <span style={{ fontWeight: 400, color: "var(--muted)" }}>({users.length})</span>}
+              All users {!loading && <span style={{ fontWeight: 400, color: "var(--muted)" }}>({totalCount.toLocaleString()})</span>}
             </h2>
           </div>
 
@@ -408,6 +421,22 @@ export function UsersPage() {
             </tbody>
           </table>
           </div>
+
+          {totalCount > PAGE_SIZE && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "10px 20px", borderTop: "1px solid var(--line)" }}>
+              <button type="button" disabled={page === 0 || loading} onClick={() => { const p = page - 1; setPage(p); loadPage(p); }}
+                style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", fontSize: 12, fontWeight: 600, border: "1px solid var(--line)", borderRadius: "var(--radius)", background: "var(--bg-surface)", color: "var(--text)", cursor: page === 0 || loading ? "not-allowed" : "pointer", opacity: page === 0 ? 0.4 : 1 }}>
+                <ChevronLeft size={14} /> Prev
+              </button>
+              <span style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap" }}>
+                Page {page + 1} of {pageCount.toLocaleString()}
+              </span>
+              <button type="button" disabled={page >= pageCount - 1 || loading} onClick={() => { const p = page + 1; setPage(p); loadPage(p); }}
+                style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", fontSize: 12, fontWeight: 600, border: "1px solid var(--line)", borderRadius: "var(--radius)", background: "var(--bg-surface)", color: "var(--text)", cursor: page >= pageCount - 1 || loading ? "not-allowed" : "pointer", opacity: page >= pageCount - 1 ? 0.4 : 1 }}>
+                Next <ChevronRight size={14} />
+              </button>
+            </div>
+          )}
         </div>
       </main>
     </div>
