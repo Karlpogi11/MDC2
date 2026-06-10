@@ -505,9 +505,9 @@ function RankedBar({ data, height: _height }: { data: { name: string; value: num
   const maxVal = Math.max(...data.map((d) => d.value), 1);
   const rowH = 50;
   const labelW = 188;
-  const valW = 52;
   const svgW = 520;
-  const barW = svgW - labelW - valW - 8;
+  const barEnd = svgW - 100;
+  const barW = barEnd - labelW;
   const H = data.length * rowH + 4;
 
   return (
@@ -521,20 +521,19 @@ function RankedBar({ data, height: _height }: { data: { name: string; value: num
         const truncated = displayName.length > 26 ? displayName.slice(0, 26) + "…" : displayName;
         return (
           <g key={i}>
-            {/* rank */}
-            <text x={0} y={y + 30} fontSize={10} fontWeight="700" fill="#94a3b8" fontFamily="system-ui">#{i + 1}</text>
-            {/* part number (if has desc) */}
-            {desc && <text x={18} y={y + 17} fontSize={9} fill="#94a3b8" fontFamily="monospace">{d.name}</text>}
-            {/* name */}
-            <text x={18} y={desc ? y + 31 : y + 30} fontSize={11} fontWeight={i < 3 ? "600" : "400"} fill={INK} fontFamily="system-ui">{truncated}</text>
-            {/* track */}
-            <rect x={labelW} y={y + 20} width={barW} height={10} fill="#f1f5f9" rx={3} />
             {/* bar */}
-            <rect x={labelW} y={y + 20} width={bw} height={10} fill={BLUE} rx={3} />
+            <rect x={labelW} y={y + 6} width={barW} height={8} fill="#f1f5f9" rx={3} />
+            <rect x={labelW} y={y + 6} width={bw} height={8} fill={BLUE} rx={3} />
+            {/* rank */}
+            <text x={0} y={y + 42} fontSize={10} fontWeight="700" fill="#94a3b8" fontFamily="system-ui">#{i + 1}</text>
+            {/* part number (if has desc) */}
+            {desc && <text x={18} y={y + 28} fontSize={9} fill="#94a3b8" fontFamily="monospace">{d.name}</text>}
+            {/* name */}
+            <text x={18} y={desc ? y + 44 : y + 42} fontSize={11} fontWeight={i < 3 ? "600" : "400"} fill={INK} fontFamily="system-ui">{truncated}</text>
             {/* value */}
-            <text x={labelW + barW + 6} y={y + 30} fontSize={11} fontWeight="600" fill={INK} fontFamily="system-ui">{d.value.toLocaleString()}</text>
+            <text x={barEnd + 10} y={desc ? y + 44 : y + 42} fontSize={11} fontWeight="600" fill={INK} fontFamily="system-ui">{d.value.toLocaleString()}</text>
             {/* pct */}
-            <text x={svgW} y={y + 30} textAnchor="end" fontSize={9} fill={MUTED} fontFamily="system-ui">{pct}%</text>
+            <text x={svgW - 10} y={desc ? y + 44 : y + 42} textAnchor="end" fontSize={9} fill={MUTED} fontFamily="system-ui">{pct}%</text>
           </g>
         );
       })}
@@ -546,27 +545,35 @@ function SiteBar({ data }: { data: { name: string; value: number }[] }) {
   if (!data.length) return <Empty />;
   const total = data.reduce((s, d) => s + d.value, 0);
   const maxVal = Math.max(...data.map((d) => d.value), 1);
-  const rowH = 38;
-  const labelW = 160;
-  const valW = 52;
+  const maxRows = 10;
+  const top = data.length > maxRows
+    ? [...data.slice(0, maxRows - 1), { name: "Other", value: data.slice(maxRows - 1).reduce((s, d) => s + d.value, 0) }]
+    : data;
+  const rowH = 30;
+  const labelW = 150;
   const svgW = 520;
-  const barW = svgW - labelW - valW - 8;
-  const H = data.length * rowH + 4;
+  const barEnd = 400;
+  const valEnd = 465;
+  const pctEnd = 510;
+  const barW = barEnd - labelW;
+  const H = top.length * rowH + 4;
 
   return (
     <svg viewBox={`0 0 ${svgW} ${H}`} style={{ width: "100%", display: "block" }}>
-      {data.map((d, i) => {
+      {top.map((d, i) => {
         const y = i * rowH;
-        const bw = Math.max(3, (d.value / maxVal) * barW);
+        const bw = Math.max(2, (d.value / maxVal) * barW);
         const pct = total > 0 ? ((d.value / total) * 100).toFixed(1) : "0";
-        const name = d.name.length > 22 ? d.name.slice(0, 22) + "…" : d.name;
+        const truncated = d.name.length > 18 ? d.name.slice(0, 18) + "…" : d.name;
         return (
           <g key={i}>
-            <text x={0} y={y + 24} fontSize={11} fontWeight={i === 0 ? "600" : "400"} fill={INK} fontFamily="system-ui">{name}</text>
-            <rect x={labelW} y={y + 13} width={barW} height={10} fill="#f1f5f9" rx={3} />
-            <rect x={labelW} y={y + 13} width={bw} height={10} fill={BLUE} rx={3} />
-            <text x={labelW + barW + 6} y={y + 23} fontSize={11} fontWeight="600" fill={INK} fontFamily="system-ui">{d.value.toLocaleString()}</text>
-            <text x={svgW} y={y + 23} textAnchor="end" fontSize={9} fill={MUTED} fontFamily="system-ui">{pct}%</text>
+            <rect x={labelW} y={y + 9} width={barW} height={8} fill="#f1f5f9" rx={2} />
+            <rect x={labelW} y={y + 9} width={bw} height={8} fill={BLUE} rx={2} />
+            <text x={0} y={y + 17} fontSize={11} fill={MUTED} fontFamily="system-ui">
+              <title>{d.name}</title>{truncated}
+            </text>
+            <text x={valEnd} y={y + 17} textAnchor="end" fontSize={11} fontWeight="600" fill={INK} fontFamily="system-ui">{d.value.toLocaleString()}</text>
+            <text x={pctEnd} y={y + 17} textAnchor="end" fontSize={10} fill={MUTED} fontFamily="system-ui">{pct}%</text>
           </g>
         );
       })}
