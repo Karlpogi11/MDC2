@@ -29,14 +29,10 @@ cd .. && npm install
 cd backend && npx drizzle-kit push
 ```
 
-### 4. Seed admin user
-
-Start the backend first, then:
+### 4. Seed data (admin user, parts, sites)
 
 ```bash
-curl -X POST http://localhost:3001/api/auth/register \
-  -H 'Content-Type: application/json' \
-  -d '{"username":"admin","password":"admin123","email":"admin@mdc.local","fullName":"Administrator","role":"dc_admin"}'
+cd backend && npx tsx --env-file=.env src/seed.ts
 ```
 
 Default login: `admin` / `admin123`
