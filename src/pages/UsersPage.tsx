@@ -156,9 +156,9 @@ export function UsersPage() {
         api.get("/users?" + params.toString()),
         api.get("/users/count"),
       ]);
-      setUsers(applySorter(usersData ?? []));
+      setUsers(applySorter(usersData?.data ?? []));
       if (typeof countData === "number") setTotalCount(countData);
-      else if (countData?.count !== undefined) setTotalCount(countData.count);
+      else if (typeof countData?.count === "number") setTotalCount(countData.count);
     } catch (e: any) {
       setActionError(e?.message ?? "Failed to load users.");
     }

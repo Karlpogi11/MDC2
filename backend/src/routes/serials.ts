@@ -138,3 +138,43 @@ serialsRouter.put("/:id/status", authMiddleware, async (req, res) => {
     .where(eq(serialNumbers.id, id));
   res.json({ ok: true });
 });
+
+serialsRouter.get("/:id/audit-logs", authMiddleware, async (req, res) => {
+  const db = await getDb();
+  const serialId = queryString(req.params.id) ?? "";
+  const [result] = await db.execute(sql`
+    SELECT
+      al.id, al.actor_id AS actorId, al.action, al.entity_type AS entityType,
+      al.entity_id AS entityId, al.old_value AS oldValue, al.new_value AS newValue,
+      al.note, al.created_at AS createdAt,
+      p.full_name AS actorFullName, p.username AS actorUsername
+    FROM audit_logs al
+    LEFT JOIN profiles p ON p.id = al.actor_id
+    WHERE al.entity_id = ${serialId}
+    ORDER BY al.created_at DESC
+    LIMIT 100
+  `);
+  const rows = (result as any[]) ?? [];
+  res.json(rows.map((r: any) => ({
+    id: r.id, actorId: r.actorId, action: r.action,
+    entityType: r.entityType, entityId: r.entityId,
+    oldValue: r.oldValue, newValue: r.newValue,
+    note: r.note, createdAt: r.createdAt,
+    actor: r.actorFullName ? { fullName: r.actorFullName, username: r.actorUsername } : null,
+  })));
+});
+
+serialsRouter.get("/:id/corrections", authMiddleware, async (req, res) => {
+  const db = await getDb();
+  const serialId = queryString(req.params.id) ?? "";
+  const [result] = await db.execute(sql`
+    SELECT id, transfer_id AS transferId, serial_id AS serialId,
+      old_serial_number AS oldSerialNumber, new_serial_number AS newSerialNumber,
+      reason, corrected_by AS correctedBy, corrected_at AS correctedAt
+    FROM serial_corrections
+    WHERE serial_id = ${serialId}
+    ORDER BY corrected_at DESC
+    LIMIT 50
+  `);
+  res.json((result as any[]) ?? []);
+});

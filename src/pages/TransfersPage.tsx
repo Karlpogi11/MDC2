@@ -54,7 +54,7 @@ function formatRow(row: any): TransferRow {
     packedAt: row.packedAt,
     destinationSite: Array.isArray(row.destinationSite) ? row.destinationSite[0] ?? null : row.destinationSite,
     requestedByProfile: Array.isArray(row.requestedByProfile) ? row.requestedByProfile[0] ?? null : row.requestedByProfile,
-    itemCount: Array.isArray(row.transfer_items) ? row.transfer_items.length : 0,
+    itemCount: row.itemCount ?? row.item_count ?? 0,
   };
 }
 

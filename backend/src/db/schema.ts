@@ -18,7 +18,7 @@ const uuid = (name: string) => varchar(name, { length: 36 });
 export const profiles = mysqlTable("profiles", {
   id: uuid("id").primaryKey(),
   fullName: text("full_name"),
-  email: text("email"),
+  email: varchar("email", { length: 255 }),
   username: varchar("username", { length: 100 }),
   role: varchar("role", { length: 20 }).notNull().default("dc_viewer"),
   isActive: boolean("is_active").notNull().default(true),
@@ -66,7 +66,7 @@ export const stockInBatches = mysqlTable("stock_in_batches", {
   id: uuid("id").primaryKey(),
   sourceType: varchar("source_type", { length: 10 }).notNull().default("manual"),
   sourceFileName: text("source_file_name"),
-  fileHash: text("file_hash"),
+  fileHash: varchar("file_hash", { length: 255 }),
   importedBy: uuid("imported_by").notNull(),
   importedAt: timestamp("imported_at").notNull().defaultNow(),
   totalRows: int("total_rows").notNull().default(0),
@@ -150,7 +150,7 @@ export const serialCorrections = mysqlTable("serial_corrections", {
   transferId: uuid("transfer_id"),
   serialId: uuid("serial_id"),
   oldSerialNumber: text("old_serial_number").notNull(),
-  newSerialNumber: text("new_serial_number").notNull(),
+  newSerialNumber: varchar("new_serial_number", { length: 255 }).notNull(),
   reason: text("reason").notNull(),
   correctedBy: uuid("corrected_by").notNull(),
   correctedAt: timestamp("corrected_at").notNull().defaultNow(),
@@ -406,6 +406,10 @@ export const transferTemplatesRelations = relations(transferTemplates, ({ many, 
 export const transferTemplateItemsRelations = relations(transferTemplateItems, ({ one }) => ({
   template: one(transferTemplates, { fields: [transferTemplateItems.templateId], references: [transferTemplates.id] }),
   part: one(parts, { fields: [transferTemplateItems.partId], references: [parts.id] }),
+}));
+
+export const packingListsRelations = relations(packingLists, ({ one }) => ({
+  transfer: one(transfers, { fields: [packingLists.transferId], references: [transfers.id] }),
 }));
 
 export const auditLogsRelations = relations(auditLogs, ({ one }) => ({

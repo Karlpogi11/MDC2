@@ -79,8 +79,9 @@ export function TransferNewPage() {
     const t = setTimeout(async () => {
       const monthStart = `${invoicePrefix}${datePart.slice(0, 6)}`;
       const monthEnd = `${invoicePrefix}${String(Number(datePart.slice(0, 6)) + 1).padStart(6, "0")}`;
-      const dups = await api.get(`/transfers?invoice_ref_gte=${monthStart}&invoice_ref_lt=${monthEnd}`);
-      const found = (dups ?? []).some((r: any) => r.invoiceRef?.endsWith(`-${invoiceSuffix.trim()}`));
+      const dups = await api.get(`/transfers?invoice_ref_gte=${monthStart}&invoice_ref_lt=${monthEnd}&limit=500`);
+      const list = Array.isArray(dups) ? dups : dups?.data ?? [];
+      const found = list.some((r: any) => r.invoiceRef?.endsWith(`-${invoiceSuffix.trim()}`));
       setInvoiceDupError(found ? `Sequence "${invoiceSuffix.trim()}" already used this month.` : null);
     }, 400);
     return () => clearTimeout(t);
@@ -144,8 +145,9 @@ export function TransferNewPage() {
     // Check for duplicate suffix in current month
     const monthStart = `${invoicePrefix}${datePart.slice(0, 6)}`;
     const monthEnd = `${invoicePrefix}${String(Number(datePart.slice(0, 6)) + 1).padStart(6, "0")}`;
-    const dups = await api.get(`/transfers?invoice_ref_gte=${monthStart}&invoice_ref_lt=${monthEnd}`);
-    const found = (dups ?? []).some((r: any) => r.invoiceRef?.endsWith(`-${invoiceSuffix.trim()}`));
+    const dups = await api.get(`/transfers?invoice_ref_gte=${monthStart}&invoice_ref_lt=${monthEnd}&limit=500`);
+    const list = Array.isArray(dups) ? dups : dups?.data ?? [];
+    const found = list.some((r: any) => r.invoiceRef?.endsWith(`-${invoiceSuffix.trim()}`));
     if (found) { setError(`Invoice sequence "${invoiceSuffix.trim()}" already used this month.`); return; }
     setShowConfirm(true); // show confirmation instead of submitting directly
   }

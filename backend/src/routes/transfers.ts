@@ -11,11 +11,15 @@ export const transfersRouter = Router();
 transfersRouter.get("/", authMiddleware, async (req, res) => {
   const db = await getDb();
   const status = queryString(req.query.status);
+  const invoiceRefGte = queryString(req.query.invoice_ref_gte);
+  const invoiceRefLt = queryString(req.query.invoice_ref_lt);
   const page = Math.max(0, queryNumber(req.query.page, 0));
   const limit = Math.min(queryNumber(req.query.limit, 100), 200);
 
   const clauses: any[] = [];
   if (status) clauses.push(sql`t.status = ${status}`);
+  if (invoiceRefGte) clauses.push(sql`t.invoice_ref >= ${invoiceRefGte}`);
+  if (invoiceRefLt) clauses.push(sql`t.invoice_ref < ${invoiceRefLt}`);
   const whereClause = clauses.length ? sql`WHERE ${sql.join(clauses, sql` AND `)}` : sql``;
 
   const [dataResult, countResult] = await Promise.all([

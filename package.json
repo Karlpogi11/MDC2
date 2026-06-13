@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:all": "npx concurrently -n be,fe -c yellow,cyan \"cd backend && npx tsx --env-file=.env src/index.ts\" \"vite\"",
+    "dev:all": "concurrently -n be,fe -c yellow,cyan \"cd backend && npm run dev\" \"vite\"",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
     "build": "vite build",
     "test": "vitest run",
@@ -17,6 +17,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.2.0",
     "autoprefixer": "^10.4.21",
+    "concurrently": "^10.0.3",
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
     "typescript": "^6.0.3",
@@ -24,7 +25,6 @@
     "vitest": "^4.1.7"
   },
   "dependencies": {
-
     "@tanstack/react-query": "^5.76.1",
     "@tanstack/react-table": "^8.21.3",
     "@zxing/browser": "^0.1.5",

@@ -1,0 +1,63 @@
+name: Deploy to Hostinger
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: npm ci --legacy-peer-deps
+
+      - name: Build backend
+        working-directory: ./backend
+        run: npm run build
+
+      - name: Deploy via SSH
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.HOSTINGER_HOST }}
+          username: ${{ secrets.HOSTINGER_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_KEY }}
+          source: |
+            dist/
+            backend/dist/
+            backend/package.json
+            backend/package-lock.json
+            backend/src/db/migrations/
+            public/.htaccess
+          target: ${{ secrets.HOSTINGER_PATH }}
+          strip_components: 0
+          rm: false
+
+      - name: Install production deps & migrate DB
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.HOSTINGER_HOST }}
+          username: ${{ secrets.HOSTINGER_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_KEY }}
+          script: |
+            cd ${{ secrets.HOSTINGER_PATH }}/backend
+            npm ci --omit=dev --legacy-peer-deps
+            DATABASE_URL="${{ secrets.PROD_DATABASE_URL }}" npx drizzle-kit migrate
+            pm2 restart mdc-backend || pm2 start dist/index.js --name mdc-backend

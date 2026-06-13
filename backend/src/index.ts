@@ -87,7 +87,7 @@ app.use("/api/receive", receiveRouter);
 
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error("Unhandled error:", err?.sql ?? err?.message ?? err);
-  res.status(500).json({ error: "Internal server error" });
+  res.status(500).json({ error: "Internal server error", detail: String(err?.sql ?? err?.message ?? err) });
 });
 
 app.listen(PORT, () => {
