@@ -1,3 +1,17 @@
+---
+title: Product Requirements Document
+tags:
+  - prd
+  - requirements
+  - product
+date: 2026-05-16
+status: Approved
+version: "1.0"
+owner: Engineering Lead
+aliases:
+  - PRD
+---
+
 # MDC Inventory System — Product Requirements Document
 
 **Version:** 1.0
@@ -160,6 +174,8 @@ Cannot: Create or modify anything
 
 ## 6. Technical Constraints
 
+See [[system-design]] for the full architecture.
+
 - Frontend deployed on Vercel (client-owned project)
 - Backend on Supabase (client-owned project, separate from IDS)
 - No service role key in client bundle — ever
@@ -187,3 +203,7 @@ Cannot: Create or modify anything
 | Who is the email recipient for transfer notifications? | DC manager | Before Milestone 2 |
 | Is there a maximum transfer size (number of items)? | DC team | Before Milestone 2 |
 | Should corrections require a second admin to approve? | Business approver | Before Milestone 3 |
+
+---
+
+**Related:** [[implementation-blueprint]], [[backlog]], [[definition-of-done]], [[ui-ux-pattern]]

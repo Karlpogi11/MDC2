@@ -1,3 +1,16 @@
+---
+title: Development Operating Checklist
+tags:
+  - process
+  - operations
+  - development
+  - checklist
+date: 2026-05-16
+aliases:
+  - Dev Checklist
+  - Operating Checklist
+---
+
 # MDC Development Operating Checklist (Single-File)
 
 Use this as the only active development document for planning, delivery, release, and operations.
@@ -151,3 +164,9 @@ Do not release if any item is unchecked:
 - Test reports:
 - Dashboards:
 - UAT sign-off:
+
+See [[prd]] for requirements, [[definition-of-done]] for quality gates, and [[system-design]] for architecture context.
+
+---
+
+**Related:** [[prd]], [[definition-of-done]], [[system-design]], [[implementation-blueprint]]

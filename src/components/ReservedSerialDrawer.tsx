@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
-import { getSupabaseClient } from "@/lib/supabase";
+import { api } from "@/lib/api";
 
 type Props = {
   partId: string;
@@ -51,71 +51,46 @@ export function ReservedSerialDrawer({ partId, partName, partNumber, reservedCou
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const client = getSupabaseClient();
-    if (!client) {
-      setRows([]);
-      setLoading(false);
-      return;
-    }
-
+    setLoading(true);
     const cached = RESERVED_DRAWER_CACHE.get(partId);
     if (cached) {
       setRows(cached);
       setLoading(false);
     }
 
-    const rowLimit = Math.min(
-      Math.max(reservedCount + RESERVED_QUERY_MARGIN, RESERVED_QUERY_MIN),
-      RESERVED_QUERY_MAX,
-    );
-
     let mounted = true;
-    void client
-      .from("transfer_items")
-      .select(`
-        id, qty, serial_id,
-        serial_numbers(id, serial_number, status, stock_in_at),
-        transfers!inner(id, transfer_no, status, created_at, packed_at, destination_site:sites!destination_site_id(site_name))
-      `)
-      .eq("part_id", partId)
-      .in("transfers.status", ["draft", "packed"])
-      .limit(rowLimit)
-      .then(({ data, error }) => {
+    api.get("/transfers?status=draft,packed")
+      .then((transfers: any) => {
         if (!mounted) return;
+        if (!Array.isArray(transfers)) { if (!cached) setRows([]); setLoading(false); return; }
 
-        if (error) {
-          if (!cached) setRows([]);
-          setLoading(false);
-          return;
-        }
-
-        const mapped = (data ?? [])
-          .map((row: any): ReservedItemRow | null => {
-            const serial = Array.isArray(row.serial_numbers) ? row.serial_numbers[0] : row.serial_numbers;
-            const transfer = Array.isArray(row.transfers) ? row.transfers[0] : row.transfers;
-            const destinationSite = Array.isArray(transfer?.destination_site) ? transfer.destination_site[0] : transfer?.destination_site;
-
-            if (!transfer?.transfer_no) return null;
-            if (transfer.status !== "draft" && transfer.status !== "packed") return null;
-
-            return {
-              transferItemId: row.id,
-              qty: row.qty ?? 1,
+        const mapped: ReservedItemRow[] = [];
+        for (const t of transfers) {
+          for (const item of (t.items ?? [])) {
+            if (item.part_id !== partId) continue;
+            const serial = item.serial ?? null;
+            mapped.push({
+              transferItemId: item.id,
+              qty: item.qty ?? 1,
               serialId: serial?.id ?? null,
               serialNumber: serial?.serial_number ?? null,
               serialStatus: serial?.status ?? null,
               stockInAt: serial?.stock_in_at ?? null,
-              transferNo: transfer.transfer_no,
-              transferStatus: transfer.status,
-              transferAt: transfer.packed_at ?? transfer.created_at,
-              destinationSiteName: destinationSite?.site_name ?? null,
-            };
-          })
-          .filter((row): row is ReservedItemRow => row !== null)
-          .sort((a, b) => b.transferAt.localeCompare(a.transferAt));
+              transferNo: t.transfer_no,
+              transferStatus: t.status,
+              transferAt: t.packed_at ?? t.created_at,
+              destinationSiteName: t.destination_site?.site_name ?? null,
+            });
+          }
+        }
 
+        mapped.sort((a, b) => b.transferAt.localeCompare(a.transferAt));
         RESERVED_DRAWER_CACHE.set(partId, mapped);
         setRows(mapped);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!mounted && !cached) setRows([]);
         setLoading(false);
       });
 

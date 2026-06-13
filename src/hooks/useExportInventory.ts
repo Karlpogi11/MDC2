@@ -1,4 +1,4 @@
-import { getSupabaseClient } from "@/lib/supabase";
+import { api } from "@/lib/api";
 import type { InventoryRow } from "@/types";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -16,17 +16,15 @@ type ExportSerial = {
 
 export function useExportInventory() {
   return async function exportCSV(sortedRows: InventoryRow[]) {
-    // Load serials from Supabase — don't rely on caller to pass them
-    const client = getSupabaseClient();
     let serials: ExportSerial[] = [];
 
-    if (client) {
-      const { data } = await client
-        .from("serial_numbers")
-        .select("serial_number,status,stock_in_at,parts(part_number),sites:current_site_id(site_name)")
-        .in("part_id", sortedRows.map(r => r.partId))
-        .order("stock_in_at", { ascending: false });
-      serials = (data ?? []) as unknown as ExportSerial[];
+    try {
+      const partIds = sortedRows.map(r => r.partId);
+      const params = new URLSearchParams();
+      partIds.forEach(id => params.append("part_id", id));
+      serials = await api.get<ExportSerial[]>(`/serials?${params.toString()}`);
+    } catch {
+      // Proceed with empty serials
     }
 
     const rows: string[][] = [

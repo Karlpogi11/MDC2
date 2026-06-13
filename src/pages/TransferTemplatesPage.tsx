@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Plus, Play, Trash2, RepeatIcon, ArrowLeft } from "lucide-react";
-import { getSupabaseClient } from "@/lib/supabase";
+import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { AppLayout } from "@/components/AppLayout";
 import { useNavigate } from "react-router-dom";
@@ -80,7 +80,7 @@ function PartSearch({ parts, value, onChange }: { parts: Part[]; value: string; 
 
 export function TransferTemplatesPage() {
   const { state: authState } = useAuth();
-  const actorId = authState.status === "authenticated" ? authState.user.id : null;
+  const actorId = authState.status === "authenticated" ? authState.profile.id : null;
   const navigate = useNavigate();
 
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -99,29 +99,14 @@ export function TransferTemplatesPage() {
   const [formItems, setFormItems] = useState<{ part_id: string; qty: number }[]>([{ part_id: "", qty: 1 }]);
 
   async function load() {
-    const client = getSupabaseClient();
-    if (!client) return;
-    const [tmplRes, siteRes, partRes] = await Promise.all([
-      client.from("transfer_templates")
-        .select("id,name,destination_site_id,schedule,is_active,created_at,destination_site:sites!destination_site_id(site_name),transfer_template_items(part_id,qty,part:parts(part_number,part_name))")
-        .order("created_at", { ascending: false }),
-      client.from("sites").select("id,site_name,site_code").eq("is_active", true).eq("is_dc", false).order("site_name"),
-      client.from("parts").select("id,part_number,part_name").eq("is_active", true).order("part_name").limit(1000),
+    const [tmplData, siteData, partData] = await Promise.all([
+      api.get("/transfer-templates"),
+      api.get("/sites?is_dc=false"),
+      api.get("/parts"),
     ]);
-    setSites((siteRes.data ?? []) as Site[]);
-    setParts((partRes.data ?? []) as Part[]);
-    setTemplates((tmplRes.data ?? []).map((t: any) => {
-      const dest = Array.isArray(t.destination_site) ? t.destination_site[0] : t.destination_site;
-      return {
-        id: t.id, name: t.name, destination_site_id: t.destination_site_id,
-        dest_name: dest?.site_name ?? "—", schedule: t.schedule,
-        is_active: t.is_active, created_at: t.created_at,
-        items: (t.transfer_template_items ?? []).map((i: any) => {
-          const p = Array.isArray(i.part) ? i.part[0] : i.part;
-          return { part_id: i.part_id, part_number: p?.part_number ?? "—", part_name: p?.part_name ?? "—", qty: i.qty };
-        }),
-      };
-    }));
+    setSites((siteData ?? []) as Site[]);
+    setParts((partData ?? []) as Part[]);
+    setTemplates((tmplData ?? []) as Template[]);
     setLoading(false);
   }
 
@@ -132,45 +117,40 @@ export function TransferTemplatesPage() {
     const validItems = formItems.filter(i => i.part_id && i.qty > 0);
     if (!validItems.length) { setError("Add at least one item."); return; }
     setSaving(true); setError(null);
-    const client = getSupabaseClient();
-    if (!client) { setSaving(false); return; }
-
-    const { data: tmpl, error: te } = await client.from("transfer_templates")
-      .insert({ name: formName.trim(), destination_site_id: formSite, schedule: formSchedule, created_by: actorId })
-      .select("id").single();
-    if (te || !tmpl) { setError(te?.message ?? "Failed to save."); setSaving(false); return; }
-
-    await client.from("transfer_template_items").insert(validItems.map(i => ({ template_id: tmpl.id, part_id: i.part_id, qty: i.qty })));
-
-    setShowForm(false);
-    setFormName(""); setFormSite(""); setFormSchedule("0 8 * * 1");
-    setFormItems([{ part_id: "", qty: 1 }]);
-    void load();
+    try {
+      await api.post("/transfer-templates", {
+        name: formName.trim(), destination_site_id: formSite, schedule: formSchedule, created_by: actorId,
+        items: validItems,
+      });
+      setShowForm(false);
+      setFormName(""); setFormSite(""); setFormSchedule("0 8 * * 1");
+      setFormItems([{ part_id: "", qty: 1 }]);
+      void load();
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to save.");
+    }
     setSaving(false);
   }
 
   async function handleRunNow(templateId: string) {
     setRunningId(templateId); setError(null);
-    const client = getSupabaseClient();
-    if (!client) { setRunningId(null); return; }
-    const { data, error: re } = await client.rpc("create_transfer_from_template", { p_template_id: templateId });
-    if (re) { setError(re.message); }
-    else if (data) { navigate(`/transfers/${data}`); }
+    try {
+      const data = await api.post(`/transfer-templates/${templateId}/run`);
+      if (data?.transferId) { navigate(`/transfers/${data.transferId}`); }
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to run template.");
+    }
     setRunningId(null);
   }
 
   async function handleToggle(id: string, current: boolean) {
-    const client = getSupabaseClient();
-    if (!client) return;
-    await client.from("transfer_templates").update({ is_active: !current }).eq("id", id);
+    await api.put(`/transfer-templates/${id}/toggle`, { isActive: !current });
     void load();
   }
 
   async function handleDelete(id: string) {
     if (!confirm("Delete this template? This cannot be undone.")) return;
-    const client = getSupabaseClient();
-    if (!client) return;
-    await client.from("transfer_templates").delete().eq("id", id);
+    await api.delete(`/transfer-templates/${id}`);
     void load();
   }
 

@@ -1,0 +1,11 @@
+{
+  "accentColor": "#3c73a7",
+  "baseFontSize": 14,
+  "cssTheme": "",
+  "enabledCssSnippets": [],
+  "interfaceFontFamily": "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+  "monospaceFontFamily": "JetBrains Mono, SF Mono, Fira Code, monospace",
+  "showViewHeader": true,
+  "theme": "obsidian",
+  "translucency": false
+}

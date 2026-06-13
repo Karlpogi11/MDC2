@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { PackagePlus, ArrowRightLeft, AlertTriangle, Search, CheckCircle2 } from "lucide-react";
-import { getSupabaseClient } from "@/lib/supabase";
+import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { AppLayout } from "@/components/AppLayout";
 import { useQuery } from "@tanstack/react-query";
@@ -53,24 +53,17 @@ function GlobalSearch() {
     if (!q.trim() || q.length < 2) { setResults([]); setOpen(false); return; }
     if (debounce.current) clearTimeout(debounce.current);
     debounce.current = setTimeout(async () => {
-      const client = getSupabaseClient();
-      if (!client) return;
       setLoading(true);
       const term = q.trim();
-      const [serialRes, partRes, transferRes] = await Promise.all([
-        client.from("serial_numbers").select("serial_number, parts(part_name)").ilike("serial_number", `%${term}%`).limit(4),
-        client.from("parts").select("part_number, part_name").or(`part_number.ilike.%${term}%,part_name.ilike.%${term}%`).limit(4),
-        client.from("transfers").select("transfer_no, status").ilike("transfer_no", `%${term}%`).limit(3),
-      ]);
+      const data = await api.get("/dashboard/search?q=" + encodeURIComponent(term));
       const out: SearchResult[] = [];
-      for (const r of (serialRes.data ?? []) as any[]) {
-        const p = Array.isArray(r.parts) ? r.parts[0] : r.parts;
-        out.push({ type: "serial", label: r.serial_number, sub: p?.part_name ?? "Serial", path: `/inventory?q=${encodeURIComponent(r.serial_number)}` });
+      for (const r of (data.serials ?? []) as any[]) {
+        out.push({ type: "serial", label: r.serial_number, sub: r.part_name ?? "Serial", path: `/inventory?q=${encodeURIComponent(r.serial_number)}` });
       }
-      for (const r of (partRes.data ?? []) as any[]) {
+      for (const r of (data.parts ?? []) as any[]) {
         out.push({ type: "part", label: r.part_number, sub: r.part_name, path: `/inventory?q=${encodeURIComponent(r.part_number)}` });
       }
-      for (const r of (transferRes.data ?? []) as any[]) {
+      for (const r of (data.transfers ?? []) as any[]) {
         out.push({ type: "transfer", label: r.transfer_no, sub: r.status?.replace("_", " "), path: `/transfers` });
       }
       setResults(out);

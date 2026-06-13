@@ -2,7 +2,7 @@ import { useState, useEffect, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Lock } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { getSupabaseClient } from "@/lib/supabase";
+import { api } from "@/lib/api";
 import { pendingPasswordRecovery, hadRecoveryHash } from "../main";
 import { useBranding } from "@/lib/useBranding";
 
@@ -30,32 +30,20 @@ export function LoginPage() {
   }, []);
 
   useEffect(() => {
-    const client = getSupabaseClient();
-    if (!client) return;
-
     // Check hash immediately for recovery/invite token
     const hash = window.location.hash;
     if (hash.includes("type=recovery") || hash.includes("type=invite")) {
       setIsRecovery(true);
     }
 
-    // Listen for PASSWORD_RECOVERY event (fires when Supabase processes the token)
-    const { data: { subscription } } = client.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY") {
+    // Also check if user is already in recovery state
+    if (hadRecoveryHash) {
+      if (api.auth.getUser()) {
         setIsRecovery(true);
-      }
-    });
-
-    // Also check current session — if user is in recovery state
-    client.auth.getSession().then(({ data: { session } }) => {
-      if (session && hadRecoveryHash) {
-        setIsRecovery(true);
-      } else if (!session && hadRecoveryHash) {
+      } else {
         setLinkExpired(true);
       }
-    });
-
-    return () => subscription.unsubscribe();
+    }
   }, []);
 
   useEffect(() => {
@@ -68,12 +56,15 @@ export function LoginPage() {
     if (newPassword.length < 8) { setError("Password must be at least 8 characters."); return; }
     setError(null);
     setSettingPassword(true);
-    const client = getSupabaseClient();
-    const { error: updateErr } = await client!.auth.updateUser({ password: newPassword });
+    try {
+      // Recovery flow — user was authenticated via recovery link, no current password needed
+      await api.auth.updatePassword("", newPassword);
+      setPasswordSet(true);
+      setTimeout(() => navigate("/", { replace: true }), 1500);
+    } catch (err: any) {
+      setError(err?.message ?? "Failed to set password");
+    }
     setSettingPassword(false);
-    if (updateErr) { setError(updateErr.message); return; }
-    setPasswordSet(true);
-    setTimeout(() => navigate("/", { replace: true }), 1500);
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -274,15 +265,15 @@ export function LoginPage() {
               : <><br />Contact your administrator if you need access.</>
             }
           </p>
-          {linkExpired && (
+              {linkExpired && (
             <p style={{ marginTop: 12, fontSize: 12, color: "#86868b", textAlign: "center" }}>
               Invite link expired.{" "}
               <button type="button" onClick={() => {
                 const email = window.prompt("Enter your email to receive a new link:");
                 if (!email) return;
-                const client = getSupabaseClient();
-                client?.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/login` })
-                  .then(() => alert(`Reset link sent to ${email}. Check your inbox.`));
+                api.post("/auth/reset-password", { email })
+                  .then(() => alert(`Reset link sent to ${email}. Check your inbox.`))
+                  .catch(() => alert("Failed to send reset link. Please contact support."));
               }} style={{ background: "none", border: "none", color: "#0057d9", cursor: "pointer", fontSize: 12, padding: 0, textDecoration: "underline" }}>
                 Request new link
               </button>

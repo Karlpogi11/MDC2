@@ -1,7 +1,7 @@
 import { friendlyError } from "@/lib/friendlyError";
 import { useState, useEffect, type FormEvent } from "react";
 import { Plus, Save, Check, X } from "lucide-react";
-import { getSupabaseClient } from "@/lib/supabase";
+import { api } from "@/lib/api";
 import { useTableResize } from "@/components/ResizableColumns";
 import { CSVDropZone } from "@/components/CSVDropZone";
 import { ImportResult } from "@/components/ImportResult";
@@ -81,9 +81,7 @@ export function PartsTab() {
   const [importMode, setImportMode] = useState<"merge" | "deactivate_unlisted" | "replace_all">("merge");
 
   async function load() {
-    const client = getSupabaseClient();
-    if (!client) return;
-    const { data } = await client.from("parts").select("*").order("part_name");
+    const data = await api.get("/parts");
     setParts((data ?? []) as Part[]);
     setLoading(false);
   }
@@ -111,8 +109,6 @@ export function PartsTab() {
   async function handleConfirmImport() {
     if (!csvRows || !colMap.part_number || !colMap.part_name) return;
     setImporting(true);
-    const client = getSupabaseClient();
-    if (!client) { setImporting(false); return; }
 
     const valid = csvRows
       .filter((r) => r[colMap.part_number]?.trim() && r[colMap.part_name]?.trim())
@@ -124,47 +120,16 @@ export function PartsTab() {
         part_type:    "product",
       }));
 
-    // Fetch existing part numbers to diff added vs updated
-    const { data: existing } = await client
-      .from("parts")
-      .select("part_number")
-      .in("part_number", valid.map((r) => r.part_number));
-    const existingSet = new Set((existing ?? []).map((r: any) => r.part_number));
-
-    const toAdd    = valid.filter((r) => !existingSet.has(r.part_number));
-    const toUpdate = valid.filter((r) =>  existingSet.has(r.part_number));
-
-    const importedPNs = valid.map((r) => r.part_number);
-
-    if (importMode === "replace_all") {
-      // Upsert all from CSV, then deactivate everything not in this file
-      const { error } = await client.from("parts").upsert(valid, { onConflict: "part_number" });
-      if (error) {
-        setImportResult({ added: 0, updated: 0, skipped: csvRows.length - valid.length, errors: [friendlyError(error)] });
-      } else {
-        const { data: allParts } = await client.from("parts").select("id,part_number");
-        const toDeactivate = (allParts ?? []).filter((p: any) => !importedPNs.includes(p.part_number)).map((p: any) => p.id);
-        if (toDeactivate.length > 0) await client.from("parts").update({ is_active: false }).in("id", toDeactivate);
-        // Ensure imported parts are active
-        await client.from("parts").update({ is_active: true }).in("part_number", importedPNs);
-        setImportResult({ added: toAdd.length, updated: toUpdate.length, skipped: csvRows.length - valid.length, errors: [] });
-      }
-    } else {
-      let errors: string[] = [];
-      if (toAdd.length > 0) {
-        const { error } = await client.from("parts").insert(toAdd);
-        if (error) errors.push(`Insert error: ${friendlyError(error)}`);
-      }
-      if (toUpdate.length > 0) {
-        const { error } = await client.from("parts").upsert(toUpdate, { onConflict: "part_number" });
-        if (error) errors.push(`Update error: ${friendlyError(error)}`);
-      }
-      if (importMode === "deactivate_unlisted" && !errors.length) {
-        const { data: allParts } = await client.from("parts").select("id,part_number").eq("is_active", true);
-        const toDeactivate = (allParts ?? []).filter((p: any) => !importedPNs.includes(p.part_number)).map((p: any) => p.id);
-        if (toDeactivate.length > 0) await client.from("parts").update({ is_active: false }).in("id", toDeactivate);
-      }
-      setImportResult({ added: errors.length ? 0 : toAdd.length, updated: errors.length ? 0 : toUpdate.length, skipped: csvRows.length - valid.length, errors });
+    try {
+      const result = await api.post("/parts/import", { rows: valid, mode: importMode });
+      setImportResult({
+        added: result.added ?? 0,
+        updated: result.updated ?? 0,
+        skipped: csvRows.length - valid.length,
+        errors: result.errors ?? [],
+      });
+    } catch (err: any) {
+      setImportResult({ added: 0, updated: 0, skipped: csvRows.length - valid.length, errors: [friendlyError(err)] });
     }
     setCsvRows(null);
     setImporting(false);
@@ -174,33 +139,30 @@ export function PartsTab() {
   async function handleAdd(e: FormEvent) {
     e.preventDefault();
     setAddError(null); setAdding(true);
-    const client = getSupabaseClient();
-    if (!client) { setAddError("Not configured."); setAdding(false); return; }
-    const { error } = await client.from("parts").insert({
-      part_number: pn.trim(), part_name: name.trim(),
-      category: category.trim() || null, average_cost: parseFloat(cost) || 0,
-    });
-    if (error) { setAddError(friendlyError(error)); setAdding(false); return; }
-    setPn(""); setName(""); setCategory(""); setCost("");
-    setAddSuccess(true); setTimeout(() => setAddSuccess(false), 2000);
+    try {
+      await api.post("/parts", {
+        part_number: pn.trim(), part_name: name.trim(),
+        category: category.trim() || null, average_cost: parseFloat(cost) || 0,
+      });
+      setPn(""); setName(""); setCategory(""); setCost("");
+      setAddSuccess(true); setTimeout(() => setAddSuccess(false), 2000);
+    } catch (err: any) {
+      setAddError(friendlyError(err));
+    }
     setAdding(false); void load();
   }
 
   async function handleSaveEdit(id: string) {
     setSaving(true);
-    const client = getSupabaseClient();
-    if (!client) { setSaving(false); return; }
-    await client.from("parts").update({
+    await api.put("/parts/" + id, {
       part_name: editName.trim(), category: editCategory.trim() || null,
       average_cost: parseFloat(editCost) || 0,
-    }).eq("id", id);
+    });
     setSaving(false); setEditId(null); void load();
   }
 
   async function toggleActive(part: Part) {
-    const client = getSupabaseClient();
-    if (!client) return;
-    await client.from("parts").update({ is_active: !part.is_active }).eq("id", part.id);
+    await api.put("/parts/" + part.id, { is_active: !part.is_active });
     void load();
   }
 

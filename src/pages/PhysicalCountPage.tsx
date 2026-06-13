@@ -1,7 +1,7 @@
 import { useTableResize } from "@/components/ResizableColumns";
 import { useState, useEffect } from "react";
 import { ClipboardCheck, Download, Upload, CheckCircle, AlertTriangle, ShieldCheck } from "lucide-react";
-import { getSupabaseClient } from "@/lib/supabase";
+import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { AppLayout } from "@/components/AppLayout";
 
@@ -52,7 +52,7 @@ export function PhysicalCountPage() {
   const tableRef = useTableResize();
   const varianceTableRef = useTableResize();
   const { state: authState } = useAuth();
-  const actorId = authState.status === "authenticated" ? authState.user.id : null;
+  const actorId = authState.status === "authenticated" ? authState.profile.id : null;
   const isAdmin = authState.status === "authenticated" && ["system_admin", "dc_admin"].includes(authState.profile.role);
 
   const [counts, setCounts] = useState<CountRecord[]>([]);
@@ -70,21 +70,8 @@ export function PhysicalCountPage() {
   const [showSteps, setShowSteps] = useState(false);
 
   async function loadCounts() {
-    const client = getSupabaseClient();
-    if (!client) return;
-    const { data } = await client
-      .from("physical_counts")
-      .select("id,status,created_at,notes,physical_count_items(id,variance)")
-      .order("created_at", { ascending: false })
-      .limit(20);
-    setCounts((data ?? []).map((c: any) => {
-      const items = Array.isArray(c.physical_count_items) ? c.physical_count_items : [];
-      return {
-        id: c.id, status: c.status, created_at: c.created_at, notes: c.notes,
-        item_count: items.length,
-        discrepancy_count: items.filter((i: any) => i.variance !== "match").length,
-      };
-    }));
+    const data = await api.get("/physical-counts");
+    setCounts((data ?? []) as CountRecord[]);
     setLoadingCounts(false);
   }
 
@@ -92,18 +79,10 @@ export function PhysicalCountPage() {
 
   async function handleExportSheet() {
     setExportingSheet(true);
-    const client = getSupabaseClient();
-    if (!client) { setExportingSheet(false); return; }
-    const { data } = await client
-      .from("serial_numbers")
-      .select("serial_number, status, parts(part_number, part_name)")
-      .eq("status", "in_stock")
-      .order("serial_number")
-      .limit(5000);
-    const rows = (data ?? []).map((r: any) => {
-      const part = Array.isArray(r.parts) ? r.parts[0] : r.parts;
-      return { serial_number: r.serial_number, part_number: part?.part_number ?? "", part_name: part?.part_name ?? "", status: r.status };
-    });
+    const data = await api.get("/serials?status=in_stock&limit=5000");
+    const rows = (data ?? []).map((r: any) => ({
+      serial_number: r.serial_number, part_number: r.part_number ?? "", part_name: r.part_name ?? "", status: r.status,
+    }));
     downloadCountSheet(rows);
     setExportingSheet(false);
   }
@@ -113,57 +92,18 @@ export function PhysicalCountPage() {
     if (!file || !actorId) return;
     setUploading(true); setSubmitError(null); setVariance(null); setActiveCountId(null);
 
-    const client = getSupabaseClient();
-    if (!client) { setUploading(false); return; }
-
-    const text = await file.text();
-    const uploaded = parseCountCSV(text);
-    if (uploaded.length === 0) {
-      setSubmitError("No valid rows found. Ensure columns: serial_number, actual_status.");
-      setUploading(false); return;
+    try {
+      const result = await api.post("/physical-counts", {
+        created_by: actorId,
+        file_name: file.name,
+        rows: await file.text(),
+      });
+      setVariance(result.variance ?? null);
+      setActiveCountId(result.countId ?? null);
+      setSubmitSuccess(result.message ?? "Count submitted.");
+    } catch (e: any) {
+      setSubmitError(e?.message ?? "Upload failed.");
     }
-
-    const serials = uploaded.map((r) => r.serial_number);
-    const { data: existing } = await client
-      .from("serial_numbers")
-      .select("serial_number, status, parts(part_number, part_name)")
-      .in("serial_number", serials);
-
-    const existingMap = new Map((existing ?? []).map((r: any) => {
-      const part = Array.isArray(r.parts) ? r.parts[0] : r.parts;
-      return [r.serial_number, { status: r.status, part_number: part?.part_number ?? "", part_name: part?.part_name ?? "" }];
-    }));
-
-    const rows: VarianceRow[] = uploaded.map((u) => {
-      const sys = existingMap.get(u.serial_number);
-      if (!sys) return { serial_number: u.serial_number, part_number: "", part_name: "", expected_status: "not_in_system", actual_status: u.actual_status, variance: "surplus" as const };
-      const v = sys.status === u.actual_status ? "match" : u.actual_status === "" ? "missing" : "status_mismatch";
-      return { serial_number: u.serial_number, part_number: sys.part_number, part_name: sys.part_name, expected_status: sys.status, actual_status: u.actual_status, variance: v as VarianceRow["variance"] };
-    });
-
-    const { data: count, error: countErr } = await client
-      .from("physical_counts")
-      .insert({ created_by: actorId, status: "submitted", notes: file.name })
-      .select("id").single();
-
-    if (countErr || !count) { setSubmitError(countErr?.message ?? "Failed to create count."); setUploading(false); return; }
-
-    const items = rows.map((r) => ({
-      count_id: count.id,
-      serial_number: r.serial_number,
-      part_id: null,
-      expected_status: r.expected_status,
-      actual_status: r.actual_status,
-      variance: r.variance,
-    }));
-
-    for (let i = 0; i < items.length; i += 500) {
-      await client.from("physical_count_items").insert(items.slice(i, i + 500));
-    }
-
-    setVariance(rows);
-    setActiveCountId(count.id);
-    setSubmitSuccess(`Count submitted: ${rows.filter((r) => r.variance === "match").length} matched, ${rows.filter((r) => r.variance !== "match").length} discrepancies. ${isAdmin ? "You can approve it below." : "Awaiting admin approval."}`);
     setUploading(false);
     void loadCounts();
     e.target.value = "";
@@ -172,34 +112,12 @@ export function PhysicalCountPage() {
   async function handleApprove(countId: string) {
     if (!actorId || !isAdmin) return;
     setApprovingId(countId);
-    const client = getSupabaseClient();
-    if (!client) { setApprovingId(null); return; }
-
-    const { data: items, error: itemsErr } = await client
-      .from("physical_count_items")
-      .select("serial_number, expected_status, actual_status, variance")
-      .eq("count_id", countId)
-      .neq("variance", "match");
-
-    if (itemsErr) { setSubmitError(itemsErr.message); setApprovingId(null); return; }
-
-    // Apply status corrections for status_mismatch rows
-    const adjustments = (items ?? []).filter((i: any) => i.variance === "status_mismatch" && i.actual_status);
-    for (const adj of adjustments as any[]) {
-      await client
-        .from("serial_numbers")
-        .update({ status: adj.actual_status })
-        .eq("serial_number", adj.serial_number);
+    try {
+      const result = await api.put(`/physical-counts/${countId}/approve`, { actorId });
+      setSubmitSuccess(result.message ?? "Count approved.");
+    } catch (e: any) {
+      setSubmitError(e?.message ?? "Approval failed.");
     }
-
-    const { error: approveErr } = await client
-      .from("physical_counts")
-      .update({ status: "approved", reviewed_by: actorId })
-      .eq("id", countId);
-
-    if (approveErr) { setSubmitError(approveErr.message); setApprovingId(null); return; }
-
-    setSubmitSuccess(`Count approved. ${adjustments.length} serial status${adjustments.length !== 1 ? "es" : ""} adjusted.`);
     setApprovingId(null);
     void loadCounts();
     if (activeCountId === countId) { setVariance(null); setActiveCountId(null); }
@@ -208,16 +126,9 @@ export function PhysicalCountPage() {
   async function handleViewDetail(countId: string) {
     if (detailCountId === countId) { setDetailCountId(null); setDetailRows(null); return; }
     setDetailCountId(countId); setLoadingDetail(true);
-    const client = getSupabaseClient();
-    if (!client) { setLoadingDetail(false); return; }
-    const { data } = await client
-      .from("physical_count_items")
-      .select("serial_number, expected_status, actual_status, variance")
-      .eq("count_id", countId)
-      .order("variance")
-      .limit(500);
+    const data = await api.get(`/physical-counts/${countId}/items`);
     setDetailRows((data ?? []).map((r: any) => ({
-      serial_number: r.serial_number, part_number: "", part_name: "",
+      serial_number: r.serial_number, part_number: r.part_number ?? "", part_name: r.part_name ?? "",
       expected_status: r.expected_status, actual_status: r.actual_status, variance: r.variance,
     })));
     setLoadingDetail(false);

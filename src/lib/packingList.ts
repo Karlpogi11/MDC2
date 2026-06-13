@@ -14,8 +14,7 @@ export type PackingListData = {
   verifiedBy?: string | null;
   notes?: string | null;
   boxCount?: number | null;
-  courier?: string | null;
-  awb?: string | null;
+  fixablySeries?: string | null;
   items: {
     serialNumber: string | null;
     partNumber: string;
@@ -85,8 +84,7 @@ function buildMetaLines(data: PackingListData): [string, string][] {
     ["INVOICE REF:", asString(data.invoiceRef, "—")],
     ["SHIPMENT DATE:", formatPackingDate(displayDate)],
   ];
-  if (asString(data.courier)) lines.push(["CARRIER:", asString(data.courier)]);
-  if (asString(data.awb)) lines.push(["TRACKING NUMBER:", asString(data.awb)]);
+  if (asString(data.fixablySeries)) lines.push(["FIXABLY SERIES:", asString(data.fixablySeries)]);
   return lines;
 }
 

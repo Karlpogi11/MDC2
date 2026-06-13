@@ -1,0 +1,18 @@
+{
+  "alwaysUpdateLinks": true,
+  "attachmentFolderPath": "docs/assets",
+  "communityPluginSortOrder": "download",
+  "communityThemeSortOrder": "download",
+  "defaultViewMode": "preview",
+  "livePreview": true,
+  "newFileLocation": "folder",
+  "newFileFolderPath": "docs",
+  "promptDelete": false,
+  "showFrontmatter": true,
+  "showLineNumber": true,
+  "spellcheck": true,
+  "tabSize": 2,
+  "useMarkdownLinks": true,
+  "wikiLinks": true,
+  "newLinkFormat": "relative"
+}

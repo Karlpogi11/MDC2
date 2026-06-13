@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, type FormEvent, type ChangeEvent } from "react";
-import { Upload, Save, Check, Moon, Sun } from "lucide-react";
+import { Upload, Save, Check, Moon, Sun, ToggleLeft, ToggleRight } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { getSupabaseClient } from "@/lib/supabase";
+import { api } from "@/lib/api";
 import { notifyBrandingUpdated } from "@/lib/useBranding";
 import { AppLayout } from "@/components/AppLayout";
 import { PartsTab } from "@/components/PartsTab";
@@ -11,44 +11,35 @@ import { getTheme, applyTheme, type Theme } from "@/lib/theme";
 type ConfigMap = Record<string, string | null>;
 
 async function loadConfig(): Promise<ConfigMap> {
-  const client = getSupabaseClient();
-  if (!client) return {};
-  const { data } = await client.from("app_config").select("key,value");
+  const rows = await api.get("/config");
   const map: ConfigMap = {};
-  for (const row of data ?? []) map[row.key] = row.value;
+  for (const row of rows ?? []) map[row.key] = row.value;
   return map;
 }
 
 async function saveConfig(key: string, value: string | null, actorId: string): Promise<string | null> {
-  const client = getSupabaseClient();
-  if (!client) return "Supabase not configured.";
-  const { error } = await client.from("app_config").upsert(
-    { key, value, updated_by: actorId, updated_at: new Date().toISOString() },
-    { onConflict: "key" },
-  );
-  return error ? error.message : null;
+  try {
+    await api.put(`/config/${key}`, { value, updated_by: actorId });
+    return null;
+  } catch (e: any) {
+    return e?.message ?? "Save failed.";
+  }
 }
 
 async function uploadLogo(file: File): Promise<{ url: string | null; error: string | null }> {
-  const client = getSupabaseClient();
-  if (!client) return { url: null, error: "Supabase not configured." };
-  const ext = file.name.split(".").pop()?.toLowerCase() ?? "png";
-  const path = `logos/${Date.now()}.${ext}`;
-
-  // Try upload
-  const { error: uploadError } = await client.storage
-    .from("branding")
-    .upload(path, file, { upsert: true, contentType: file.type });
-
-  if (uploadError) return { url: null, error: `Storage error: ${uploadError.message}` };
-
-  const { data } = client.storage.from("branding").getPublicUrl(path);
-  return { url: data.publicUrl, error: null };
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+    const result = await api.post("/storage/branding/upload", formData);
+    return { url: result.url ?? null, error: null };
+  } catch (e: any) {
+    return { url: null, error: e?.message ?? "Upload failed." };
+  }
 }
 
 export function ConfigPage() {
   const { state: authState } = useAuth();
-  const actorId = authState.status === "authenticated" ? authState.user.id : "";
+  const actorId = authState.status === "authenticated" ? authState.profile.id : "";
   const [tab, setTab] = useState<"branding" | "parts" | "sites" | "system" | "digest" | "webhooks" | "danger">("branding");
   const [config, setConfig] = useState<ConfigMap>({});
   const [loading, setLoading] = useState(true);
@@ -188,6 +179,21 @@ export function ConfigPage() {
             <ConfigTextField label="Login notice" hint="Optional message shown below the sign-in form."
               value={val("login_notice")} onChange={(v) => setConfig((c) => ({ ...c, login_notice: v }))}
               onSave={(e) => void handleSave(e, "login_notice")} saving={saving === "login_notice"} saved={saved === "login_notice"} multiline />
+            <Field label="Send email on dispatch" hint="When enabled, an email notification with packing list is sent to the destination site when a transfer is marked In Transit.">
+              <button type="button" role="switch" aria-checked={config.send_email_on_dispatch !== "false"} onClick={() => void (async () => {
+                const next = config.send_email_on_dispatch === "true" ? "false" : "true";
+                setConfig((c) => ({ ...c, send_email_on_dispatch: next }));
+                const err = await saveConfig("send_email_on_dispatch", next, actorId);
+                if (err) setError(err);
+                else { setSaved("send_email_on_dispatch"); setTimeout(() => setSaved(null), 2000); }
+              })()}
+                style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: 0, fontSize: 13, fontWeight: 600, cursor: "pointer", border: "none", background: "transparent", color: "var(--text)" }}>
+                <span style={{ position: "relative", display: "inline-block", width: 40, height: 22, borderRadius: 11, background: config.send_email_on_dispatch !== "false" ? "#22c55e" : "#d1d5db", transition: "background 200ms", flexShrink: 0 }}>
+                  <span style={{ position: "absolute", top: 2, left: config.send_email_on_dispatch !== "false" ? 20 : 2, width: 18, height: 18, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,.2)", transition: "left 200ms" }} />
+                </span>
+                <span style={{ color: config.send_email_on_dispatch !== "false" ? "var(--text)" : "var(--muted)" }}>{config.send_email_on_dispatch !== "false" ? "On" : "Off"}</span>
+              </button>
+            </Field>
           </Section>
         )}
 
@@ -290,33 +296,26 @@ function DigestTab({ actorId }: { actorId: string }) {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    const client = getSupabaseClient();
-    if (!client) return;
-    client.from("report_jobs").select("*").order("created_at", { ascending: false })
-      .then(({ data }) => { setJobs(data ?? []); setLoading(false); });
+    api.get("/report-jobs").then((data) => { setJobs(data ?? []); setLoading(false); });
   }, []);
 
   async function handleSave(e: FormEvent) {
     e.preventDefault();
     if (!actorId) return;
     setSaving(true);
-    const client = getSupabaseClient();
-    if (!client) { setSaving(false); return; }
     const recipientList = recipients.split(/[\n,]/).map((r) => r.trim()).filter(Boolean);
-    await client.from("report_jobs").insert({
+    await api.post("/report-jobs", {
       type: "weekly_digest", schedule, recipients: recipientList,
       is_active: true, created_by: actorId,
     });
     setSaved(true); setSaving(false);
     setTimeout(() => setSaved(false), 2000);
-    const { data } = await client.from("report_jobs").select("*").order("created_at", { ascending: false });
+    const data = await api.get("/report-jobs");
     setJobs(data ?? []);
   }
 
   async function toggleJob(id: string, is_active: boolean) {
-    const client = getSupabaseClient();
-    if (!client) return;
-    await client.from("report_jobs").update({ is_active }).eq("id", id);
+    await api.put(`/report-jobs/${id}/toggle`, { is_active });
     setJobs((prev) => prev.map((j) => j.id === id ? { ...j, is_active } : j));
   }
 
@@ -373,31 +372,24 @@ function WebhooksTab({ actorId }: { actorId: string }) {
   const ALL_EVENTS = ["transfer.received", "transfer.created", "stock_in.completed", "correction.approved", "physical_count.submitted"];
 
   useEffect(() => {
-    const client = getSupabaseClient();
-    if (!client) return;
-    client.from("webhooks").select("*").order("created_at", { ascending: false })
-      .then(({ data }) => { setWebhooks(data ?? []); setLoading(false); });
+    api.get("/webhooks").then((data) => { setWebhooks(data ?? []); setLoading(false); });
   }, []);
 
   async function handleSave(e: FormEvent) {
     e.preventDefault();
     if (!actorId || !url.trim() || !secret.trim()) return;
     setSaving(true);
-    const client = getSupabaseClient();
-    if (!client) { setSaving(false); return; }
     const eventList = events.split(",").map((ev) => ev.trim()).filter(Boolean);
-    await client.from("webhooks").insert({ url: url.trim(), secret: secret.trim(), events: eventList, created_by: actorId });
+    await api.post("/webhooks", { url: url.trim(), secret: secret.trim(), events: eventList, created_by: actorId });
     setSaved(true); setSaving(false);
     setTimeout(() => setSaved(false), 2000);
     setUrl(""); setSecret(""); setEvents("transfer.received,stock_in.completed");
-    const { data } = await client.from("webhooks").select("*").order("created_at", { ascending: false });
+    const data = await api.get("/webhooks");
     setWebhooks(data ?? []);
   }
 
   async function toggleWebhook(id: string, is_active: boolean) {
-    const client = getSupabaseClient();
-    if (!client) return;
-    await client.from("webhooks").update({ is_active }).eq("id", id);
+    await api.put(`/webhooks/${id}/toggle`, { is_active });
     setWebhooks((prev) => prev.map((w) => w.id === id ? { ...w, is_active } : w));
   }
 
@@ -473,14 +465,11 @@ function DangerZoneTab({ role }: { role: string | null }) {
   async function handleReset() {
     if (confirm !== "RESET") return;
     setRunning(true); setErr(null);
-    const client = getSupabaseClient();
-    if (!client) { setErr("Supabase not configured."); setRunning(false); return; }
     try {
-      const { data, error } = await client.rpc("reset_all_test_data");
-      if (error) throw new Error(error.message);
+      await api.post("/config/reset");
       setDone(true);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "Reset failed.");
+    } catch (e: any) {
+      setErr(e?.message ?? "Reset failed.");
     }
     setRunning(false);
   }

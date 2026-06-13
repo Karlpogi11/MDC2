@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, forwardRef, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
-import { getSupabaseClient } from "@/lib/supabase";
+import { api } from "@/lib/api";
 import { toCapitalized } from "@/lib/format";
 
 type Part = { id: string; part_number: string; part_name: string; category: string | null };
@@ -33,19 +33,11 @@ function PartNumberInput({ value, onChange, placeholder = "e.g. 923-03861", styl
     if (!query.trim() || query.length < 2) { setSuggestions([]); setOpen(false); return; }
 
     debounceRef.current = setTimeout(async () => {
-      const client = getSupabaseClient();
-      if (!client) return;
-      const { data } = await client
-        .from("parts")
-        .select("id,part_number,part_name,category")
-        .or(`part_number.ilike.%${query}%,part_name.ilike.%${query}%`)
-        .eq("is_active", true)
-        .order("part_number")
-        .limit(20);
+      const data: Part[] = await api.get("/parts/search?q=" + encodeURIComponent(query));
 
       // Sort: exact prefix on part_number first, then contains
       const q = query.toLowerCase();
-      const sorted = ((data ?? []) as Part[]).sort((a, b) => {
+      const sorted = (data ?? []).sort((a, b) => {
         const aPrefix = a.part_number.toLowerCase().startsWith(q) ? 0 : 1;
         const bPrefix = b.part_number.toLowerCase().startsWith(q) ? 0 : 1;
         return aPrefix - bPrefix || a.part_number.localeCompare(b.part_number);

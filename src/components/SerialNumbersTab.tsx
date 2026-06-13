@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTableResize } from "@/components/ResizableColumns";
-import { getSupabaseClient } from "@/lib/supabase";
+import { api } from "@/lib/api";
 
 type SerialRow = {
   id: string;
@@ -29,34 +29,22 @@ export function SerialNumbersTab() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadPage = useCallback(async (reset = false, searchVal = search, statusVal = statusFilter) => {
-    const client = getSupabaseClient();
-    if (!client) return;
     setLoading(true);
+    if (reset) cursorRef.current = null;
 
-    let query = client
-      .from("serial_numbers")
-      .select("id,serial_number,status,stock_in_at,parts(part_number,part_name),sites:current_site_id(site_name)")
-      .order("stock_in_at", { ascending: false })
-      .order("id", { ascending: false })
-      .limit(PAGE_SIZE);
+    const params = new URLSearchParams();
+    if (searchVal.trim()) params.set("q", searchVal.trim());
+    if (statusVal) params.set("status", statusVal);
+    params.set("page", cursorRef.current ?? "0");
+    params.set("limit", String(PAGE_SIZE));
 
-    // Server-side filters
-    if (searchVal.trim()) {
-      query = query.ilike("serial_number", `%${searchVal.trim()}%`);
-    }
-    if (statusVal) {
-      query = query.eq("status", statusVal);
-    }
-    if (!reset && cursorRef.current) {
-      query = query.lt("stock_in_at", cursorRef.current);
-    }
-
-    const { data } = await query;
+    const data = await api.get("/serials?" + params.toString());
     const rows = (data ?? []) as unknown as SerialRow[];
 
     setSerials(prev => reset ? rows : [...prev, ...rows]);
     setHasMore(rows.length === PAGE_SIZE);
-    if (rows.length > 0) cursorRef.current = rows[rows.length - 1].stock_in_at;
+    const curPage = parseInt(cursorRef.current ?? "0", 10);
+    cursorRef.current = String(curPage + 1);
     setLoading(false);
   }, [search, statusFilter]);
 
@@ -80,20 +68,6 @@ export function SerialNumbersTab() {
     cursorRef.current = null;
     void loadPage(true);
   }, []);
-
-  // Realtime refresh
-  useEffect(() => {
-    const client = getSupabaseClient();
-    if (!client) return;
-    const channel = client
-      .channel("serial-list-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "serial_numbers" }, () => {
-        cursorRef.current = null;
-        void loadPage(true);
-      })
-      .subscribe();
-    return () => { void client.removeChannel(channel); };
-  }, [loadPage]);
 
   return (
     <main className="inventory-shell">

@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { getSupabaseClient } from "@/lib/supabase";
+import React, { useEffect, useState } from "react";
+import { api } from "@/lib/api";
 import { useTableResize } from "@/components/ResizableColumns";
 
 function BatchItems({ batchId }: { batchId: string }) {
@@ -7,16 +7,14 @@ function BatchItems({ batchId }: { batchId: string }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const client = getSupabaseClient();
-    if (!client) return;
-    client.from("stock_in_items")
-      .select("id, quantity, part:parts(part_number, part_name), serial:serial_numbers(serial_number, status)")
-      .eq("batch_id", batchId)
-      .order("created_at")
-      .then(({ data }) => { setItems(data ?? []); setLoading(false); });
+    api.get("/stock-in/batches/" + batchId + "/serials")
+      .then((data) => {
+        setItems(data ?? []);
+        setLoading(false);
+      });
   }, [batchId]);
 
-  if (loading) return <tr><td colSpan={5} style={{ padding: "5px 12px", fontSize: 12, color: "var(--muted)" }}>Loading items…</td></tr>;
+  if (loading) return <tr><td colSpan={7} style={{ padding: "5px 12px", fontSize: 12, color: "var(--muted)" }}>Loading items…</td></tr>;
 
   return (
     <>
@@ -39,16 +37,15 @@ function BatchItems({ batchId }: { batchId: string }) {
                 )}
                 {items.map((item) => {
                   const part = Array.isArray(item.part) ? item.part[0] : item.part;
-                  const serial = Array.isArray(item.serial) ? item.serial[0] : item.serial;
                   return (
                     <tr key={item.id} style={{ borderTop: "1px solid #f1f5f9" }}>
-                      <td style={{ padding: "5px 16px 5px 32px", fontFamily: "monospace", color: "var(--blue)", fontWeight: 600 }}>{serial?.serial_number ?? "—"}</td>
+                      <td style={{ padding: "5px 16px 5px 32px", fontFamily: "monospace", color: "var(--blue)", fontWeight: 600 }}>{item.serial_number}</td>
                       <td style={{ padding: "5px 12px", fontFamily: "monospace", color: "var(--text)" }}>{part?.part_number ?? "—"}</td>
                       <td style={{ padding: "5px 12px", color: "var(--text)" }}>{part?.part_name ?? "—"}</td>
-                      <td style={{ padding: "5px 16px", textAlign: "right" }}>{item.quantity}</td>
+                      <td style={{ padding: "5px 16px", textAlign: "right" }}>1</td>
                       <td style={{ padding: "5px 16px" }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: "var(--radius-pill)", background: "var(--bg-surface-elevated)", color: serial?.status === "in_stock" ? "var(--link)" : "var(--muted)" }}>
-                          {serial?.status ?? "—"}
+                        <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: "var(--radius-pill)", background: "var(--bg-surface-elevated)", color: item.status === "in_stock" ? "var(--link)" : "var(--muted)" }}>
+                          {item.status}
                         </span>
                       </td>
                     </tr>
@@ -70,13 +67,8 @@ export function ImportHistoryTab() {
   const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
-    const client = getSupabaseClient();
-    if (!client) return;
-    client.from("stock_in_batches")
-      .select("id, source_type, source_file_name, imported_at, total_rows, success_rows, failed_rows, importer:profiles!imported_by(full_name, username)")
-      .order("imported_at", { ascending: false })
-      .limit(50)
-      .then(({ data }) => { setBatches(data ?? []); setLoading(false); });
+    api.get("/stock-in/batches")
+      .then((data) => { setBatches(data ?? []); setLoading(false); });
   }, []);
 
   return (
@@ -103,8 +95,8 @@ export function ImportHistoryTab() {
               const importer = Array.isArray(b.importer) ? b.importer[0] : b.importer;
               const isExpanded = expanded === b.id;
               return (
-                <>
-                  <tr key={b.id} onClick={() => setExpanded(isExpanded ? null : b.id)}
+                <React.Fragment key={b.id}>
+                  <tr onClick={() => setExpanded(isExpanded ? null : b.id)}
                     style={{ cursor: "pointer", background: isExpanded ? "var(--bg-surface-elevated)" : undefined }}>
                     <td>{new Date(b.imported_at).toLocaleString("en-US", { month: "short", day: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</td>
                     <td><span style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: "var(--radius-pill)", background: "var(--bg-surface-elevated)", color: b.source_type === "manual" ? "var(--muted)" : "var(--blue)" }}>{b.source_type}</span></td>
@@ -115,7 +107,7 @@ export function ImportHistoryTab() {
                     <td style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{importer?.full_name ?? importer?.username ?? "—"}</td>
                   </tr>
                   {isExpanded && <BatchItems batchId={b.id} />}
-                </>
+                </React.Fragment>
               );
             })}
           </tbody>

@@ -12,7 +12,7 @@ export type InventoryRow = {
   lastStockOutAt: string | null;
 };
 
-export type InventorySource = "supabase" | "demo";
+export type InventorySource = "mysql" | "demo";
 
 export type InventoryQueryResult = {
   rows: InventoryRow[];

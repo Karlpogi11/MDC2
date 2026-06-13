@@ -1,11 +1,12 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { getSupabaseClient } from "@/lib/supabase";
+import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
 export function ChangePasswordPage() {
   const navigate = useNavigate();
   const { state: authState } = useAuth();
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -17,15 +18,17 @@ export function ChangePasswordPage() {
     if (newPassword.length < 8) { setError("Password must be at least 8 characters."); return; }
     setError(null);
     setSaving(true);
-    const client = getSupabaseClient()!;
-    const { error: updateErr } = await client.auth.updateUser({ password: newPassword });
-    if (updateErr) { setError(updateErr.message); setSaving(false); return; }
-    // Clear force_password_change flag
-    if (authState.status === "authenticated") {
-      await client.from("profiles").update({ force_password_change: false }).eq("id", authState.user.id);
+    try {
+      await api.auth.updatePassword(currentPassword, newPassword);
+      // Clear force_password_change flag
+      if (authState.status === "authenticated") {
+        await api.put("/auth/me", { forcePasswordChange: false });
+      }
+      navigate("/", { replace: true });
+    } catch (err: any) {
+      setError(err?.message ?? "Failed to update password");
     }
     setSaving(false);
-    navigate("/", { replace: true });
   }
 
   const inputStyle: React.CSSProperties = {
@@ -42,6 +45,10 @@ export function ChangePasswordPage() {
         </p>
         <form onSubmit={(e) => void handleSubmit(e)}>
           {error && <div style={{ marginBottom: 16, padding: "8px 12px", border: "1px solid var(--negative)", borderRadius: "var(--radius)", color: "var(--negative)", fontSize: 13 }}>{error}</div>}
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 5 }}>Current password</label>
+            <input type="password" required value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="Current password" style={inputStyle} />
+          </div>
           <div style={{ marginBottom: 14 }}>
             <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 5 }}>New password</label>
             <input type="password" required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Min. 8 characters" style={inputStyle} />

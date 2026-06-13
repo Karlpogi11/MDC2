@@ -1,3 +1,16 @@
+---
+title: Audit Checklist
+tags:
+  - audit
+  - quality
+  - go-live
+  - completion
+date: 2026-05-20
+aliases:
+  - Audit Checklist
+  - Go-Live Audit
+---
+
 # MDC Audit Checklist — COMPLETE
 
 > Last updated: 2026-05-20 13:15 PHT
@@ -80,3 +93,9 @@
 | **Total** | **35/36** | **1 cosmetic deferred** |
 
 **System is go-live ready. All P0 and P1 items resolved.**
+
+See [[definition-of-done]] for quality gate definitions and [[system-design]] for architecture context.
+
+---
+
+**Related:** [[definition-of-done]], [[system-design]], [[implementation-blueprint]], [[reset-transactional-data-runbook]]

@@ -5,8 +5,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { Session, User } from "@supabase/supabase-js";
-import { getSupabaseClient } from "./supabase";
+import { api } from "./api";
 
 export type UserRole = "system_admin" | "dc_admin" | "dc_operator" | "dc_viewer";
 
@@ -23,7 +22,7 @@ type AuthState =
   | { status: "loading" }
   | { status: "connecting" }
   | { status: "unauthenticated" }
-  | { status: "authenticated"; user: User; session: Session; profile: Profile };
+  | { status: "authenticated"; profile: Profile; token: string };
 
 type AuthContextValue = {
   state: AuthState;
@@ -38,116 +37,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({ status: "loading" });
 
   useEffect(() => {
-    const client = getSupabaseClient();
-    if (!client) { setState({ status: "unauthenticated" }); return; }
-
-    // If loading takes >8s, DB is likely unreachable — show connecting overlay
-    const timeout = setTimeout(() => {
-      setState((prev) => prev.status === "loading" ? { status: "connecting" } : prev);
-    }, 3000);
-
-    client.auth.getSession().then(({ data: { session } }) => {
-      clearTimeout(timeout);
-      if (session) void loadProfile(session);
-      else setState({ status: "unauthenticated" });
-    });
-
-    const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
-      clearTimeout(timeout);
-      if (session) void loadProfile(session);
-      else setState({ status: "unauthenticated" });
-    });
-
-    return () => { clearTimeout(timeout); subscription.unsubscribe(); };
-  }, []);
-
-  async function loadProfile(session: Session) {
-    const client = getSupabaseClient()!;
-    const { data } = await client
-      .from("profiles")
-      .select("id,full_name,email,username,role,is_active,force_password_change")
-      .eq("id", session.user.id)
-      .maybeSingle();
-
-    if (!data) {
-      // Google OAuth first login — create profile row
-      const meta = session.user.user_metadata;
-      const { data: newProfile, error } = await client
-        .from("profiles")
-        .insert({
-          id: session.user.id,
-          email: session.user.email,
-          full_name: meta?.full_name ?? meta?.name ?? null,
-          username: null,
-          role: "dc_viewer", // default role; system_admin promotes as needed
-        })
-        .select("id,full_name,email,username,role")
-        .single();
-
-      if (error || !newProfile) {
-        await client.auth.signOut();
-        setState({ status: "unauthenticated" });
-        return;
-      }
-
-      setState({ status: "authenticated", user: session.user, session, profile: newProfile as Profile });
-      return;
-    }
-
-    if (!data.is_active) {
-      await client.auth.signOut();
+    const token = api.auth.getToken();
+    if (!token) {
       setState({ status: "unauthenticated" });
       return;
     }
 
-    setState({ status: "authenticated", user: session.user, session, profile: data as Profile });
-  }
+    const timeout = setTimeout(() => {
+      setState((prev) => prev.status === "loading" ? { status: "connecting" } : prev);
+    }, 3000);
+
+    api.auth.me()
+      .then((profile) => {
+        clearTimeout(timeout);
+        setState({ status: "authenticated", profile, token });
+      })
+      .catch(() => {
+        clearTimeout(timeout);
+        setState({ status: "unauthenticated" });
+      });
+  }, []);
 
   async function signInWithUsername(username: string, password: string): Promise<string | null> {
-    const client = getSupabaseClient();
-    if (!client) return "Supabase is not configured.";
-
-    // Resolve username → email via security definer function
-    const { data: email, error: lookupError } = await client
-      .rpc("get_email_for_username", { p_username: username });
-
-    if (lookupError) {
-      const msg = lookupError.message.toLowerCase();
+    try {
+      const res = await api.auth.signIn(username, password);
+      setState({ status: "authenticated", profile: res.user, token: res.token });
+      return null;
+    } catch (err: any) {
+      const msg = err.message?.toLowerCase() ?? "";
       if (msg.includes("fetch") || msg.includes("network") || msg.includes("failed")) {
         return "No connection. Check your internet and try again.";
       }
-      return lookupError.message;
+      return err.message ?? "Invalid username or password.";
     }
-    if (!email) return "Invalid username or password.";
-
-    const { error } = await client.auth.signInWithPassword({ email, password });
-    if (error) {
-      const msg = error.message.toLowerCase();
-      if (msg.includes("fetch") || msg.includes("network") || msg.includes("failed")) {
-        return "No connection. Check your internet and try again.";
-      }
-      return "Invalid username or password.";
-    }
-    return null;
   }
 
   async function signInWithGoogle(): Promise<string | null> {
-    const client = getSupabaseClient();
-    if (!client) return "Supabase is not configured.";
-
-    const { error } = await client.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}/` },
-    });
-    return error ? error.message : null;
+    return "Google sign-in is not available in the MySQL version.";
   }
 
   async function signOut() {
-    const client = getSupabaseClient();
+    api.auth.signOut();
     document.documentElement.classList.remove("dark-theme");
     document.documentElement.removeAttribute("data-theme");
     localStorage.removeItem("mdc-theme");
-    await client?.auth.signOut();
+    setState({ status: "unauthenticated" });
   }
 
   return (

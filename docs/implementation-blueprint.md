@@ -1,3 +1,14 @@
+---
+title: Implementation Blueprint
+tags:
+  - implementation
+  - planning
+  - architecture
+date: 2026-05-16
+aliases:
+  - Blueprint
+---
+
 # Implementation Blueprint
 
 ## 1) Fork vs New Build Decision
@@ -43,6 +54,8 @@ Why this is safer:
   - `packing-lists`
 - Immutable audit table for correction actions
 
+See [[system-design]] for the full architecture breakdown.
+
 ## 3) Domain Tables (Minimum)
 
 - `profiles` (user identity + role)
@@ -74,32 +87,34 @@ Hard rules:
 ## 5) Feature Mapping to Your Requirement
 
 1. Import stock (serial/part/bulk)
-- CSV/XLSX uploader with template validation
-- duplicate serial detection before insert
-- commit as batch transaction
+   - CSV/XLSX uploader with template validation
+   - duplicate serial detection before insert
+   - commit as batch transaction
 
 2. Transfer with packing list + email
-- create transfer header and item lines
-- generate PDF packing list
-- send email with attached/linked packing list
+   - create transfer header and item lines
+   - generate PDF packing list
+   - send email with attached/linked packing list
 
 3. Manual correction of wrong serial transfer
-- correction dialog requires reason
-- enforce no duplicate final serial
-- write immutable `serial_corrections` + `audit_logs`
+   - correction dialog requires reason
+   - enforce no duplicate final serial
+   - write immutable `serial_corrections` + `audit_logs`
 
 4. Export stocked-in records
-- filters: date range, part, serial, operator
-- csv/xlsx export endpoints
+   - filters: date range, part, serial, operator
+   - csv/xlsx export endpoints
 
 5. Export transferred records
-- filters: date range, destination site, status
-- csv/xlsx export endpoints
+   - filters: date range, destination site, status
+   - csv/xlsx export endpoints
 
 6. Fixably + GSX analytics uploads
-- parser by source type (`fixably`, `gsx`)
-- normalize to common schema
-- trend charts: top parts used by site/date range
+   - parser by source type (`fixably`, `gsx`)
+   - normalize to common schema
+   - trend charts: top parts used by site/date range
+
+See [[prd]] for full feature requirements and acceptance criteria.
 
 ## 6) UI Direction (Inventory-first)
 
@@ -126,34 +141,36 @@ UX details:
 - sticky header + dense rows
 - filter chips for site, date, category, status
 
+See [[ui-ux-pattern]] and [[ui-spec-inventory]] for detailed UI guidance.
+
 ## 7) Security Risks and Exact Mitigations
 
 ### P0
 1. Cross-tenant/access bleed
-- Fix: dedicated Supabase project + strict RLS policy per table + route guards.
+   - Fix: dedicated Supabase project + strict RLS policy per table + route guards.
 
 2. Secret leakage (email/API keys)
-- Fix: keep in Supabase/Vercel secrets only; never `VITE_` expose private keys.
+   - Fix: keep in Supabase/Vercel secrets only; never `VITE_` expose private keys.
 
 3. Unauthorized serial corrections
-- Fix: correction policy with role checks, reason, and immutable audit trail.
+   - Fix: correction policy with role checks, reason, and immutable audit trail.
 
 4. File upload abuse
-- Fix: MIME and extension allowlist, size limits, signed upload URL, AV scanning stage if available.
+   - Fix: MIME and extension allowlist, size limits, signed upload URL, AV scanning stage if available.
 
 ### P1
 1. Data integrity on imports
-- Fix: staging table + validation report before commit.
+   - Fix: staging table + validation report before commit.
 
 2. Duplicate serial race conditions
-- Fix: DB unique constraints + transactional insert logic.
+   - Fix: DB unique constraints + transactional insert logic.
 
 3. Email spoofing/delivery failures
-- Fix: verified company sender domain (SPF, DKIM, DMARC) + retry queue.
+   - Fix: verified company sender domain (SPF, DKIM, DMARC) + retry queue.
 
 ### P2
 1. Slow analytics on large history
-- Fix: indexed normalized table + materialized summary views.
+   - Fix: indexed normalized table + materialized summary views.
 
 ## 8) Practical Extraction Plan From IDS
 
@@ -183,6 +200,8 @@ Week 3
 Week 4
 - analytics uploader/parser + trend dashboard + UAT fixes
 
+See [[backlog]] for the task breakdown.
+
 ## 10) Go-live Checklist
 
 - UAT signoff by assigned approvers
@@ -190,3 +209,9 @@ Week 4
 - secrets rotated and stored in company-owned accounts
 - backups + restore test completed
 - audit trail verified end-to-end
+
+See [[definition-of-done]] for full quality gates.
+
+---
+
+**Related:** [[prd]], [[system-design]], [[backlog]], [[definition-of-done]], [[ui-ux-pattern]]

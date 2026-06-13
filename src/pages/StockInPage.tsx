@@ -2,7 +2,7 @@ import { friendlyError } from "@/lib/friendlyError";
 import { useState, useRef, useEffect, type ChangeEvent, type DragEvent, type FormEvent, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowUp, Upload, Download, CheckCircle, XCircle, FileText, X, Plus, ScanLine } from "lucide-react";
-import { getSupabaseClient } from "@/lib/supabase";
+import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { AppLayout } from "@/components/AppLayout";
 import { PartNumberInput } from "@/components/PartNumberInput";
@@ -89,40 +89,26 @@ export function StockInPage() {
 
   const navigate = useNavigate();
   const { state: authState } = useAuth();
-  const actorId = authState.status === "authenticated" ? authState.user.id : null;
+  const actorId = authState.status === "authenticated" ? authState.profile.id : null;
 
   async function executeBatchInsert(
     serials: { serial: string; partNumber: string; partName: string }[],
     actor: string
   ) {
-    const client = getSupabaseClient();
-    if (!client) throw new Error("Not configured.");
-    const { data: dcSite } = await client.from("sites").select("id").eq("is_dc", true).single();
+    const dcSite = await api.get("/sites/dc");
     if (!dcSite) throw new Error("DC site not configured.");
     const uniqueParts = [...new Set(serials.map((r) => r.partNumber))];
-    const { data: existingParts } = await client.from("parts").select("id,part_number").in("part_number", uniqueParts);
-    const partMap = new Map((existingParts ?? []).map((p: any) => [p.part_number, p.id]));
+    const allParts = await api.get("/parts");
+    const existingParts = (allParts ?? []).filter((p: any) => uniqueParts.includes(p.part_number));
+    const partMap = new Map(existingParts.map((p: any) => [p.part_number, p.id]));
     const missing = uniqueParts.filter((pn) => !partMap.has(pn));
     if (missing.length > 0) {
       throw new Error(`Unknown part number${missing.length > 1 ? "s" : ""}: ${missing.join(", ")}. Add them in Config → Parts first.`);
     }
-    const { data: batch } = await client.from("stock_in_batches")
-      .insert({ source_type: "manual", imported_by: actor, total_rows: serials.length, success_rows: 0, failed_rows: 0 })
-      .select("id").single();
-    if (!batch) throw new Error("Failed to create batch.");
-    const { data: inserted } = await client.from("serial_numbers")
-      .insert(serials.map((r) => ({ serial_number: r.serial, part_id: partMap.get(r.partNumber), current_site_id: dcSite.id, status: "in_stock", stock_in_batch_id: batch.id })))
-      .select("id,serial_number");
-    const insertedRows = (inserted ?? []) as { id: string; serial_number: string }[];
-    if (insertedRows.length > 0) {
-      await client.from("stock_in_items").insert(
-        insertedRows.map((ins) => ({ batch_id: batch.id, part_id: partMap.get(serials.find((r) => r.serial === ins.serial_number)!.partNumber), serial_id: ins.id, quantity: 1 }))
-      );
-    }
-    await client.from("stock_in_batches").update({ success_rows: insertedRows.length, failed_rows: serials.length - insertedRows.length }).eq("id", batch.id);
-    // Refresh materialized view so inventory page shows new items immediately
-    await client.rpc("refresh_inventory_snapshot").then(() => {/* ok */}, () => {/* non-fatal */});
-    return { ok: insertedRows.length, failed: serials.filter((r) => !insertedRows.some((ins) => ins.serial_number === r.serial)) };
+    const result = await api.post("/stock-in/batch", { serials, actor_id: actor, dc_site_id: (dcSite as any).id });
+    const r = result as any;
+    await api.post("/inventory/refresh-snapshot", {}).catch(() => {});
+    return { ok: r.successRows ?? 0, failed: r.failedRows ?? [] };
   }
 
   // --- Bulk upload state ---
@@ -224,7 +210,7 @@ export function StockInPage() {
     setSubmitting(true);
     try {
       const result = await executeBatchInsert(valid, actorId);
-      setSubmitResult({ ok: result.ok, failed: result.failed.map((r) => ({ serial: r.serial, reason: "duplicate or constraint" })) });
+      setSubmitResult({ ok: result.ok, failed: result.failed.map((r: { serial: string }) => ({ serial: r.serial, reason: "duplicate or constraint" })) });
       setDraftList([]);
       setDraftPartNumber(""); setDraftPartName(""); setDraftPartConfirmed(false);
     } catch (err) {
@@ -265,18 +251,10 @@ export function StockInPage() {
     const totalRows = state.status === "previewing" ? state.totalRows : 0;
     setState({ status: "uploading", totalRows });
 
-    const client = getSupabaseClient();
-    if (!client) { setState({ status: "error", message: "Supabase not configured." }); return; }
-
     try {
-      const path = `stockin/${Date.now()}-${file.name}`;
-      const { error: uploadError } = await client.storage.from("imports-stockin").upload(path, file);
-      if (uploadError) throw new Error(uploadError.message);
-
-      const { data, error: fnError } = await client.functions.invoke("import-stockin", {
-        body: { filePath: path, fileName: file.name },
-      });
-      if (fnError) throw new Error(fnError.message);
+      const formData = new FormData();
+      formData.append("file", file);
+      const data = await api.post("/stock-in/upload", formData);
 
       setState({ status: "done", result: data as BatchResult });
     } catch (err) {

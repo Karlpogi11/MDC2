@@ -1,7 +1,7 @@
 import { friendlyError } from "@/lib/friendlyError";
 import { useState, useEffect, type FormEvent } from "react";
 import { Plus, Check, Save, X } from "lucide-react";
-import { getSupabaseClient } from "@/lib/supabase";
+import { api } from "@/lib/api";
 import { CSVDropZone } from "@/components/CSVDropZone";
 import { useTableResize } from "@/components/ResizableColumns";
 import { ImportResult } from "@/components/ImportResult";
@@ -82,9 +82,7 @@ export function SitesTab() {
   const [editSaving, setEditSaving] = useState(false);
 
   async function load() {
-    const client = getSupabaseClient();
-    if (!client) return;
-    const { data } = await client.from("sites").select("*").order("site_name");
+    const data = await api.get("/sites");
     setSites((data ?? []) as Site[]);
     setLoading(false);
   }
@@ -95,15 +93,13 @@ export function SitesTab() {
     setImporting(true); setImportResult(null);
     const text = await file.text();
     const rows = parseCSV(text);
-    const client = getSupabaseClient();
-    if (!client || rows.length === 0) { setImporting(false); return; }
-    const { data, error } = await client.rpc("batch_upsert_sites", { p_rows: rows });
-    if (error) {
-      setImportResult({ added: 0, skipped: 0, errors: [friendlyError(error)] });
-    } else {
-      const result = data as { error_count: number; errors: { code: string; reason: string }[] };
+    if (rows.length === 0) { setImporting(false); return; }
+    try {
+      const result = await api.post("/sites/import", { rows });
       const errCount = result.error_count ?? 0;
-      setImportResult({ added: rows.length - errCount, skipped: 0, errors: (result.errors ?? []).map((e) => `${e.code}: ${e.reason}`) });
+      setImportResult({ added: rows.length - errCount, skipped: 0, errors: (result.errors ?? []).map((e: any) => `${e.code}: ${e.reason}`) });
+    } catch (err: any) {
+      setImportResult({ added: 0, skipped: 0, errors: [friendlyError(err)] });
     }
     setImporting(false); void load();
   }
@@ -111,15 +107,16 @@ export function SitesTab() {
   async function handleAdd(e: FormEvent) {
     e.preventDefault();
     setAddError(null); setAdding(true);
-    const client = getSupabaseClient();
-    if (!client) { setAddError("Not configured."); setAdding(false); return; }
-    const { error } = await client.from("sites").insert({
-      site_code: code.trim().toUpperCase(), site_name: name.trim(),
-      is_dc: isDC, invoice_prefix: prefix.trim() || null, address: address.trim() || null,
-    });
-    if (error) { setAddError(friendlyError(error)); setAdding(false); return; }
-    setCode(""); setName(""); setIsDC(false); setPrefix(""); setAddress("");
-    setAddSuccess(true); setTimeout(() => setAddSuccess(false), 2000);
+    try {
+      await api.post("/sites", {
+        site_code: code.trim().toUpperCase(), site_name: name.trim(),
+        is_dc: isDC, invoice_prefix: prefix.trim() || null, address: address.trim() || null,
+      });
+      setCode(""); setName(""); setIsDC(false); setPrefix(""); setAddress("");
+      setAddSuccess(true); setTimeout(() => setAddSuccess(false), 2000);
+    } catch (err: any) {
+      setAddError(friendlyError(err));
+    }
     setAdding(false); void load();
   }
 
@@ -133,22 +130,18 @@ export function SitesTab() {
 
   async function handleSaveEdit(id: string) {
     setEditSaving(true);
-    const client = getSupabaseClient();
-    if (!client) { setEditSaving(false); return; }
     const emails = editEmails.split(/[,\n]/).map((e) => e.trim().toLowerCase()).filter(Boolean);
-    await client.from("sites").update({
+    await api.put("/sites/" + id, {
       site_name: editName.trim(), invoice_prefix: editPrefix.trim() || null,
       address: editAddress.trim() || null, is_dc: editIsDC,
       contact_emails: emails,
       ship_to_code: editShipTo.trim() || null,
-    }).eq("id", id);
+    });
     setEditSaving(false); setEditId(null); void load();
   }
 
   async function toggleActive(site: Site) {
-    const client = getSupabaseClient();
-    if (!client) return;
-    await client.from("sites").update({ is_active: !site.is_active }).eq("id", site.id);
+    await api.put("/sites/" + site.id, { is_active: !site.is_active });
     void load();
   }
 

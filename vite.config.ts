@@ -12,11 +12,11 @@ export default defineConfig({
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
         runtimeCaching: [
           {
-            // Cache Supabase API responses for offline read
-            urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
+            // Cache API responses for offline read
+            urlPattern: /^http:\/\/localhost:3001\/api\/.*/i,
             handler: "NetworkFirst",
             options: {
-              cacheName: "supabase-api",
+              cacheName: "mdc-api",
               networkTimeoutSeconds: 10,
               expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 },
             },
@@ -48,7 +48,7 @@ export default defineConfig({
       output: {
         manualChunks: {
           "vendor-react": ["react", "react-dom", "react-router-dom"],
-          "vendor-supabase": ["@supabase/supabase-js"],
+          "vendor-api": [],
           "vendor-ui": ["lucide-react"],
           "vendor-query": ["@tanstack/react-query", "@tanstack/react-table"],
           "vendor-zxing": ["@zxing/browser", "@zxing/library"],

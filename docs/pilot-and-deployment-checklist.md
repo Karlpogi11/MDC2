@@ -1,3 +1,16 @@
+---
+title: Pilot Test & Pre-Deployment Checklist
+tags:
+  - deployment
+  - pilot
+  - operations
+  - checklist
+date: 2026-05-16
+aliases:
+  - Pilot Checklist
+  - Deployment Checklist
+---
+
 # MDC Pilot Test & Pre-Deployment Checklist
 
 ## How to Run a Pilot Test (Before Going Live)
@@ -83,3 +96,9 @@ Do NOT create a separate environment — just limit access to 2–3 trusted user
 - [ ] User accounts created for all DC staff
 - [ ] Staff briefed on the URL and login credentials
 - [ ] Someone designated as `dc_admin` for day-to-day management
+
+See [[audit-checklist]] for the go-live audit and [[definition-of-done]] for quality gates.
+
+---
+
+**Related:** [[audit-checklist]], [[definition-of-done]], [[system-design]]

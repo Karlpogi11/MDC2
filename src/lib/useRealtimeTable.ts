@@ -1,44 +1,28 @@
-import { useEffect, useRef, useState } from "react";
-import { getSupabaseClient } from "./supabase";
+import { useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
-type RealtimeStatus = "connecting" | "live" | "disconnected";
+type Tables = string | string[];
 
-/**
- * Subscribes to postgres_changes on one or more tables and calls onUpdate
- * when any INSERT/UPDATE/DELETE fires. Returns the current connection status.
- */
 export function useRealtimeTable(
-  tables: string | string[],
-  onUpdate: () => void,
-  enabled = true
-): RealtimeStatus {
-  const [status, setStatus] = useState<RealtimeStatus>("connecting");
-  const onUpdateRef = useRef(onUpdate);
-  onUpdateRef.current = onUpdate;
+  tables: Tables,
+  onUpdate?: () => void,
+  enabled = true,
+): string {
+  const queryClient = useQueryClient();
+  const tableList = Array.isArray(tables) ? tables : [tables];
 
   useEffect(() => {
     if (!enabled) return;
-    const client = getSupabaseClient();
-    if (!client) { setStatus("disconnected"); return; }
 
-    const tableList = Array.isArray(tables) ? tables : [tables];
-    const key = tableList.join(",");
+    const interval = setInterval(() => {
+      for (const table of tableList) {
+        queryClient.invalidateQueries({ queryKey: [table] });
+      }
+      onUpdate?.();
+    }, 10000);
 
-    let channel = client.channel(`realtime:${key}`);
-    for (const table of tableList) {
-      channel = channel.on(
-        "postgres_changes",
-        { event: "*", schema: "public", table },
-        () => onUpdateRef.current()
-      );
-    }
-    channel.subscribe((s) => {
-      if (s === "SUBSCRIBED") setStatus("live");
-      else if (s === "CLOSED" || s === "CHANNEL_ERROR") setStatus("disconnected");
-    });
+    return () => clearInterval(interval);
+  }, [tableList.join(","), enabled, onUpdate, queryClient]);
 
-    return () => { void client.removeChannel(channel); };
-  }, [Array.isArray(tables) ? tables.join(",") : tables, enabled]);
-
-  return status;
+  return enabled ? "live" : "connecting";
 }

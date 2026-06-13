@@ -1,3 +1,16 @@
+---
+title: UI/UX Pattern
+tags:
+  - ui
+  - ux
+  - design
+  - frontend
+date: 2026-05-16
+aliases:
+  - UI/UX Pattern
+  - Brand System
+---
+
 # MDC UI/UX Pattern (Enterprise Inventory)
 
 ## Purpose
@@ -52,16 +65,16 @@ Rules:
 1. Global nav (dark, persistent): brand + primary modules + utility/account.
 2. Sub-nav (light): section tabs (`Inventory`, `Batches`, `Serial numbers`, `Stock transfers`, `Stocktakes`).
 3. Selector row:
-- segment tabs (`All`, `Products`, `Materials`)
-- right aligned inventory snapshot controls (`As of: Today`, `Site: Main warehouse`)
+   - segment tabs (`All`, `Products`, `Materials`)
+   - right aligned inventory snapshot controls (`As of: Today`, `Site: Main warehouse`)
 4. Accent divider: single blue rule below selector row.
 5. Action row:
-- left: item count + `Stocktake`
-- right: export/print icon actions
+   - left: item count + `Stocktake`
+   - right: export/print icon actions
 6. Dense data grid:
-- sticky semantic columns
-- filter row directly under headers
-- totals row first in body
+   - sticky semantic columns
+   - filter row directly under headers
+   - totals row first in body
 
 ## Approved Inventory Fields
 Table headers must stay aligned with MDC data model:
@@ -107,3 +120,9 @@ Derived field logic:
 - Do not introduce floating center FAB for this screen.
 - Do not replace Lucide icons with emoji/unicode symbols.
 - Do not rename inventory headers unless data model changes.
+
+See also [[ui-spec-inventory]] for the inventory grid specification.
+
+---
+
+**Related:** [[prd]], [[ui-spec-inventory]], [[system-design]]

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { ShieldAlert } from "lucide-react";
-import { getSupabaseClient } from "@/lib/supabase";
+import { ShieldAlert, ChevronLeft, ChevronRight } from "lucide-react";
+import { api } from "@/lib/api";
 import { AppLayout } from "@/components/AppLayout";
 import { useTableResize } from "@/components/ResizableColumns";
 
@@ -38,8 +38,7 @@ const FIELD_LABELS: Record<string, string> = {
   transfer_id:      "Transfer",
   stock_in_at:      "Stocked in at",
   packed_at:        "Packed at",
-  courier:          "Courier",
-  awb:              "Tracking number",
+  fixably_series:   "Fixably series",
   qty:              "Quantity",
   is_active:        "Active",
   part_number:      "Part number",
@@ -121,28 +120,17 @@ export function AuditLogPage() {
   }, [filterAction, filterEntity, filterSerial, page]);
 
   async function load() {
-    const client = getSupabaseClient();
-    if (!client) return;
     setLoading(true);
-
-    let q = client
-      .from("audit_logs")
-      .select("id, created_at, action, entity_type, entity_id, note, old_value, new_value, actor:profiles!actor_id(full_name, username)", { count: "exact" })
-      .order("created_at", { ascending: false })
-      .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
-
-    if (filterAction) q = q.eq("action", filterAction);
-    if (filterEntity) q = q.eq("entity_type", filterEntity);
-    if (filterSerial.trim()) q = q.or(`old_value->>serial_number.ilike.%${filterSerial.trim()}%,new_value->>serial_number.ilike.%${filterSerial.trim()}%`);
-
-    const { data, count, error } = await q;
-    if (!error && data) {
-      setRows(data.map((r: any) => ({
-        ...r,
-        actor: Array.isArray(r.actor) ? r.actor[0] ?? null : r.actor,
-      })));
-      setTotal(count ?? 0);
-    }
+    const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) });
+    if (filterAction) params.set("action", filterAction);
+    if (filterEntity) params.set("entity_type", filterEntity);
+    if (filterSerial.trim()) params.set("serial", filterSerial.trim());
+    const result = await api.get("/audit-logs?" + params.toString());
+    setRows((result.data ?? []).map((r: any) => ({
+      ...r,
+      actor: Array.isArray(r.actor) ? r.actor[0] ?? null : r.actor,
+    })));
+    setTotal(result.total ?? 0);
     setLoading(false);
   }
 
@@ -183,15 +171,15 @@ export function AuditLogPage() {
         <div className="table-card">
           <div className="table-scroll">
             <table ref={tableRef}>
-              <thead>
-                <tr>
-                  <th>When</th>
-                  <th>Who</th>
-                  <th>Action</th>
-                  <th>Entity</th>
-                  <th>Changes</th>
-                </tr>
-              </thead>
+                <thead style={{ position: "sticky", top: 0, zIndex: 1, background: "var(--bg-surface)" }}>
+                  <tr>
+                    <th>When</th>
+                    <th>Who</th>
+                    <th>Action</th>
+                    <th>Entity</th>
+                    <th>Changes</th>
+                  </tr>
+                </thead>
               <tbody>
                 {loading && <tr><td colSpan={5} className="empty-row">Loading…</td></tr>}
                 {!loading && rows.length === 0 && <tr><td colSpan={5} className="empty-row">No audit entries.</td></tr>}
@@ -220,15 +208,17 @@ export function AuditLogPage() {
 
         {/* Pagination */}
         {total > PAGE_SIZE && (
-          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10, marginTop: 14, fontSize: 13 }}>
-            <button type="button" disabled={page === 0} onClick={() => setPage(p => p - 1)}
-              style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "5px 14px", cursor: page === 0 ? "not-allowed" : "pointer", opacity: page === 0 ? 0.5 : 1 }}>
-              Prev
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, padding: "12px 0" }}>
+            <button type="button" disabled={page === 0 || loading} onClick={() => setPage(p => p - 1)}
+              style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", fontSize: 12, fontWeight: 600, border: "1px solid var(--line)", borderRadius: "var(--radius)", background: "var(--bg-surface)", color: "var(--text)", cursor: page === 0 || loading ? "not-allowed" : "pointer", opacity: page === 0 ? 0.4 : 1 }}>
+              <ChevronLeft size={14} /> Prev
             </button>
-            <span style={{ color: "var(--muted)" }}>Page {page + 1} of {Math.ceil(total / PAGE_SIZE)}</span>
-            <button type="button" disabled={(page + 1) * PAGE_SIZE >= total} onClick={() => setPage(p => p + 1)}
-              style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "5px 14px", cursor: (page + 1) * PAGE_SIZE >= total ? "not-allowed" : "pointer", opacity: (page + 1) * PAGE_SIZE >= total ? 0.5 : 1 }}>
-              Next
+            <span style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap" }}>
+              Page {page + 1} of {Math.ceil(total / PAGE_SIZE)}
+            </span>
+            <button type="button" disabled={(page + 1) * PAGE_SIZE >= total || loading} onClick={() => setPage(p => p + 1)}
+              style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", fontSize: 12, fontWeight: 600, border: "1px solid var(--line)", borderRadius: "var(--radius)", background: "var(--bg-surface)", color: "var(--text)", cursor: (page + 1) * PAGE_SIZE >= total || loading ? "not-allowed" : "pointer", opacity: (page + 1) * PAGE_SIZE >= total ? 0.4 : 1 }}>
+              Next <ChevronRight size={14} />
             </button>
           </div>
         )}

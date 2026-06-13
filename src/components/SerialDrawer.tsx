@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { X, Search, Clock } from "lucide-react";
-import { getSupabaseClient } from "@/lib/supabase";
+import { api } from "@/lib/api";
 
 type Serial = {
   id: string;
@@ -74,58 +74,59 @@ function actionLabel(action: string, newVal: any, oldVal: any): string {
   return action;
 }
 
-function SerialTimeline({ serialId, serialNumber }: { serialId: string; serialNumber: string }) {
+function SerialTimeline({ serialId, serialNumber, stockInAt }: { serialId: string; serialNumber: string; stockInAt?: string | null }) {
   const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const client = getSupabaseClient();
-    if (!client) return;
-
     Promise.all([
-      // Audit log events for this serial
-      client.from("audit_logs")
-        .select("id, action, old_value, new_value, note, created_at, actor:profiles!actor_id(full_name, username)")
-        .eq("entity_type", "serial_numbers")
-        .eq("entity_id", serialId)
-        .order("created_at", { ascending: true }),
-
-      // Transfer history — transfers this serial was part of
-      client.from("transfer_items")
-        .select("id, transfer:transfers(id, transfer_no, status, created_at, packed_at, destination_site:sites!destination_site_id(site_name), source_site:sites!source_site_id(site_name))")
-        .eq("serial_id", serialId),
-
-      // Corrections involving this serial
-      client.from("serial_corrections")
-        .select("id, old_serial_number, new_serial_number, reason, corrected_at, corrected_by:profiles!corrected_by(full_name, username)")
-        .eq("serial_id", serialId)
-        .order("corrected_at", { ascending: true }),
-    ]).then(([auditRes, transferRes, correctionRes]) => {
+      api.get("/serials/" + serialId + "/audit-logs"),
+      api.get("/serials/" + serialId + "/transfer-history"),
+      api.get("/serials/" + serialId + "/corrections"),
+    ]).then(([auditData, transferData, correctionData]) => {
       const timeline: TimelineEvent[] = [];
 
       // Audit log events
-      for (const row of (auditRes.data ?? [])) {
+      for (const row of (auditData ?? [])) {
         const actor = Array.isArray(row.actor) ? row.actor[0] : row.actor;
         const nv = row.new_value as any;
         const ov = row.old_value as any;
         const label = actionLabel(row.action, nv, ov);
-        // Derive site from new_value if available
-        let site: string | null = null;
-        if (nv?.current_site_id) site = null; // resolved below if needed
+
+        // Skip audit events that duplicate transfer events (Packed / Received)
+        if (row.action === "update" && nv?.status && nv.status !== ov?.status) {
+          if (["in_transit", "transit", "transferred"].includes(nv.status)) {
+            continue;
+          }
+        }
 
         timeline.push({
           id: `audit-${row.id}`,
           at: row.created_at,
           action: label,
           actor: actor?.full_name ?? actor?.username ?? null,
-          site,
+          site: null,
           note: row.note ?? null,
           color: actionColor(row.action + label.toLowerCase()),
         });
       }
 
+      // Add synthetic Stocked In event if audit log has no insert
+      const hasInsert = (auditData ?? []).some((r: any) => r.action === "insert");
+      if (!hasInsert && stockInAt) {
+        timeline.push({
+          id: `stockin-${serialId}`,
+          at: stockInAt,
+          action: "Stocked In",
+          actor: null,
+          site: null,
+          note: null,
+          color: "var(--muted)",
+        });
+      }
+
       // Transfer events
-      for (const item of (transferRes.data ?? [])) {
+      for (const item of (transferData ?? [])) {
         const t = Array.isArray(item.transfer) ? item.transfer[0] : item.transfer;
         if (!t) continue;
         const dest = Array.isArray(t.destination_site) ? t.destination_site[0] : t.destination_site;
@@ -142,18 +143,27 @@ function SerialTimeline({ serialId, serialNumber }: { serialId: string; serialNu
             color: "var(--muted)",
           });
         }
-        if (t.packed_at) {
-          timeline.push({
-            id: `tr-packed-${t.id}`,
-            at: t.packed_at,
-            action: `Packed - ${t.transfer_no}`,
-            actor: null,
-            site: src?.site_name ?? null,
-            note: `→ ${dest?.site_name ?? "unknown"}`,
-            color: "var(--blue)",
-          });
-        }
-        if (t.status === "received") {
+          if (t.packed_at) {
+            timeline.push({
+              id: `tr-packed-${t.id}`,
+              at: t.packed_at,
+              action: `Packed - ${t.transfer_no}`,
+              actor: null,
+              site: src?.site_name ?? null,
+              note: `→ ${dest?.site_name ?? "unknown"}`,
+              color: "var(--muted)",
+            });
+            timeline.push({
+              id: `tr-transferred-${t.id}`,
+              at: t.packed_at,
+              action: "Transferred out",
+              actor: null,
+              site: src?.site_name ?? null,
+              note: null,
+              color: "var(--muted)",
+            });
+          }
+          if (t.status === "received") {
           timeline.push({
             id: `tr-received-${t.id}`,
             at: t.packed_at ?? t.created_at,
@@ -167,7 +177,7 @@ function SerialTimeline({ serialId, serialNumber }: { serialId: string; serialNu
       }
 
       // Correction events
-      for (const c of (correctionRes.data ?? [])) {
+      for (const c of (correctionData ?? [])) {
         const by = Array.isArray(c.corrected_by) ? c.corrected_by[0] : c.corrected_by;
         timeline.push({
           id: `corr-${c.id}`,
@@ -196,11 +206,14 @@ function SerialTimeline({ serialId, serialNumber }: { serialId: string; serialNu
         {/* Vertical line */}
         <div style={{ position: "absolute", left: 4, top: 8, bottom: 8, width: 2, background: "var(--line)" }} />
 
-        {events.map((ev, i) => (
+        {events.map((ev, i) => {
+          const isLast = i === events.length - 1;
+          const dotColor = isLast ? "var(--blue)" : ev.color;
+          return (
           <div key={ev.id} style={{ display: "flex", gap: 16, marginBottom: i < events.length - 1 ? 20 : 0, position: "relative" }}>
             {/* Dot */}
             <div className="circle" style={{
-              width: 10, height: 10, borderRadius: "50%", background: ev.color,
+              width: 10, height: 10, borderRadius: "50%", background: dotColor,
               flexShrink: 0, zIndex: 1, marginTop: 4,
             }} />
 
@@ -217,7 +230,8 @@ function SerialTimeline({ serialId, serialNumber }: { serialId: string; serialNu
               )}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -227,20 +241,15 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
   const [serials, setSerials] = useState<Serial[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [timelineSearch, setTimelineSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>(initialStatusFilter ?? "all");
   const [activeTab, setActiveTab] = useState<"serials" | "history">("serials");
   const [selectedSerial, setSelectedSerial] = useState<Serial | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const client = getSupabaseClient();
-    if (!client) return;
-    client
-      .from("serial_numbers")
-      .select("id, serial_number, status, stock_in_at, current_site:sites!current_site_id(site_name, site_code)")
-      .eq("part_id", partId)
-      .order("stock_in_at", { ascending: false })
-      .then(({ data }) => {
+    api.get("/serials?part_id=" + partId + "&limit=500")
+      .then((data) => {
         setSerials((data ?? []).map((s: any) => ({
           ...s,
           current_site: Array.isArray(s.current_site) ? s.current_site[0] ?? null : s.current_site,
@@ -308,7 +317,7 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
 
         {/* Tabs */}
         <div style={{ display: "flex", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
-          {([["serials", "Serials"], ["history", "Chain of Custody"]] as const).map(([tab, label]) => (
+          {([["serials", "Serials"], ["history", "Timeline"]] as const).map(([tab, label]) => (
             <button key={tab} type="button" onClick={() => { setActiveTab(tab); if (tab === "serials") setSelectedSerial(null); }}
               style={{ flex: 1, padding: "5px 0", fontSize: 13, fontWeight: activeTab === tab ? 700 : 400, color: activeTab === tab ? "var(--blue)" : "var(--muted)", background: "transparent", border: "none", borderBottom: `2px solid ${activeTab === tab ? "var(--blue)" : "transparent"}`, cursor: "pointer", marginBottom: -1 }}>
               {label}
@@ -358,21 +367,34 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
 
         {activeTab === "history" && (
           <>
-            {/* Serial selector */}
-            <div style={{ padding: "5px 12px", borderBottom: "1px solid #f0f0f0", flexShrink: 0 }}>
-              <select value={selectedSerial?.id ?? ""} onChange={(e) => {
-                const s = serials.find(x => x.id === e.target.value) ?? null;
-                setSelectedSerial(s);
-              }} style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 8px", fontSize: 13, outline: "none", fontFamily: "monospace" }}>
-                <option value="">- select a serial to view history -</option>
-                {serials.map(s => <option key={s.id} value={s.id}>{s.serial_number}</option>)}
-              </select>
+            <div style={{ padding: "5px 12px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
+              <input value={timelineSearch} onChange={(e) => setTimelineSearch(e.target.value)}
+                placeholder="Search serial number..."
+                style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 10px", fontSize: 13, outline: "none", boxSizing: "border-box", background: "var(--bg-surface-elevated)", color: "var(--text)" }} />
             </div>
             <div style={{ flex: 1, overflowY: "auto" }}>
-              {selectedSerial
-                ? <SerialTimeline serialId={selectedSerial.id} serialNumber={selectedSerial.serial_number} />
-                : <div style={{ padding: 32, textAlign: "center", color: "var(--muted)", fontSize: 13 }}>Select a serial above to view its chain of custody.</div>
-              }
+              {selectedSerial && !timelineSearch.trim() ? (
+                <SerialTimeline serialId={selectedSerial.id} serialNumber={selectedSerial.serial_number} stockInAt={selectedSerial.stock_in_at} />
+              ) : (
+                <div>
+                  {serials
+                    .filter(s => !timelineSearch.trim() || s.serial_number.toLowerCase().includes(timelineSearch.toLowerCase()))
+                    .slice(0, 30)
+                    .map(s => (
+                      <div key={s.id}
+                        onClick={() => { setSelectedSerial(s); setTimelineSearch(""); }}
+                        style={{ padding: "7px 12px", cursor: "pointer", borderBottom: "1px solid var(--line-soft)", fontSize: 13, fontFamily: "monospace", color: "var(--link)" }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
+                        {s.serial_number}
+                      </div>
+                    ))}
+                  {timelineSearch.trim() && !serials.some(s => s.serial_number.toLowerCase().includes(timelineSearch.toLowerCase())) && (
+                    <div style={{ padding: 32, textAlign: "center", color: "var(--muted)", fontSize: 13 }}>No serials matching "{timelineSearch}"</div>
+                  )}
+                  {!timelineSearch.trim() && <div style={{ padding: 32, textAlign: "center", color: "var(--muted)", fontSize: 13 }}>Type a serial number to view its timeline.</div>}
+                </div>
+              )}
             </div>
           </>
         )}

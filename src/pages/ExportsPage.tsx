@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Download, FileDown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { getSupabaseClient } from "@/lib/supabase";
+import { api } from "@/lib/api";
 import { AppLayout } from "@/components/AppLayout";
 import { DatePicker } from "@/components/DatePicker";
 
@@ -44,32 +44,17 @@ export function ExportsPage() {
   const [trCount, setTrCount] = useState<number | null>(null);
 
   useEffect(() => {
-    const client = getSupabaseClient();
-    if (!client) return;
-    client.from("sites").select("id,site_name,site_code").eq("is_active", true).eq("is_dc", false).order("site_name")
-      .then(({ data }) => setSites((data ?? []) as Site[]));
+    api.get("/sites").then((data) => setSites((data ?? []) as Site[]));
   }, []);
 
   async function exportStockedIn() {
     setSiExporting(true); setSiCount(null);
-    const client = getSupabaseClient();
-    if (!client) { setSiExporting(false); return; }
 
-    let q = client
-      .from("serial_numbers")
-      .select(`
-        serial_number, status, stock_in_at,
-        part:parts(part_number, part_name, category),
-        site:sites!current_site_id(site_name, site_code),
-        batch:stock_in_batches(source_type, imported_at)
-      `)
-      .order("stock_in_at", { ascending: false })
-      .limit(10000);
+    const params = new URLSearchParams();
+    if (siFrom) params.set("from", siFrom);
+    if (siTo)   params.set("to", siTo + "T23:59:59");
 
-    if (siFrom) q = q.gte("stock_in_at", siFrom);
-    if (siTo)   q = q.lte("stock_in_at", siTo + "T23:59:59");
-
-    const { data } = await q;
+    const data = await api.get(`/exports/stocked-in?${params.toString()}`);
     const rows = (data ?? []) as any[];
     setSiCount(rows.length);
 
@@ -98,24 +83,8 @@ export function ExportsPage() {
 
   async function exportStockedOut() {
     setTrExporting(true); setTrCount(null);
-    const client = getSupabaseClient();
-    if (!client) { setTrExporting(false); return; }
 
-    let q = client
-      .from("transfer_items")
-      .select(`
-        qty,
-        part:parts(part_number, part_name, category),
-        serial:serial_numbers(serial_number),
-        transfer:transfers(
-          transfer_no, status, created_at, packed_at,
-          destination:sites!destination_site_id(site_name, site_code),
-          requester:profiles!requested_by(full_name, username)
-        )
-      `)
-      .limit(10000);
-
-    const { data } = await q;
+    const data = await api.get("/exports/stocked-out");
     let rows = (data ?? []) as any[];
 
     // Apply all filters in a single clean pass

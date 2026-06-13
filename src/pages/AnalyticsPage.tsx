@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTableResize } from "@/components/ResizableColumns";
 import { friendlyError } from "@/lib/friendlyError";
 import { BarChart3, Upload, RefreshCw, TrendingUp } from "lucide-react";
-import { getSupabaseClient } from "@/lib/supabase";
+import { api } from "@/lib/api";
 import { useSites } from "@/hooks/useSites";
 import { normalizeCsvHeader, parseCSV, parseDelimitedRows } from "@/lib/csv";
 
@@ -254,7 +254,7 @@ function fmtDate(iso: string) {
 
 function Panel({ title, subtitle, action, children, noPad }: { title: string; subtitle?: string; action?: React.ReactNode; children: React.ReactNode; noPad?: boolean }) {
   return (
-    <div style={{ background: "var(--bg-surface)", border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", boxShadow: "0 1px 3px rgba(0,0,0,.04)" }}>
+    <div style={{ minWidth: 0, background: "var(--bg-surface)", border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", boxShadow: "0 1px 3px rgba(0,0,0,.04)" }}>
       <div style={{ padding: "16px 20px", borderBottom: `1px solid ${BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, color: INK, letterSpacing: "-0.01em" }}>{title}</div>
@@ -356,8 +356,16 @@ function SeriesChips({ list, selected, onChange }: {
 // ── Enterprise SVG Charts ─────────────────────────────────────────────────────
 
 const W = 600;
-/** Area + line chart — enterprise time series with typography hierarchy */
-function AreaChart({ data, keys, height = 200 }: {
+
+function formatCompactNumber(value: number) {
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(abs >= 10_000_000 ? 0 : 1)}M`;
+  if (abs >= 1_000) return `${(value / 1_000).toFixed(abs >= 10_000 ? 0 : 1)}k`;
+  return value.toLocaleString();
+}
+
+/** Area + line chart — compact, responsive, and label-safe */
+function AreaChart({ data, keys, height = 190 }: {
   data: Record<string, string | number>[];
   keys: { key: string; label: string; color: string }[];
   height?: number;
@@ -367,17 +375,17 @@ function AreaChart({ data, keys, height = 200 }: {
   if (data.length === 1) {
     const month = String(data[0].month ?? data[0].site ?? "");
     return (
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height, gap: 8 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, alignItems: "stretch", minHeight: height }}>
         {keys.map((k) => (
-          <div key={k.key} style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 36, fontWeight: 800, color: INK, letterSpacing: "-1px" }}>{Number(data[0][k.key] ?? 0).toLocaleString()}</div>
-            <div style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>{k.label} · {month}</div>
+          <div key={k.key} style={{ display: "flex", flexDirection: "column", justifyContent: "center", minHeight: height - 24, padding: "14px 16px", background: "var(--bg-surface-elevated)", border: `1px solid ${BORDER}`, borderRadius: "var(--radius)" }}>
+            <div style={{ fontSize: 30, fontWeight: 800, color: INK, letterSpacing: "-0.04em", lineHeight: 1 }}>{Number(data[0][k.key] ?? 0).toLocaleString()}</div>
+            <div style={{ fontSize: 11, color: MUTED, marginTop: 6, lineHeight: 1.4 }}>{k.label} · {month}</div>
           </div>
         ))}
       </div>
     );
   }
-  const pad = { t: 24, r: 24, b: 44, l: 52 };
+  const pad = { t: 18, r: 20, b: 34, l: 46 };
   const cw = W - pad.l - pad.r;
   const ch = height - pad.t - pad.b;
   const maxVal = Math.max(...data.flatMap((d) => keys.map((k) => Number(d[k.key] ?? 0))), 1);
@@ -389,17 +397,21 @@ function AreaChart({ data, keys, height = 200 }: {
   const ticks = 4;
   const px = (i: number) => pad.l + (i / (data.length - 1 || 1)) * cw;
   const py = (v: number) => pad.t + ch - (v / niceMax) * ch;
+  const dense = data.length > 10;
+  const labelStep = data.length > 24 ? 4 : data.length > 12 ? 3 : 2;
+  const showPeak = keys.length === 1 && data.length <= 8;
 
   // Peak index for annotation
-  const peakIdx = data.reduce((best, d, i) => {
-    const v = keys.reduce((s, k) => s + Number(d[k.key] ?? 0), 0);
-    const bv = keys.reduce((s, k) => s + Number(data[best][k.key] ?? 0), 0);
+  const peakIdx = showPeak ? data.reduce((best, d, i) => {
+    const v = Number(d[keys[0].key] ?? 0);
+    const bv = Number(data[best][keys[0].key] ?? 0);
     return v > bv ? i : best;
-  }, 0);
-  const peakVal = keys.reduce((s, k) => s + Number(data[peakIdx][k.key] ?? 0), 0);
-  const peakLabel = peakVal >= 1000000 ? `${(peakVal/1000000).toFixed(1)}M` : peakVal >= 1000 ? `${(peakVal/1000).toFixed(1)}k` : peakVal.toLocaleString();
-  const peakX = px(peakIdx); const peakY = py(peakVal);
-  const flipPeak = peakX > W * 0.65;
+  }, 0) : 0;
+  const peakVal = showPeak ? Number(data[peakIdx][keys[0].key] ?? 0) : 0;
+  const peakLabel = showPeak ? formatCompactNumber(peakVal) : "";
+  const peakX = showPeak ? px(peakIdx) : 0;
+  const peakY = showPeak ? py(peakVal) : 0;
+  const flipPeak = showPeak ? peakX > W * 0.68 : false;
 
   return (
     <svg viewBox={`0 0 ${W} ${height}`} style={{ width: "100%", display: "block" }}>
@@ -417,13 +429,13 @@ function AreaChart({ data, keys, height = 200 }: {
       {Array.from({ length: ticks + 1 }, (_, i) => {
         const v = (niceMax / ticks) * (ticks - i);
         const y = pad.t + (ch / ticks) * i;
-        const lbl = v >= 1000000 ? `${(v/1000000).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(v%1000===0?0:1)}k` : String(Math.round(v));
+        const lbl = formatCompactNumber(Math.round(v));
         return (
           <g key={i}>
             <line x1={pad.l} x2={W - pad.r} y1={y} y2={y}
               stroke="currentColor" strokeOpacity={i === ticks ? 0.15 : 0.07} strokeWidth={i === ticks ? 1 : 0.75} />
             {/* Y labels: 9px, 70% opacity — supporting info */}
-            <text x={pad.l - 8} y={y + 4} textAnchor="end" fontSize={9} fill="currentColor" opacity={0.4} fontFamily="system-ui">{lbl}</text>
+            <text x={pad.l - 8} y={y + 3} textAnchor="end" fontSize={8} fill="currentColor" opacity={0.4} fontFamily="system-ui">{lbl}</text>
           </g>
         );
       })}
@@ -443,12 +455,16 @@ function AreaChart({ data, keys, height = 200 }: {
         return <path key={k.key} d={d} fill="none" stroke={k.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />;
       })}
 
-      {/* Peak annotation — LARGE value (dominant), tiny "peak" label (supporting) */}
-      <circle cx={peakX} cy={peakY} r={4} fill={keys[0].color} stroke="currentColor" strokeOpacity={0.3} strokeWidth={2} />
-      <text x={peakX + (flipPeak ? -10 : 10)} y={peakY - 10} textAnchor={flipPeak ? "end" : "start"}
-        fontSize={15} fontWeight="800" fill="currentColor" fontFamily="system-ui" letterSpacing="-0.5">{peakLabel}</text>
-      <text x={peakX + (flipPeak ? -10 : 10)} y={peakY + 4} textAnchor={flipPeak ? "end" : "start"}
-        fontSize={9} fill={MUTED} opacity={0.6} fontFamily="system-ui">peak</text>
+      {showPeak && (
+        <>
+          {/* Peak annotation only on sparse, single-series charts to avoid clutter */}
+          <circle cx={peakX} cy={peakY} r={4} fill={keys[0].color} stroke="currentColor" strokeOpacity={0.3} strokeWidth={2} />
+          <text x={peakX + (flipPeak ? -10 : 10)} y={peakY - 10} textAnchor={flipPeak ? "end" : "start"}
+            fontSize={14} fontWeight="800" fill="currentColor" fontFamily="system-ui" letterSpacing="-0.4">{peakLabel}</text>
+          <text x={peakX + (flipPeak ? -10 : 10)} y={peakY + 4} textAnchor={flipPeak ? "end" : "start"}
+            fontSize={9} fill={MUTED} opacity={0.6} fontFamily="system-ui">peak</text>
+        </>
+      )}
 
       {/* Last point dot */}
       {keys.map((k) => {
@@ -460,21 +476,22 @@ function AreaChart({ data, keys, height = 200 }: {
       {data.map((d, i) => {
         const lbl = String(d.month ?? d.site ?? "").slice(0, 7); // "2025-07"
         const [yr, mo] = lbl.split("-");
-        const isJan = mo === "01";
+        const monthIndex = Number.parseInt(mo, 10);
+        if (!yr || !Number.isFinite(monthIndex) || monthIndex < 1 || monthIndex > 12) return null;
+        const isJan = monthIndex === 1;
         const isFirst = i === 0;
         const isLast = i === data.length - 1;
-        const dense = data.length > 14;
         const show = dense
-          ? (isJan || isFirst || isLast || i % 3 === 0)
+          ? (isJan || isFirst || isLast || i % labelStep === 0)
           : true;
         if (!show) return null;
-        const monthName = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][parseInt(mo, 10) - 1] ?? mo;
+        const monthName = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][monthIndex - 1] ?? mo;
         const display = (isJan || isFirst) ? `${monthName} ${yr}` : monthName;
         return (
           <g key={i}>
             {(isJan && !isFirst) && <line x1={px(i)} x2={px(i)} y1={pad.t + ch} y2={pad.t + ch + 4} stroke="currentColor" strokeOpacity={0.2} strokeWidth={1} />}
             <text x={px(i)} y={height - pad.b + 15} textAnchor="middle"
-              fontSize={(isJan || isFirst) ? 10 : 9}
+              fontSize={(isJan || isFirst) ? 9.5 : 8.5}
               fontWeight={(isJan || isFirst) ? "600" : "400"}
               fill="currentColor"
               opacity={(isJan || isFirst) ? 0.6 : 0.4}
@@ -498,86 +515,159 @@ function AreaChart({ data, keys, height = 200 }: {
   );
 }
 
-/** Ranked horizontal bar — two-line label: part# + description */
-function RankedBar({ data, height: _height }: { data: { name: string; value: number; label?: string }[]; height?: number }) {
+/** Ranked list — clear volume ranking without implying progress */
+function RankedBar({ data }: { data: { name: string; value: number; label?: string }[]; height?: number }) {
   if (!data.length) return <Empty />;
   const total = data.reduce((s, d) => s + d.value, 0);
-  const maxVal = Math.max(...data.map((d) => d.value), 1);
-  const rowH = 50;
-  const labelW = 188;
-  const svgW = 520;
-  const barEnd = svgW - 100;
-  const barW = barEnd - labelW;
-  const H = data.length * rowH + 4;
-
   return (
-    <svg viewBox={`0 0 ${svgW} ${H}`} style={{ width: "100%", display: "block" }}>
+    <div style={{ display: "grid", gap: 10 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "32px minmax(0, 1fr) auto auto",
+          gap: 10,
+          alignItems: "center",
+          padding: "0 0 2px",
+          color: MUTED,
+          fontSize: 10,
+          fontWeight: 700,
+          textTransform: "uppercase",
+          letterSpacing: "0.08em",
+        }}
+      >
+        <div />
+        <div />
+        <div style={{ textAlign: "right" }}>Count</div>
+        <div style={{ textAlign: "right" }}>%</div>
+      </div>
       {data.map((d, i) => {
-        const y = i * rowH;
-        const bw = Math.max(3, (d.value / maxVal) * barW);
         const pct = total > 0 ? ((d.value / total) * 100).toFixed(1) : "0";
         const desc = d.label && d.label !== d.name ? d.label : null;
         const displayName = desc ?? d.name;
-        const truncated = displayName.length > 26 ? displayName.slice(0, 26) + "…" : displayName;
         return (
-          <g key={i}>
-            {/* bar */}
-            <rect x={labelW} y={y + 6} width={barW} height={8} fill="#f1f5f9" rx={3} />
-            <rect x={labelW} y={y + 6} width={bw} height={8} fill={BLUE} rx={3} />
-            {/* rank */}
-            <text x={0} y={y + 42} fontSize={10} fontWeight="700" fill="#94a3b8" fontFamily="system-ui">#{i + 1}</text>
-            {/* part number (if has desc) */}
-            {desc && <text x={18} y={y + 28} fontSize={9} fill="#94a3b8" fontFamily="monospace">{d.name}</text>}
-            {/* name */}
-            <text x={18} y={desc ? y + 44 : y + 42} fontSize={11} fontWeight={i < 3 ? "600" : "400"} fill={INK} fontFamily="system-ui">{truncated}</text>
-            {/* value */}
-            <text x={barEnd + 10} y={desc ? y + 44 : y + 42} fontSize={11} fontWeight="600" fill={INK} fontFamily="system-ui">{d.value.toLocaleString()}</text>
-            {/* pct */}
-            <text x={svgW - 10} y={desc ? y + 44 : y + 42} textAnchor="end" fontSize={9} fill={MUTED} fontFamily="system-ui">{pct}%</text>
-          </g>
+          <div
+            key={`${d.name}-${i}`}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "32px minmax(0, 1fr) auto auto",
+              gap: 10,
+              alignItems: "center",
+              padding: "8px 0",
+              borderBottom: i < data.length - 1 ? `1px solid ${BORDER}` : "none",
+            }}
+          >
+            <div
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 999,
+                display: "grid",
+                placeItems: "center",
+                background: "var(--bg-surface)",
+                border: `1px solid ${BORDER}`,
+                color: MUTED,
+                fontSize: 10,
+                fontWeight: 700,
+                lineHeight: 1,
+                flexShrink: 0,
+              }}
+            >
+              #{i + 1}
+            </div>
+
+            <div style={{ minWidth: 0 }}>
+              {desc && (
+                <div style={{ fontSize: 10, color: MUTED, fontFamily: "monospace", lineHeight: 1.3, overflowWrap: "anywhere" }}>
+                  {d.name}
+                </div>
+              )}
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: i < 3 ? 700 : 600,
+                  color: INK,
+                  lineHeight: 1.35,
+                  overflowWrap: "anywhere",
+                }}
+                title={displayName}
+              >
+                {displayName}
+              </div>
+            </div>
+
+            <div style={{ textAlign: "right", fontSize: 12, fontWeight: 700, color: INK, fontVariantNumeric: "tabular-nums" }}>
+              {d.value.toLocaleString()}
+            </div>
+
+            <div style={{ textAlign: "right", fontSize: 10, color: MUTED, fontVariantNumeric: "tabular-nums" }}>
+              {pct}%
+            </div>
+          </div>
         );
       })}
-    </svg>
+    </div>
   );
 }
 
 function SiteBar({ data }: { data: { name: string; value: number }[] }) {
   if (!data.length) return <Empty />;
   const total = data.reduce((s, d) => s + d.value, 0);
-  const maxVal = Math.max(...data.map((d) => d.value), 1);
   const maxRows = 10;
   const top = data.length > maxRows
     ? [...data.slice(0, maxRows - 1), { name: "Other", value: data.slice(maxRows - 1).reduce((s, d) => s + d.value, 0) }]
     : data;
-  const rowH = 30;
-  const labelW = 150;
-  const svgW = 520;
-  const barEnd = 400;
-  const valEnd = 465;
-  const pctEnd = 510;
-  const barW = barEnd - labelW;
-  const H = top.length * rowH + 4;
 
   return (
-    <svg viewBox={`0 0 ${svgW} ${H}`} style={{ width: "100%", display: "block" }}>
+    <div style={{ display: "grid", gap: 10 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 1fr) auto auto",
+          gap: 10,
+          alignItems: "center",
+          padding: "0 0 2px",
+          color: MUTED,
+          fontSize: 10,
+          fontWeight: 700,
+          textTransform: "uppercase",
+          letterSpacing: "0.08em",
+        }}
+      >
+        <div />
+        <div style={{ textAlign: "right" }}>Count</div>
+        <div style={{ textAlign: "right" }}>%</div>
+      </div>
       {top.map((d, i) => {
-        const y = i * rowH;
-        const bw = Math.max(2, (d.value / maxVal) * barW);
         const pct = total > 0 ? ((d.value / total) * 100).toFixed(1) : "0";
-        const truncated = d.name.length > 18 ? d.name.slice(0, 18) + "…" : d.name;
         return (
-          <g key={i}>
-            <rect x={labelW} y={y + 9} width={barW} height={8} fill="#f1f5f9" rx={2} />
-            <rect x={labelW} y={y + 9} width={bw} height={8} fill={BLUE} rx={2} />
-            <text x={0} y={y + 17} fontSize={11} fill={MUTED} fontFamily="system-ui">
-              <title>{d.name}</title>{truncated}
-            </text>
-            <text x={valEnd} y={y + 17} textAnchor="end" fontSize={11} fontWeight="600" fill={INK} fontFamily="system-ui">{d.value.toLocaleString()}</text>
-            <text x={pctEnd} y={y + 17} textAnchor="end" fontSize={10} fill={MUTED} fontFamily="system-ui">{pct}%</text>
-          </g>
+          <div
+            key={`${d.name}-${i}`}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(0, 1fr) auto auto",
+              gap: 10,
+              alignItems: "center",
+              padding: "8px 0",
+              borderBottom: i < top.length - 1 ? `1px solid ${BORDER}` : "none",
+            }}
+          >
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: INK, lineHeight: 1.35, overflowWrap: "anywhere" }} title={d.name}>
+                {d.name}
+              </div>
+            </div>
+
+            <div style={{ textAlign: "right", fontSize: 12, fontWeight: 700, color: INK, fontVariantNumeric: "tabular-nums" }}>
+              {d.value.toLocaleString()}
+            </div>
+
+            <div style={{ textAlign: "right", fontSize: 10, color: MUTED, fontVariantNumeric: "tabular-nums" }}>
+              {pct}%
+            </div>
+          </div>
         );
       })}
-    </svg>
+    </div>
   );
 }
 
@@ -585,8 +675,8 @@ function SiteBar({ data }: { data: { name: string; value: number }[] }) {
 function DonutChart({ data, centerLabel }: { data: { name: string; value: number; color: string }[]; centerLabel?: string }) {
   const total = data.reduce((s, d) => s + d.value, 0);
   if (!total) return <Empty />;
-  const size = 160; const cx = size / 2; const cy = size / 2;
-  const R = 64; const ri = 40;
+  const size = 148; const cx = size / 2; const cy = size / 2;
+  const R = 60; const ri = 38;
   let angle = -Math.PI / 2;
   const slices = data.map((d) => {
     const sweep = (d.value / total) * 2 * Math.PI;
@@ -600,23 +690,23 @@ function DonutChart({ data, centerLabel }: { data: { name: string; value: number
   });
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 28 }}>
-      <svg viewBox={`0 0 ${size} ${size}`} style={{ width: size, height: size, flexShrink: 0 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap", justifyContent: "center" }}>
+      <svg viewBox={`0 0 ${size} ${size}`} style={{ width: size, height: size, flex: "0 0 auto" }}>
         {slices.map((s, i) => <path key={i} d={s.path} fill={s.color}><title>{s.name}: {s.value.toLocaleString()}</title></path>)}
         {/* Center: LARGE number (dominant) + tiny label (supporting) */}
-        <text x={cx} y={cy - 4} textAnchor="middle" fontSize={22} fontWeight="800" fill={INK} fontFamily="system-ui" letterSpacing="-1">{total.toLocaleString()}</text>
-        <text x={cx} y={cy + 14} textAnchor="middle" fontSize={9} fill={MUTED} opacity={0.65} fontFamily="system-ui" letterSpacing="0.5">{(centerLabel ?? "total").toUpperCase()}</text>
+        <text x={cx} y={cy - 4} textAnchor="middle" fontSize={20} fontWeight="800" fill={INK} fontFamily="system-ui" letterSpacing="-0.8">{total.toLocaleString()}</text>
+        <text x={cx} y={cy + 14} textAnchor="middle" fontSize={8.5} fill={MUTED} opacity={0.65} fontFamily="system-ui" letterSpacing="0.6">{(centerLabel ?? "total").toUpperCase()}</text>
       </svg>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1 }}>
+      <div style={{ display: "grid", gap: 8, flex: "1 1 220px", minWidth: 220 }}>
         {data.map((d, i) => {
           const op = Math.max(0.5, 1 - i * 0.12);
           return (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, opacity: op }}>
+            <div key={i} style={{ display: "grid", gridTemplateColumns: "8px minmax(0, 1fr) auto auto", alignItems: "center", gap: 8, opacity: op }}>
               <div style={{ width: 7, height: 7, borderRadius: "50%", background: d.color, flexShrink: 0 }} />
               {/* Name: small, muted */}
-              <span style={{ fontSize: 11, color: MUTED, flex: 1, lineHeight: 1.3 }}>{d.name}</span>
+              <span style={{ fontSize: 11, color: MUTED, lineHeight: 1.35, minWidth: 0, overflowWrap: "anywhere" }}>{d.name}</span>
               {/* Value: bold, dominant */}
-              <span style={{ fontSize: 14, fontWeight: 800, color: INK, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.3px" }}>{d.value.toLocaleString()}</span>
+              <span style={{ fontSize: 13, fontWeight: 800, color: INK, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.3px" }}>{d.value.toLocaleString()}</span>
               {/* Pct: small, very muted */}
               <span style={{ fontSize: 10, color: MUTED, width: 36, textAlign: "right", opacity: 0.7, fontVariantNumeric: "tabular-nums" }}>{Math.round(d.value / total * 100)}%</span>
             </div>
@@ -633,7 +723,7 @@ export function AnalyticsPage() {
   const abcTableRef = useTableResize();
   const velTableRef = useTableResize();
   const { state: authState } = useAuth();
-  const actorId = authState.status === "authenticated" ? authState.user.id : null;
+  const actorId = authState.status === "authenticated" ? authState.profile.id : null;
   const role = authState.status === "authenticated" ? authState.profile.role : null;
 
   const [activeTab, setActiveTab] = useState<"dc" | "upload" | "demand" | "abc" | "velocity">("dc");
@@ -706,218 +796,61 @@ export function AnalyticsPage() {
   // ── Loaders ──────────────────────────────────────────────────────────────────
 
   async function loadUploads(): Promise<UploadRecord[]> {
-    const client = getSupabaseClient(); if (!client) return [];
-    const { data } = await client.from("analytics_uploads").select("id,source_type,file_name,uploaded_at,row_count,status").order("uploaded_at", { ascending: false }).limit(20);
+    const data = await api.get("/analytics/uploads");
     return (data ?? []) as UploadRecord[];
   }
 
   async function loadSeriesList(): Promise<string[]> {
-    const client = getSupabaseClient(); if (!client) return [];
-    // Get distinct part names from analytics_summary, extract device series
-    const { data } = await client.from("analytics_summary").select("part_name").limit(2000);
-    const names = (data ?? []).map((r: any) => r.part_name ?? "").filter(Boolean) as string[];
-    // Known Apple device series patterns — ordered by specificity
-    const PATTERNS = [
-      "iPhone 16 Pro Max", "iPhone 16 Pro", "iPhone 16 Plus", "iPhone 16",
-      "iPhone 15 Pro Max", "iPhone 15 Pro", "iPhone 15 Plus", "iPhone 15",
-      "iPhone 14 Pro Max", "iPhone 14 Pro", "iPhone 14 Plus", "iPhone 14",
-      "iPhone 13 Pro Max", "iPhone 13 Pro", "iPhone 13 mini", "iPhone 13",
-      "iPhone 12 Pro Max", "iPhone 12 Pro", "iPhone 12 mini", "iPhone 12",
-      "iPhone 11 Pro Max", "iPhone 11 Pro", "iPhone 11",
-      "iPhone XS Max", "iPhone XS", "iPhone XR", "iPhone X",
-      "iPhone SE",
-      "iPad Pro", "iPad Air", "iPad mini", "iPad",
-      "MacBook Pro", "MacBook Air", "MacBook",
-      "Apple Watch",
-    ];
-    const found = new Set<string>();
-    for (const name of names) {
-      for (const p of PATTERNS) {
-        if (name.toLowerCase().includes(p.toLowerCase())) { found.add(p); break; }
-      }
-    }
-    // Sort by PATTERNS order
-    const sorted = PATTERNS.filter((p) => found.has(p));
-    return sorted;
+    const data = await api.get("/analytics/series-list");
+    return (data ?? []) as string[];
   }
 
   async function loadDC(): Promise<DCData> {
-    const client = getSupabaseClient();
-    if (!client) throw new Error("Supabase is not configured.");
-    const [siRes, trRes, tiRes, snapRes] = await Promise.all([
-      client.from("serial_numbers").select("stock_in_at").order("stock_in_at", { ascending: true }).limit(50000),
-      client.from("transfers").select("id,status,created_at,destination_site:sites!destination_site_id(site_name)").neq("status", "cancelled").limit(10000),
-      client.from("transfer_items").select("qty,part:parts(part_number,part_name),transfer:transfers(status,created_at)").limit(50000),
-      client.from("inventory_snapshot").select("in_stock,committed,available"),
-    ]);
-    if (siRes.error || trRes.error || tiRes.error) {
-      throw new Error((siRes.error ?? trRes.error ?? tiRes.error)!.message);
-    }
-    const serials   = (siRes.data ?? []) as { stock_in_at: string }[];
-    const transfers = (trRes.data ?? []) as { id: string; status: string; created_at: string; destination_site: any }[];
-    const items     = (tiRes.data ?? []) as { qty: number; part: any; transfer: any }[];
-    const snap      = (snapRes.data ?? []) as { in_stock: number; committed: number; available: number }[];
-    const totalInStock  = snap.reduce((s, r) => s + (r.in_stock ?? 0), 0);
-    const totalCommitted = snap.reduce((s, r) => s + (r.committed ?? 0), 0);
-    const totalAvailable = snap.reduce((s, r) => s + (r.available ?? 0), 0);
-
-    const siByMonth = new Map<string, number>();
-    for (const s of serials) { const m = s.stock_in_at?.slice(0, 7) ?? "?"; siByMonth.set(m, (siByMonth.get(m) ?? 0) + 1); }
-    const soByMonth = new Map<string, number>();
-    for (const item of items) {
-      const t = Array.isArray(item.transfer) ? item.transfer[0] : item.transfer;
-      if (!t || t.status === "cancelled") continue;
-      const m = t.created_at?.slice(0, 7) ?? "?";
-      soByMonth.set(m, (soByMonth.get(m) ?? 0) + (item.qty ?? 1));
-    }
-    const allMonths = [...new Set([...siByMonth.keys(), ...soByMonth.keys()])].sort();
-    const monthly = allMonths.map((month) => ({ month, stockIn: siByMonth.get(month) ?? 0, stockOut: soByMonth.get(month) ?? 0 }));
-
-    const partMap = new Map<string, { part_name: string | null; qty: number }>();
-    for (const item of items) {
-      const t = Array.isArray(item.transfer) ? item.transfer[0] : item.transfer;
-      if (!t || t.status === "cancelled") continue;
-      const part = Array.isArray(item.part) ? item.part[0] : item.part;
-      if (!part?.part_number) continue;
-      const ex = partMap.get(part.part_number);
-      if (ex) ex.qty += item.qty ?? 1;
-      else partMap.set(part.part_number, { part_name: part.part_name ?? null, qty: item.qty ?? 1 });
-    }
-    const topParts = [...partMap.entries()].sort((a, b) => b[1].qty - a[1].qty).slice(0, 10).map(([pn, v]) => ({ part_number: pn, part_name: v.part_name, qty: v.qty }));
-
-    const siteMap = new Map<string, number>();
-    for (const t of transfers) {
-      const dest = Array.isArray(t.destination_site) ? t.destination_site[0] : t.destination_site;
-      const name = dest?.site_name ?? "Unknown";
-      siteMap.set(name, (siteMap.get(name) ?? 0) + 1);
-    }
-    const bySite = [...siteMap.entries()].sort((a, b) => b[1] - a[1]).map(([site, qty]) => ({ site, qty }));
-
-    const sc = { draft: 0, packed: 0, in_transit: 0, received: 0 };
-    for (const t of transfers) { if (t.status in sc) sc[t.status as keyof typeof sc]++; }
-    const total = transfers.length;
-    const statusBreakdown = [
-      { name: "Received",   value: sc.received,   color: GREEN,   pct: total ? Math.round(sc.received / total * 100) : 0 },
-      { name: "In Transit", value: sc.in_transit,  color: BLUE,    pct: total ? Math.round(sc.in_transit / total * 100) : 0 },
-      { name: "Packed",     value: sc.packed,      color: "var(--muted)", pct: total ? Math.round(sc.packed / total * 100) : 0 },
-      { name: "Draft",      value: sc.draft,       color: SLATE,   pct: total ? Math.round(sc.draft / total * 100) : 0 },
-    ].filter((s) => s.value > 0);
-
-    const received = transfers.filter((t) => t.status === "received").length;
-    const dcResult = {
-      kpi: { totalStockedIn: serials.length, totalStockedOut: items.reduce((s, i) => s + (i.qty ?? 1), 0), totalTransfers: total, receivedRate: total ? Math.round(received / total * 100) : 0, totalAvailable, totalCommitted },
-      monthly, topParts, bySite, statusBreakdown,
-    };
-    return dcResult;
+    const data = await api.get("/analytics/dc-activity");
+    return data as DCData;
   }
 
   async function loadDemand() {
     setDemandLoading(true);
-    const client = getSupabaseClient(); if (!client) { setDemandLoading(false); return; }
+    try {
+      const params = new URLSearchParams();
+      if (demandFrom) params.set("from", demandFrom.slice(0, 7));
+      if (demandTo) params.set("to", demandTo.slice(0, 7));
+      if (demandSite) params.set("site_code", demandSite);
+      if (demandSeries.length === 1) params.set("series", demandSeries[0]);
+      else if (demandSeries.length > 1) params.set("series", demandSeries.join(","));
 
-    // Build site_code → site_name lookup (also covers ship_to_code as fallback for old data)
-    const { data: siteRows } = await client.from("sites").select("site_name, site_code, ship_to_code");
-    const siteNameMap = new Map<string, string>();
-    for (const s of (siteRows ?? []) as { site_name: string; site_code: string; ship_to_code: string | null }[]) {
-      siteNameMap.set(s.site_code, s.site_name);
-      if (s.ship_to_code) siteNameMap.set(s.ship_to_code, s.site_name); // fallback for old numeric codes
+      const data = await api.get("/analytics/demand?" + params.toString());
+      setDemandData(data);
+    } finally {
+      setDemandLoading(false);
     }
-
-    let q = client.from("analytics_summary").select("part_number,part_name,site_code,month,total_qty");
-    if (demandFrom) q = q.gte("month", `${demandFrom.slice(0, 7)}-01`);
-    if (demandTo)   q = q.lte("month", `${demandTo.slice(0, 7)}-01`);
-    if (!demandTo) {
-      const now = new Date();
-      const cutoff = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-      q = q.lt("month", cutoff);
-    }
-    if (demandSite)   q = q.eq("site_code", demandSite);
-    if (demandSeries.length === 1) q = q.ilike("part_name", `%${demandSeries[0]}%`);
-    else if (demandSeries.length > 1) q = q.or(demandSeries.map((s) => `part_name.ilike.%${s}%`).join(","));
-
-    const { data } = await q.limit(100000);
-    const rows = (data ?? []) as { part_number: string; part_name: string | null; site_code: string | null; month: string; total_qty: number }[];
-
-    const isFiltered = !!(demandFrom || demandTo);
-    const monthMap = new Map<string, number>();
-    const partMap  = new Map<string, { name: string; qty: number }>();
-    const siteMap  = new Map<string, number>();
-
-    for (const r of rows) {
-      // Always group by month for the chart
-      const m = r.month?.slice(0, 7) ?? "?";
-      monthMap.set(m, (monthMap.get(m) ?? 0) + r.total_qty);
-      const ex = partMap.get(r.part_number);
-      if (ex) ex.qty += r.total_qty;
-      else partMap.set(r.part_number, { name: r.part_name ?? r.part_number, qty: r.total_qty });
-      if (r.site_code) {
-        const siteName = siteNameMap.get(r.site_code) ?? r.site_code;
-        siteMap.set(siteName, (siteMap.get(siteName) ?? 0) + r.total_qty);
-      }
-    }
-
-    const monthly  = [...monthMap.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([month, qty]) => ({ month, qty }));
-    const topParts = [...partMap.entries()].sort((a, b) => b[1].qty - a[1].qty).slice(0, 10).map(([pn, v]) => ({ name: pn, value: v.qty, label: v.name !== pn ? v.name : pn }));
-    const bySite   = [...siteMap.entries()].sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value }));
-    const topSite  = bySite[0]?.name ?? null;
-
-    setDemandData({ kpi: { totalRepairs: rows.reduce((s, r) => s + r.total_qty, 0), uniqueParts: partMap.size, topSite }, monthly, topParts, bySite, isFiltered });
-    setDemandLoading(false);
   }
 
   async function loadABC() {
     setAbcLoading(true);
-    const client = getSupabaseClient(); if (!client) { setAbcLoading(false); return; }
-    let q = client.from("analytics_by_part").select("part_number,part_name,total_qty").order("total_qty", { ascending: false }).limit(2000);
-    if (abcSeries.length === 1) q = q.ilike("part_name", `%${abcSeries[0]}%`);
-    else if (abcSeries.length > 1) q = q.or(abcSeries.map((s) => `part_name.ilike.%${s}%`).join(","));
-    const { data } = await q;
-    const rows = (data ?? []) as { part_number: string; part_name: string | null; total_qty: number }[];
-    const total = rows.reduce((s, r) => s + r.total_qty, 0);
-    let cum = 0;
-    const classified = rows.map((r) => {
-      cum += r.total_qty;
-      const pct = total > 0 ? cum / total : 0;
-      const tier: "A" | "B" | "C" = pct <= 0.8 ? "A" : pct <= 0.95 ? "B" : "C";
-      return { ...r, tier };
-    });
-    const tc = { A: 0, B: 0, C: 0 };
-    for (const r of classified) tc[r.tier]++;
-    setAbcData({
-      donut: [
-        { name: "A — Critical (top 80%)", value: tc.A, color: GREEN },
-        { name: "B — Important (next 15%)", value: tc.B, color: BLUE },
-        { name: "C — Low (bottom 5%)", value: tc.C, color: SLATE },
-      ],
-      rows: classified,
-    });
-    setAbcLoading(false);
+    try {
+      const params = new URLSearchParams();
+      if (abcSeries.length === 1) params.set("series", abcSeries[0]);
+      else if (abcSeries.length > 1) params.set("series", abcSeries.join(","));
+      const data = await api.get("/analytics/abc?" + params.toString());
+      setAbcData(data);
+    } finally {
+      setAbcLoading(false);
+    }
   }
 
   async function loadVelocity() {
     setVelLoading(true);
-    const client = getSupabaseClient(); if (!client) { setVelLoading(false); return; }
-    let q = client.from("analytics_by_part").select("part_number,part_name,total_qty,last_used").order("last_used", { ascending: false, nullsFirst: false }).limit(2000);
-    if (velSeries.length === 1) q = q.ilike("part_name", `%${velSeries[0]}%`);
-    else if (velSeries.length > 1) q = q.or(velSeries.map((s) => `part_name.ilike.%${s}%`).join(","));
-    const { data } = await q;
-    const now = Date.now();
-    const rows = (data ?? []).map((r: any) => {
-      const daysSince = r.last_used ? Math.floor((now - new Date(r.last_used).getTime()) / 86400000) : null;
-      const category: "fast" | "slow" | "dead" = daysSince === null ? "dead" : daysSince <= 30 ? "fast" : daysSince <= 90 ? "slow" : "dead";
-      return { part_number: r.part_number, part_name: r.part_name, total_qty: r.total_qty, days_since_last: daysSince, category };
-    });
-    const vc = { fast: 0, slow: 0, dead: 0 };
-    for (const r of rows) vc[r.category]++;
-    setVelData({
-      donut: [
-        { name: "Fast — used ≤30 days ago", value: vc.fast, color: GREEN },
-        { name: "Slow — used 31–90 days ago", value: vc.slow, color: AMBER },
-        { name: "Dead — 90+ days or never", value: vc.dead, color: SLATE },
-      ],
-      rows,
-    });
-    setVelLoading(false);
+    try {
+      const params = new URLSearchParams();
+      if (velSeries.length === 1) params.set("series", velSeries[0]);
+      else if (velSeries.length > 1) params.set("series", velSeries.join(","));
+      const data = await api.get("/analytics/velocity?" + params.toString());
+      setVelData(data);
+    } finally {
+      setVelLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -946,8 +879,7 @@ export function AnalyticsPage() {
   async function deleteUpload(id: string) {
     if (!confirm("Delete this upload and all its data? This cannot be undone.")) return;
     setDeletingUploadId(id);
-    const client = getSupabaseClient(); if (!client) { setDeletingUploadId(null); return; }
-    await client.from("analytics_uploads").delete().eq("id", id);
+    await api.delete(`/analytics/uploads/${id}`);
     await queryClient.invalidateQueries({ queryKey: ["analytics", "uploads"] });
     setDeletingUploadId(null);
     setDemandData(null);
@@ -956,77 +888,26 @@ export function AnalyticsPage() {
   async function confirmImport(mapping: ColumnMapping) {
     if (!actorId || !mappingState) return;
     setImporting(true);
-    const client = getSupabaseClient(); if (!client) { setImporting(false); return; }
     const text = await mappingState.file.text();
     const rows = parseCSV(text);
-    const NONE = "__none__";
-
-    // Build ship_to_code → site_code lookup so we store site_code, not raw ship-to numbers
-    const { data: siteRows } = await client.from("sites").select("site_code, site_name, ship_to_code");
-    const shipToSiteMap = new Map<string, string>();
-    for (const s of (siteRows ?? []) as { site_code: string; site_name: string; ship_to_code: string | null }[]) {
-      // Exact site_code match
-      shipToSiteMap.set(s.site_code.toUpperCase(), s.site_code);
-      // ship_to numeric code
-      if (s.ship_to_code) shipToSiteMap.set(s.ship_to_code.replace(/^0+/, "") || "0", s.site_code);
-      // Full site_name match (e.g. "MOBILECARE - THE PODIUM")
-      shipToSiteMap.set(s.site_name.toUpperCase().trim(), s.site_code);
-      // Partial: last segment after " - " (e.g. "THE PODIUM")
-      const parts = s.site_name.split(/\s*-\s*/);
-      if (parts.length > 1) shipToSiteMap.set(parts[parts.length - 1].toUpperCase().trim(), s.site_code);
+    try {
+      const result = await api.post("/analytics/uploads", {
+        source_type: sourceType,
+        file_name: mappingState.file.name,
+        uploaded_by: actorId,
+        mapping: {
+          part_number: mapping.part_number,
+          qty: mapping.qty,
+          site_code: mapping.site_code,
+          used_at: mapping.used_at,
+          description: mapping.description,
+        },
+        rows,
+      });
+      setImportResult({ added: result.added ?? 0, skipped: result.skipped ?? 0, errors: result.errors ?? [] });
+    } catch (e: any) {
+      setImportResult({ added: 0, skipped: 0, errors: [e?.message ?? "Import failed."] });
     }
-
-    const descLookup = new Map<string, string>();
-    if (mapping.description !== NONE) {
-      const descs = [...new Set(rows.map((r) => (r[mapping.description] ?? "").trim()).filter(Boolean))];
-      const chunks = Array.from({ length: Math.ceil(descs.length / 100) }, (_, i) => descs.slice(i * 100, i * 100 + 100));
-      const results = await Promise.all(chunks.map((chunk) => client.from("parts").select("part_number,part_name").in("part_name", chunk)));
-      for (const { data: parts } of results)
-        for (const p of (parts ?? []) as { part_number: string; part_name: string }[]) descLookup.set(p.part_name.toLowerCase(), p.part_number);
-    }
-    const { data: upload, error: ue } = await client.from("analytics_uploads").insert({ source_type: sourceType, file_name: mappingState.file.name, file_path: "", uploaded_by: actorId, row_count: rows.length, status: "processing" }).select("id").single();
-    if (ue || !upload) { setImportResult({ added: 0, skipped: 0, errors: [ue?.message ?? "Upload failed."] }); setImporting(false); setMappingState(null); return; }
-
-    const normalized = applyMapping(rows, mapping, upload.id, sourceType, descLookup)
-      .map((r) => ({
-        ...r,
-        // Resolve location name / ship_to number → site_code
-        // Try: exact full string → last segment after " - " → numeric strip → raw
-        site_code: r.site_code ? (() => {
-          const raw = r.site_code.trim();
-          const upper = raw.toUpperCase();
-          if (shipToSiteMap.has(upper)) return shipToSiteMap.get(upper)!;
-          const lastSeg = upper.split(/\s*-\s*/).pop()?.trim() ?? "";
-          if (lastSeg && shipToSiteMap.has(lastSeg)) return shipToSiteMap.get(lastSeg)!;
-          const stripped = raw.replace(/^0+/, "") || "0";
-          return shipToSiteMap.get(stripped) ?? shipToSiteMap.get(raw) ?? raw;
-        })() : null,
-      }));
-    const errors: string[] = []; let added = 0;
-    // Insert all chunks in parallel (max 5 concurrent to avoid overwhelming the DB)
-    const chunks = Array.from({ length: Math.ceil(normalized.length / 500) }, (_, i) => normalized.slice(i * 500, i * 500 + 500));
-    const CONCURRENCY = 5;
-    for (let i = 0; i < chunks.length; i += CONCURRENCY) {
-      const batch = chunks.slice(i, i + CONCURRENCY);
-      const results = await Promise.all(batch.map((chunk) => client.from("analytics_rows").insert(chunk)));
-      for (const { error } of results) {
-        if (error) errors.push(friendlyError(error));
-        else added += 500;
-      }
-      if (errors.length) break;
-    }
-    added = Math.min(added, normalized.length);
-    await client.from("analytics_uploads").update({ status: errors.length ? "error" : "done", row_count: added, error_message: errors[0] ?? null }).eq("id", upload.id);
-    setImportResult({ added, skipped: rows.length - normalized.length, errors });
-
-    // Delete all previous uploads (cascade deletes their analytics_rows)
-    // Only keep the one we just created
-    if (!errors.length) {
-      await client.from("analytics_uploads").delete().neq("id", upload.id);
-      // Refresh analytics_summary via RPC
-      await client.rpc("refresh_analytics_summary");
-    }
-
     setImporting(false); setMappingState(null);
     void queryClient.invalidateQueries({ queryKey: ["analytics"] });
     setDemandData(null);
@@ -1045,7 +926,7 @@ export function AnalyticsPage() {
   return (
     <AppLayout>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-      <main style={{ maxWidth: 1080, margin: "0 auto", padding: "28px 24px" }}>
+      <main style={{ maxWidth: 1120, margin: "0 auto", padding: "28px 20px 40px" }}>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 24 }}>
           <BarChart3 size={18} color={BLUE} />
@@ -1067,7 +948,7 @@ export function AnalyticsPage() {
           <div style={{ display: "grid", gap: 20 }}>
             {dcError && <div style={{ background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "12px 16px", color: "var(--muted)", fontSize: 13 }}>Error: {dcError}</div>}
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>
               {dcLoading
                 ? [1,2,3,4].map((i) => <div key={i} style={{ background: "var(--bg-surface)", border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", height: 100 }} />)
                 : dcData ? [
@@ -1080,7 +961,7 @@ export function AnalyticsPage() {
             </div>
 
             {/* Top parts + Status side by side — works with any amount of data */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20, alignItems: "stretch" }}>
               <Panel title="Most Transferred Parts" subtitle="Parts with highest outbound volume" action={<RefreshBtn onClick={() => void dcQuery.refetch()} loading={dcLoading} />}>
                 {dcLoading ? <Spinner /> : !dcData?.topParts.length ? <Empty msg="No transfers yet." /> : (
                   <RankedBar data={dcData.topParts.map((p) => ({ name: p.part_number, value: p.qty, label: p.part_name ?? p.part_number }))} />
@@ -1103,7 +984,7 @@ export function AnalyticsPage() {
             {/* Monthly trend — only shown when 2+ months of data exist */}
             {dcData && dcData.monthly.length >= 2 && (
               <Panel title="Stock-In vs Dispatched — Monthly Trend" subtitle="Serials received at DC vs units dispatched over time">
-                <AreaChart data={dcData.monthly} keys={[{ key: "stockIn", label: "Stocked In", color: BLUE }, { key: "stockOut", label: "Dispatched", color: SLATE }]} height={220} />
+                <AreaChart data={dcData.monthly} keys={[{ key: "stockIn", label: "Stocked In", color: BLUE }, { key: "stockOut", label: "Dispatched", color: SLATE }]} height={200} />
               </Panel>
             )}
           </div>
@@ -1111,7 +992,7 @@ export function AnalyticsPage() {
 
         {/* ── Upload ───────────────────────────────────────────────────────── */}
         {activeTab === "upload" && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20, alignItems: "start" }}>
             <Panel title="Upload repair data" subtitle="Fixably or GSX export CSV — columns auto-detected">
               <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
                 {(["fixably", "gsx"] as const).map((t) => (
@@ -1181,7 +1062,7 @@ export function AnalyticsPage() {
             </div>
 
             {demandData && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>
                 <KpiCard label="Total Parts Used" value={demandData.kpi.totalRepairs.toLocaleString()} sub="across all uploaded data" />
                 <KpiCard label="Unique Parts" value={demandData.kpi.uniqueParts.toLocaleString()} sub="distinct part numbers" />
                 <KpiCard label="Top Site" value={demandData.kpi.topSite ?? "—"} sub="highest repair volume" />
@@ -1190,11 +1071,11 @@ export function AnalyticsPage() {
 
             <Panel title="Monthly Repair Volume" subtitle="Parts consumed per month">
               {demandLoading ? <Spinner /> : !demandData ? <Empty msg="Select filters and click Run Analysis." /> : !demandData.monthly.length ? <Empty msg="No data for selected filters." /> : (
-                <AreaChart data={demandData.monthly.map((d) => ({ month: d.month, qty: d.qty }))} keys={[{ key: "qty", label: "Parts used", color: BLUE }]} height={220} />
+                <AreaChart data={demandData.monthly.map((d) => ({ month: d.month, qty: d.qty }))} keys={[{ key: "qty", label: "Parts used", color: BLUE }]} height={200} />
               )}
             </Panel>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20, alignItems: "stretch" }}>
               <Panel title="Top 10 Parts by Demand" subtitle="Highest consumption volume">
                 {demandLoading ? <Spinner /> : !demandData?.topParts.length ? <Empty /> : (
                   <RankedBar data={demandData.topParts} />
@@ -1221,13 +1102,13 @@ export function AnalyticsPage() {
                 <div style={{ marginLeft: "auto" }}><RefreshBtn onClick={() => void loadABC()} loading={abcLoading} /></div>
               </div>
             )}
-            <div style={{ display: "grid", gridTemplateColumns: "380px 1fr", gap: 20 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20, alignItems: "stretch" }}>
               <Panel title="ABC Distribution" subtitle="Part count by tier — based on repair demand" action={<RefreshBtn onClick={() => void loadABC()} loading={abcLoading} />}>
                 {abcLoading ? <Spinner /> : !abcData ? <Empty /> : <DonutChart data={abcData.donut} centerLabel="parts" />}
               </Panel>
               {abcData && (
                 <Panel title="Tier Summary" subtitle="A = top 80% of repair volume · B = next 15% · C = bottom 5%">
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
                     {(["A","B","C"] as const).map((tier) => {
                       const count = abcData.rows.filter((r) => r.tier === tier).length;
                       const vol   = abcData.rows.filter((r) => r.tier === tier).reduce((s, r) => s + r.total_qty, 0);
@@ -1289,13 +1170,13 @@ export function AnalyticsPage() {
                 <div style={{ marginLeft: "auto" }}><RefreshBtn onClick={() => void loadVelocity()} loading={velLoading} /></div>
               </div>
             )}
-            <div style={{ display: "grid", gridTemplateColumns: "380px 1fr", gap: 20 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20, alignItems: "stretch" }}>
               <Panel title="Velocity Breakdown" subtitle="Parts classified by recency of last repair use" action={<RefreshBtn onClick={() => void loadVelocity()} loading={velLoading} />}>
                 {velLoading ? <Spinner /> : !velData ? <Empty /> : <DonutChart data={velData.donut} centerLabel="parts" />}
               </Panel>
               {velData && (
                 <Panel title="Movement Summary" subtitle="Fast ≤30d · Slow 31–90d · Dead 90d+">
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
                     {velData.donut.map((d) => {
                       const bg = d.color === GREEN ? "var(--bg-surface-elevated)" : d.color === AMBER ? "var(--bg-surface-elevated)" : FAINT;
                       return (
@@ -1353,9 +1234,3 @@ export function AnalyticsPage() {
     </AppLayout>
   );
 }
-
-
-
-
-
-

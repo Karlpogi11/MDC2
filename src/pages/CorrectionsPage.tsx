@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, type FormEvent } from "react";
 import { useTableResize } from "@/components/ResizableColumns";
 import { DangerAction } from "@/components/DangerAction";
 import { ClipboardCheck, Search, AlertTriangle, Check, Clock, ArrowRight } from "lucide-react";
-import { getSupabaseClient } from "@/lib/supabase";
+import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { AppLayout } from "@/components/AppLayout";
 
@@ -99,17 +99,12 @@ function CorrectionModal({ serial, onClose, onDone, actorId }: {
     setChecking(true); setConflict(null); setConflictChecked(false);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
-      const client = getSupabaseClient(); if (!client) { setChecking(false); return; }
-      const { data } = await client.from("serial_numbers")
-        .select("status, part:parts(part_number,part_name), transfer_items(transfer:transfers(transfer_no))")
-        .eq("serial_number", trimmed).maybeSingle();
-      if (data) {
-        const d = data as any;
-        const part = Array.isArray(d.part) ? d.part[0] : d.part;
-        const ti = (d.transfer_items ?? [])[0];
-        const tr = ti ? (Array.isArray(ti.transfer) ? ti.transfer[0] : ti.transfer) : null;
-        setConflict({ status: d.status, part_number: part?.part_number ?? null, part_name: part?.part_name ?? null, transfer_no: tr?.transfer_no ?? null });
-      }
+      try {
+        const data = await api.get(`/serials/${encodeURIComponent(trimmed)}`);
+        if (data) {
+          setConflict({ status: data.status, part_number: data.part_number ?? null, part_name: data.part_name ?? null, transfer_no: data.transfer_no ?? null });
+        }
+      } catch {}
       setConflictChecked(true); setChecking(false);
     }, 500);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
@@ -121,12 +116,8 @@ function CorrectionModal({ serial, onClose, onDone, actorId }: {
     setPartSearching(true);
     if (partDebounceRef.current) clearTimeout(partDebounceRef.current);
     partDebounceRef.current = setTimeout(async () => {
-      const client = getSupabaseClient(); if (!client) { setPartSearching(false); return; }
       const q = partQuery.trim();
-      const { data } = await client.from("parts")
-        .select("id, part_number, part_name")
-        .or(`part_number.ilike.%${q}%,part_name.ilike.%${q}%`)
-        .limit(8);
+      const data = await api.get(`/parts/search?q=${encodeURIComponent(q)}`);
       setPartResults((data ?? []) as PartResult[]);
       setPartSearching(false);
     }, 350);
@@ -142,24 +133,25 @@ function CorrectionModal({ serial, onClose, onDone, actorId }: {
     e.preventDefault();
     if (!canSubmit) return;
     setSubmitting(true); setError(null);
-    const client = getSupabaseClient(); if (!client) { setSubmitting(false); return; }
 
-    if (mode === "serial") {
-      const { error: err } = await client.from("workflow_requests").insert({
-        type: "serial_correction", entity_type: "serial_numbers", entity_id: serial.id,
-        requested_by: actorId,
-        payload: { old_serial_id: serial.id, old_serial_number: serial.serial_number, new_serial_number: trimmed, reason: reason.trim(), transfer_id: serial.transfer?.id ?? null },
-      });
-      if (err) { setError(friendlyError(err)); setSubmitting(false); return; }
-      onDone(`Serial correction submitted: ${serial.serial_number} → ${trimmed}`);
-    } else {
-      const { error: err } = await client.from("workflow_requests").insert({
-        type: "part_reassignment", entity_type: "serial_numbers", entity_id: serial.id,
-        requested_by: actorId,
-        payload: { serial_id: serial.id, serial_number: serial.serial_number, new_part_id: newPart!.id, new_part_number: newPart!.part_number, new_part_name: newPart!.part_name, reason: reason.trim() },
-      });
-      if (err) { setError(friendlyError(err)); setSubmitting(false); return; }
-      onDone(`Part reassignment submitted: ${serial.serial_number} → ${newPart!.part_number}`);
+    try {
+      if (mode === "serial") {
+        await api.post("/corrections/workflow-requests", {
+          type: "serial_correction", entity_type: "serial_numbers", entity_id: serial.id,
+          requested_by: actorId,
+          payload: { old_serial_id: serial.id, old_serial_number: serial.serial_number, new_serial_number: trimmed, reason: reason.trim(), transfer_id: serial.transfer?.id ?? null },
+        });
+        onDone(`Serial correction submitted: ${serial.serial_number} → ${trimmed}`);
+      } else {
+        await api.post("/corrections/workflow-requests", {
+          type: "part_reassignment", entity_type: "serial_numbers", entity_id: serial.id,
+          requested_by: actorId,
+          payload: { serial_id: serial.id, serial_number: serial.serial_number, new_part_id: newPart!.id, new_part_number: newPart!.part_number, new_part_name: newPart!.part_name, reason: reason.trim() },
+        });
+        onDone(`Part reassignment submitted: ${serial.serial_number} → ${newPart!.part_number}`);
+      }
+    } catch (e: any) {
+      setError(friendlyError(e));
     }
   }
 
@@ -293,7 +285,7 @@ function CorrectionModal({ serial, onClose, onDone, actorId }: {
 
 export function CorrectionsPage() {
   const { state: authState } = useAuth();
-  const actorId = authState.status === "authenticated" ? authState.user.id : null;
+  const actorId = authState.status === "authenticated" ? authState.profile.id : null;
   const canApprove = authState.status === "authenticated" && ["system_admin", "dc_admin"].includes(authState.profile.role);
 
   const [query, setQuery]       = useState("");
@@ -310,90 +302,48 @@ export function CorrectionsPage() {
   const [historyLoading, setHistoryLoading] = useState(true);
 
   async function loadPending() {
-    const client = getSupabaseClient(); if (!client) return;
-    const { data } = await client.from("workflow_requests")
-      .select("id,type,payload,requested_at,requester:profiles!requested_by(full_name,username)")
-      .in("type", ["serial_correction", "part_reassignment"]).eq("status", "pending")
-      .order("requested_at", { ascending: false });
-    setPending((data ?? []).map((r: any) => ({ ...r, requester: Array.isArray(r.requester) ? r.requester[0] : r.requester })));
+    const data = await api.get("/corrections/workflow-requests/pending");
+    setPending(data ?? []);
   }
 
   async function loadHistory() {
-    const client = getSupabaseClient(); if (!client) return;
-    const { data } = await client.from("serial_corrections")
-      .select("id,old_serial_number,new_serial_number,reason,corrected_at,corrected_by_profile:profiles!corrected_by(full_name,username),transfer:transfers(transfer_no)")
-      .order("corrected_at", { ascending: false }).limit(50);
-    setHistory((data ?? []).map((r: any) => ({
-      ...r,
-      corrected_by_profile: Array.isArray(r.corrected_by_profile) ? r.corrected_by_profile[0] ?? null : r.corrected_by_profile,
-      transfer: Array.isArray(r.transfer) ? r.transfer[0] ?? null : r.transfer,
-    })));
+    const data = await api.get("/corrections/serial-corrections");
+    setHistory(data ?? []);
     setHistoryLoading(false);
   }
 
   useEffect(() => { void loadHistory(); void loadPending(); }, []);
-
-  useEffect(() => {
-    const client = getSupabaseClient(); if (!client) return;
-    const ch = client.channel("corrections-rt")
-      .on("postgres_changes", { event: "*", schema: "public", table: "workflow_requests" }, () => void loadPending())
-      .subscribe();
-    return () => { void client.removeChannel(ch); };
-  }, []);
 
   async function handleSearch(e?: { preventDefault: () => void }, overrideQuery?: string) {
     e?.preventDefault();
     const q = (overrideQuery ?? query).trim();
     if (!q) return;
     setSearching(true); setResult(null); setNotFound(false); setSuccessMsg(null);
-    const client = getSupabaseClient(); if (!client) { setSearching(false); return; }
-    const { data } = await client.from("serial_numbers")
-      .select("id,serial_number,status,part:parts(part_number,part_name),transfer_items(transfer:transfers(transfer_no,id))")
-      .eq("serial_number", q).maybeSingle();
-    if (!data) { setNotFound(true); setSearching(false); return; }
-    const d = data as any;
-    const ti = (d.transfer_items ?? [])[0];
-    const transfer = ti ? (Array.isArray(ti.transfer) ? ti.transfer[0] : ti.transfer) : null;
-    setResult({ id: d.id, serial_number: d.serial_number, status: d.status, part: Array.isArray(d.part) ? d.part[0] ?? null : d.part, transfer });
+    try {
+      const data = await api.get(`/serials/${encodeURIComponent(q)}`);
+      if (!data) { setNotFound(true); setSearching(false); return; }
+      setResult({ id: data.id, serial_number: data.serial_number, status: data.status, part: data.part ?? null, transfer: data.transfer ?? null });
+    } catch {
+      setNotFound(true);
+    }
     setSearching(false);
   }
 
   async function handleApprove(req: any) {
     if (!actorId) return;
     setApprovingId(req.id); setApproveError(null);
-    const client = getSupabaseClient(); if (!client) { setApprovingId(null); return; }
-    const p = req.payload;
-    let error: any = null;
-    if (req.type === "part_reassignment") {
-      ({ error } = await client.rpc("apply_part_reassignment", {
-        p_serial_id: p.serial_id, p_new_part_id: p.new_part_id,
-        p_reason: p.reason, p_actor_id: actorId,
-      }));
-    } else {
-      ({ error } = await client.rpc("apply_serial_correction", {
-        p_old_serial_id: p.old_serial_id, p_new_serial_number: p.new_serial_number,
-        p_reason: p.reason, p_actor_id: actorId, p_transfer_id: p.transfer_id ?? null,
-      }));
-    }
-    if (error) {
-      setApproveError(`RPC error: ${friendlyError(error)}`);
-    } else {
-      const { error: updateErr } = await client.from("workflow_requests")
-        .update({ status: "approved", reviewed_by: actorId, reviewed_at: new Date().toISOString() })
-        .eq("id", req.id);
-      if (updateErr) {
-        setApproveError(`Update error: ${updateErr.message}`);
-      } else {
-        await loadPending(); void loadHistory();
-      }
+    try {
+      await api.put(`/corrections/workflow-requests/${req.id}/approve`, { actorId });
+      await loadPending(); void loadHistory();
+    } catch (e: any) {
+      setApproveError(`Approval error: ${friendlyError(e)}`);
     }
     setApprovingId(null);
   }
 
   async function handleReject(id: string) {
     if (!actorId) return;
-    const client = getSupabaseClient(); if (!client) return;
-    await client.from("workflow_requests").update({ status: "rejected", reviewed_by: actorId, reviewed_at: new Date().toISOString() }).eq("id", id);
+    await api.put(`/corrections/workflow-requests/${id}/reject`, { actorId });
     await loadPending();
   }
 

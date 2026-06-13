@@ -1,21 +1,27 @@
 import { friendlyError } from "@/lib/friendlyError";
 import { useTableResize } from "@/components/ResizableColumns";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileText, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
-import { getSupabaseClient } from "@/lib/supabase";
+import { FileText, ArrowUp, ArrowDown, ArrowUpDown, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
+import { api } from "@/lib/api";
 import { AppLayout } from "@/components/AppLayout";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  fetchTransfers,
-  NAVIGATION_CACHE_GC_TIME,
-  NAVIGATION_CACHE_STALE_TIME,
-  transfersQueryKey,
-  type Transfer,
-  type TransferStatus,
-} from "@/services/navigationCache";
 
-function getAge(transfer: Transfer): string | null {
+type TransferStatus = "draft" | "packed" | "in_transit" | "received" | "cancelled";
+
+type TransferRow = {
+  id: string;
+  transfer_no: string;
+  status: TransferStatus;
+  created_at: string;
+  packed_at: string | null;
+  destination_site: { site_name: string; site_code: string } | null;
+  requested_by_profile: { full_name: string | null; username: string | null } | null;
+  item_count: number;
+};
+
+const PAGE_SIZE = 30;
+
+function getAge(transfer: TransferRow): string | null {
   if (transfer.status === "received" || transfer.status === "cancelled") return null;
   const from = transfer.packed_at ?? transfer.created_at;
   const ms = Date.now() - new Date(from).getTime();
@@ -39,13 +45,32 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "2-digit" });
 }
 
+function formatRow(row: any): TransferRow {
+  return {
+    id: row.id,
+    transfer_no: row.transfer_no,
+    status: row.status,
+    created_at: row.created_at,
+    packed_at: row.packed_at,
+    destination_site: Array.isArray(row.destination_site) ? row.destination_site[0] ?? null : row.destination_site,
+    requested_by_profile: Array.isArray(row.requested_by_profile) ? row.requested_by_profile[0] ?? null : row.requested_by_profile,
+    item_count: Array.isArray(row.transfer_items) ? row.transfer_items.length : 0,
+  };
+}
+
 export function TransfersPage() {
   const navigate = useNavigate();
   const tableRef = useTableResize();
-  const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<TransferStatus | "all">("all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<{ key: "transfer_no" | "destination" | "items" | "date"; dir: "asc" | "desc" }>({ key: "date", dir: "desc" });
+  // Pagination state
+  const [transfers, setTransfers] = useState<TransferRow[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [page, setPage] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const pageCount = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   function toggleSort(key: typeof sort.key) {
     setSort(s => s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" });
@@ -55,82 +80,69 @@ export function TransfersPage() {
     return sort.dir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />;
   }
 
-  const { data: transfers = [], isLoading: loading, error } = useQuery({
-    queryKey: transfersQueryKey,
-    queryFn: fetchTransfers,
-    staleTime: NAVIGATION_CACHE_STALE_TIME,
-    gcTime: NAVIGATION_CACHE_GC_TIME,
-    refetchOnWindowFocus: true,
-  });
+  function applySorter(rows: TransferRow[]) {
+    return [...rows].sort((a, b) => {
+      const mul = sort.dir === "asc" ? 1 : -1;
+      if (sort.key === "transfer_no") return mul * a.transfer_no.localeCompare(b.transfer_no);
+      if (sort.key === "destination") return mul * ((a.destination_site?.site_name ?? "").localeCompare(b.destination_site?.site_name ?? ""));
+      if (sort.key === "items") return mul * (a.item_count - b.item_count);
+      return mul * (new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    });
+  }
 
-  // Realtime: invalidate on any transfer insert/update
-  useEffect(() => {
-    const client = getSupabaseClient();
-    if (!client) return;
-    const channel = client
-      .channel("transfers-list")
-      .on("postgres_changes", { event: "*", schema: "public", table: "transfers" }, () => {
-        void queryClient.invalidateQueries({ queryKey: transfersQueryKey });
-      })
-      .subscribe();
-    return () => { void client.removeChannel(channel); };
-  }, [queryClient]);
-
-  // Optimistic status update mutation
-  const updateStatus = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: TransferStatus }) => {
-      const client = getSupabaseClient();
-      if (!client) throw new Error("Not configured");
-      const { error } = await client.rpc("transition_transfer_status", {
-        p_transfer_id: id,
-        p_new_status: status,
-      });
-      if (error) throw new Error(friendlyError(error));
-    },
-    onMutate: async ({ id, status }) => {
-      await queryClient.cancelQueries({ queryKey: transfersQueryKey });
-      const previous = queryClient.getQueryData<Transfer[]>(transfersQueryKey);
-      queryClient.setQueryData<Transfer[]>(transfersQueryKey, (old = []) =>
-        old.map((t) => t.id === id ? { ...t, status } : t)
-      );
-      return { previous };
-    },
-    onError: (_err, _vars, ctx) => {
-      if (ctx?.previous) queryClient.setQueryData(transfersQueryKey, ctx.previous);
-    },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: transfersQueryKey }),
-  });
-
-  const fetchError = error instanceof Error ? friendlyError(error) : null;
-  const filtered = transfers.filter((t) => {
-    if (statusFilter !== "all" && t.status !== statusFilter) return false;
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      return (
-        t.transfer_no.toLowerCase().includes(q) ||
-        (t.destination_site?.site_name ?? "").toLowerCase().includes(q) ||
-        (t.destination_site?.site_code ?? "").toLowerCase().includes(q)
-      );
+  const fetchPage = useCallback(async (p: number, status: string) => {
+    setLoading(true);
+    setFetchError(null);
+    try {
+      const params = new URLSearchParams({ page: String(p), pageSize: String(PAGE_SIZE) });
+      if (status !== "all") params.set("status", status);
+      const data = await api.get(`/transfers?${params.toString()}`);
+      setTransfers(applySorter(((data as any).rows ?? []).map(formatRow)));
+      setTotalCount((data as any).total ?? 0);
+    } catch (err) {
+      setFetchError(err instanceof Error ? friendlyError(err) : "Failed to load transfers.");
     }
-    return true;
+    setLoading(false);
+  }, []);
+
+  // Fetch on mount and when page/status changes
+  useEffect(() => { fetchPage(page, statusFilter); }, [page, statusFilter, fetchPage]);
+
+  // Client-side re-sort when sort column/direction changes
+  useEffect(() => { setTransfers((prev) => applySorter(prev)); }, [sort]);
+
+  // Client-side search filter
+  const filtered = transfers.filter((t) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      t.transfer_no.toLowerCase().includes(q) ||
+      (t.destination_site?.site_name ?? "").toLowerCase().includes(q) ||
+      (t.destination_site?.site_code ?? "").toLowerCase().includes(q)
+    );
   });
 
-  const sorted = [...filtered].sort((a, b) => {
-    const mul = sort.dir === "asc" ? 1 : -1;
-    if (sort.key === "transfer_no") return mul * a.transfer_no.localeCompare(b.transfer_no);
-    if (sort.key === "destination") return mul * ((a.destination_site?.site_name ?? "").localeCompare(b.destination_site?.site_name ?? ""));
-    if (sort.key === "items") return mul * (a.item_count - b.item_count);
-    return mul * (new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-  });
+  // Poll for updates every 15 seconds
+  useEffect(() => {
+    const interval = setInterval(() => fetchPage(page, statusFilter), 15000);
+    return () => clearInterval(interval);
+  }, [page, statusFilter, fetchPage]);
+
+  function goToPage(p: number) { setPage(Math.max(0, Math.min(p, pageCount - 1))); }
+  function handleRefresh() { fetchPage(page, statusFilter); }
 
   return (
     <AppLayout>
       <main style={{ maxWidth: 960, margin: "0 auto", padding: "32px 24px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
           <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text)" }}>
-            Transfers {!loading && <span style={{ fontSize: 14, fontWeight: 400, color: "var(--muted)" }}>({filtered.length})</span>}
+            Transfers {!loading && totalCount > 0 && <span style={{ fontSize: 14, fontWeight: 400, color: "var(--muted)" }}>({totalCount.toLocaleString()})</span>}
           </h1>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button type="button" onClick={handleRefresh}
+              style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "transparent", color: "var(--muted)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 8px", fontSize: 12, cursor: "pointer" }}>
+              <RefreshCw size={12} />
+            </button>
             <button
               type="button"
               onClick={() => navigate("/transfers/templates")}
@@ -155,7 +167,7 @@ export function TransfersPage() {
             <button
               key={s}
               type="button"
-              onClick={() => setStatusFilter(s)}
+              onClick={() => { setStatusFilter(s); setPage(0); }}
               style={{
                 border: "none", borderBottom: `2px solid ${statusFilter === s ? "var(--blue)" : "transparent"}`,
                 borderRadius: 0, padding: "5px 10px", fontSize: 13, fontWeight: statusFilter === s ? 600 : 400,
@@ -178,9 +190,9 @@ export function TransfersPage() {
         </div>
 
         <section className="table-card">
-          <div className="table-scroll">
+          <div className="table-scroll" style={{ maxHeight: "80vh" }}>
           <table ref={tableRef}>
-            <thead>
+            <thead style={{ position: "sticky", top: 0, zIndex: 1, background: "var(--bg-surface)" }}>
               <tr>
                 <th><button className="col-sort" type="button" onClick={() => toggleSort("transfer_no")}><span>Transfer #</span><SortIcon k="transfer_no" /></button></th>
                 <th><button className="col-sort" type="button" onClick={() => toggleSort("destination")}><span>Destination</span><SortIcon k="destination" /></button></th>
@@ -213,25 +225,25 @@ export function TransfersPage() {
                   </td>
                 </tr>
               )}
-              {!loading && sorted.map((t) => {
+              {!loading && filtered.map((t) => {
                 const s = STATUS_STYLE[t.status];
                 return (
                   <tr key={t.id}>
-                    <td style={{ fontWeight: 700, color: "var(--blue)", fontFamily: "monospace" }}>
+                    <td style={{ padding: "10px 12px", fontWeight: 700, color: "var(--blue)", fontFamily: "monospace" }}>
                       {t.transfer_no}
                     </td>
-                    <td>
+                    <td style={{ padding: "10px 12px" }}>
                       {t.destination_site
                         ? <><span style={{ fontWeight: 600 }}>{t.destination_site.site_name}</span> <span style={{ color: "var(--muted)", fontSize: 11 }}>{t.destination_site.site_code}</span></>
                         : <span style={{ color: "var(--muted)" }}>—</span>}
                     </td>
-                    <td className="num">{t.item_count}</td>
-                    <td>
+                    <td className="num" style={{ padding: "10px 12px" }}>{t.item_count}</td>
+                    <td style={{ padding: "10px 12px" }}>
                       <span className="status-badge" style={{ background: s.bg, color: s.color }}>
                         {s.label}
                       </span>
                     </td>
-                    <td>
+                    <td style={{ padding: "10px 12px" }}>
                       {(() => {
                         const age = getAge(t);
                         if (age === null) return <span style={{ color: "var(--muted)" }}>—</span>;
@@ -244,11 +256,11 @@ export function TransfersPage() {
                         );
                       })()}
                     </td>
-                    <td style={{ color: "var(--muted)" }}>
+                    <td style={{ padding: "10px 12px", color: "var(--muted)" }}>
                       {t.requested_by_profile?.full_name ?? t.requested_by_profile?.username ?? "—"}
                     </td>
-                    <td style={{ color: "var(--muted)" }}>{formatDate(t.created_at)}</td>
-                    <td>
+                    <td style={{ padding: "10px 12px", color: "var(--muted)" }}>{formatDate(t.created_at)}</td>
+                    <td style={{ padding: "10px 12px" }}>
                       <button type="button" onClick={() => navigate(`/transfers/${t.id}`)}
                         style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", padding: "5px 12px", fontSize: 12, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
                         View
@@ -261,8 +273,23 @@ export function TransfersPage() {
           </table>
           </div>
         </section>
+
+        {totalCount > PAGE_SIZE && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, padding: "12px 0" }}>
+            <button type="button" disabled={page === 0 || loading} onClick={() => goToPage(page - 1)}
+              style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", fontSize: 12, fontWeight: 600, border: "1px solid var(--line)", borderRadius: "var(--radius)", background: "var(--bg-surface)", color: "var(--text)", cursor: page === 0 || loading ? "not-allowed" : "pointer", opacity: page === 0 ? 0.4 : 1 }}>
+              <ChevronLeft size={14} /> Prev
+            </button>
+            <span style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap" }}>
+              Page {page + 1} of {pageCount.toLocaleString()}
+            </span>
+            <button type="button" disabled={(page + 1) * PAGE_SIZE >= totalCount || loading} onClick={() => goToPage(page + 1)}
+              style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", fontSize: 12, fontWeight: 600, border: "1px solid var(--line)", borderRadius: "var(--radius)", background: "var(--bg-surface)", color: "var(--text)", cursor: (page + 1) * PAGE_SIZE >= totalCount || loading ? "not-allowed" : "pointer", opacity: (page + 1) * PAGE_SIZE >= totalCount ? 0.4 : 1 }}>
+              Next <ChevronRight size={14} />
+            </button>
+          </div>
+        )}
       </main>
     </AppLayout>
   );
 }
-

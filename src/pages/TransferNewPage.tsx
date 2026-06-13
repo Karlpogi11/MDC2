@@ -1,8 +1,8 @@
 import { friendlyError } from "@/lib/friendlyError";
-import { useState, useEffect, type FormEvent } from "react";
+import { useState, useEffect, useRef, type FormEvent } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Plus, X } from "lucide-react";
-import { getSupabaseClient } from "@/lib/supabase";
+import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { AppLayout } from "@/components/AppLayout";
 import { PartNumberInput } from "@/components/PartNumberInput";
@@ -19,14 +19,7 @@ type LineItem = {
 };
 
 async function fetchSites(): Promise<Site[]> {
-  const client = getSupabaseClient();
-  if (!client) return [];
-  const { data } = await client
-    .from("sites")
-    .select("id,site_name,site_code")
-    .eq("is_active", true)
-    .eq("is_dc", false) // destination sites only (not DC itself)
-    .order("site_name");
+  const data = await api.get("/sites?is_dc=false");
   return (data ?? []) as Site[];
 }
 
@@ -44,7 +37,7 @@ export function TransferNewPage() {
   const location = useLocation();
   const prefill = (location.state as { prefill?: { part_number: string; part_name: string }[] } | null)?.prefill;
   const { state: authState } = useAuth();
-  const actorId = authState.status === "authenticated" ? authState.user.id : null;
+  const actorId = authState.status === "authenticated" ? authState.profile.id : null;
 
   const { data: allSites = [] } = useSites();
   const sites = allSites.filter((s) => !s.is_dc);
@@ -54,6 +47,48 @@ export function TransferNewPage() {
       ? prefill.map((p) => ({ serial_number: "", part_number: p.part_number, part_name: p.part_name, qty: 1, resolving: false }))
       : [{ serial_number: "", part_number: "", part_name: "", qty: 1, resolving: false }]
   );
+  const [invoicePrefix, setInvoicePrefix] = useState("");
+  const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const [invoiceSuffix, setInvoiceSuffix] = useState("");
+  const invoiceRef = invoicePrefix + datePart + "-" + invoiceSuffix;
+  useEffect(() => {
+    api.get("/sites/dc").then((data) => {
+      if (data?.invoice_prefix) setInvoicePrefix(data.invoice_prefix);
+    });
+  }, []);
+  const invoiceSuffixRef = useRef<HTMLInputElement>(null);
+  const serialRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const serialTimers = useRef<(ReturnType<typeof setTimeout> | null)[]>([]);
+  useEffect(() => {
+    serialRefs.current = serialRefs.current.slice(0, lines.length);
+    serialTimers.current = serialTimers.current.slice(0, lines.length);
+  }, [lines.length]);
+  useEffect(() => {
+    if (destinationId) invoiceSuffixRef.current?.focus();
+  }, [destinationId]);
+
+  function focusSerial(i: number) {
+    setTimeout(() => serialRefs.current[i]?.focus(), 0);
+  }
+
+  function onSerialChange(i: number, value: string) {
+    updateLine(i, "serial_number", value);
+    if (serialTimers.current[i]) clearTimeout(serialTimers.current[i]);
+    if (!value.trim()) { updateLine(i, "part_number", ""); updateLine(i, "part_name", ""); updateLine(i, "error", ""); return; }
+    serialTimers.current[i] = setTimeout(() => void resolveSerial(i, value), 350);
+  }
+  const [invoiceDupError, setInvoiceDupError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!invoiceSuffix.trim() || !invoicePrefix) { setInvoiceDupError(null); return; }
+    const t = setTimeout(async () => {
+      const monthStart = `${invoicePrefix}${datePart.slice(0, 6)}`;
+      const monthEnd = `${invoicePrefix}${String(Number(datePart.slice(0, 6)) + 1).padStart(6, "0")}`;
+      const dups = await api.get(`/transfers?invoice_ref_gte=${monthStart}&invoice_ref_lt=${monthEnd}`);
+      const found = (dups ?? []).some((r: any) => r.invoice_ref?.endsWith(`-${invoiceSuffix.trim()}`));
+      setInvoiceDupError(found ? `Sequence "${invoiceSuffix.trim()}" already used this month.` : null);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [invoiceSuffix, invoicePrefix, datePart]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -61,33 +96,30 @@ export function TransferNewPage() {
   async function resolveSerial(i: number, sn: string) {
     if (!sn.trim()) return;
     setLines((prev) => prev.map((l, idx) => idx === i ? { ...l, resolving: true, error: undefined } : l));
-    const client = getSupabaseClient();
-    if (!client) return;
-    const { data } = await client
-      .from("serial_numbers")
-      .select("status, parts(part_number, part_name)")
-      .eq("serial_number", sn.trim())
-      .maybeSingle();
-
-    if (!data) {
-      setLines((prev) => prev.map((l, idx) => idx === i ? { ...l, resolving: false, error: "Serial not found in inventory." } : l));
-      return;
+    try {
+      const data = await api.get(`/serials/${encodeURIComponent(sn.trim())}`);
+      if (!data) {
+        setLines((prev) => prev.map((l, idx) => idx === i ? { ...l, resolving: false, error: "Serial not found in inventory." } : l));
+        return;
+      }
+      const part = Array.isArray(data.parts) ? data.parts[0] : data.parts as { part_number: string; part_name: string } | null;
+      const statusLabel = (s: string) =>
+        s === "in_transit" ? "Reserved for another transfer" :
+        s === "transferred" ? "Already transferred out" :
+        s === "consumed" ? "Consumed" :
+        s === "void" ? "Voided" :
+        s.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
+      const statusErr = data.status !== "in_stock" ? `Not available — ${statusLabel(data.status)}` : undefined;
+      setLines((prev) => prev.map((l, idx) => idx === i ? {
+        ...l,
+        resolving: false,
+        part_number: part?.part_number ?? l.part_number,
+        part_name: part?.part_name ?? "",
+        error: statusErr,
+      } : l));
+    } catch {
+      setLines((prev) => prev.map((l, idx) => idx === i ? { ...l, resolving: false, error: "Serial not found." } : l));
     }
-    const part = Array.isArray(data.parts) ? data.parts[0] : data.parts as { part_number: string; part_name: string } | null;
-    const statusLabel = (s: string) =>
-      s === "in_transit" ? "Reserved for another transfer" :
-      s === "transferred" ? "Already transferred out" :
-      s === "consumed" ? "Consumed" :
-      s === "void" ? "Voided" :
-      s.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
-    const statusErr = data.status !== "in_stock" ? `Not available — ${statusLabel(data.status)}` : undefined;
-    setLines((prev) => prev.map((l, idx) => idx === i ? {
-      ...l,
-      resolving: false,
-      part_number: part?.part_number ?? l.part_number,
-      part_name: part?.part_name ?? "",
-      error: statusErr,
-    } : l));
   }
 
   function addLine() {
@@ -104,11 +136,19 @@ export function TransferNewPage() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!actorId) { setError("Not authenticated."); return; }
-    if (!destinationId) { setError("Select a destination site."); return; }
     const validLines = lines.filter((l) => l.serial_number.trim() || l.part_number.trim());
-    if (validLines.length === 0) { setError("Add at least one item."); return; }
+    if (!actorId || !destinationId || !invoiceSuffix.trim() || validLines.length === 0) return;
+    const unresolved = lines.some(l => l.serial_number.trim() && !l.part_number && !l.error && !l.resolving);
+    if (unresolved) return;
+    const hasError = lines.some(l => l.error);
+    if (hasError) return;
     setError(null);
+    // Check for duplicate suffix in current month
+    const monthStart = `${invoicePrefix}${datePart.slice(0, 6)}`;
+    const monthEnd = `${invoicePrefix}${String(Number(datePart.slice(0, 6)) + 1).padStart(6, "0")}`;
+    const dups = await api.get(`/transfers?invoice_ref_gte=${monthStart}&invoice_ref_lt=${monthEnd}`);
+    const found = (dups ?? []).some((r: any) => r.invoice_ref?.endsWith(`-${invoiceSuffix.trim()}`));
+    if (found) { setError(`Invoice sequence "${invoiceSuffix.trim()}" already used this month.`); return; }
     setShowConfirm(true); // show confirmation instead of submitting directly
   }
 
@@ -116,79 +156,19 @@ export function TransferNewPage() {
     setShowConfirm(false);
     setSubmitting(true);
     const validLines = lines.filter((l) => l.serial_number.trim() || l.part_number.trim());
-    const client = getSupabaseClient();
-    if (!client) { setError("Supabase not configured."); setSubmitting(false); return; }
 
     try {
-      // Get DC site id (is_dc = true)
-      const { data: dcSite } = await client
-        .from("sites")
-        .select("id")
-        .eq("is_dc", true)
-        .single();
-
-      if (!dcSite) throw new Error("DC site not found. Please configure a DC site in the Sites table.");
-
-      // Create transfer header
-      const { data: transfer, error: tErr } = await client
-        .from("transfers")
-        .insert({
-          transfer_no: generateTransferNo(),
-          source_site_id: dcSite.id,
-          destination_site_id: destinationId,
-          status: "draft",
-          requested_by: actorId,
-        })
-        .select("id,transfer_no")
-        .single();
-
-      if (tErr || !transfer) throw new Error(tErr?.message ?? "Failed to create transfer.");
-
-      // Generate invoice_ref using source site (DC) prefix — format: PREFIXYYYYMMDDLNNN
-      const { data: invoiceRef } = await client.rpc("generate_invoice_ref", { p_site_id: dcSite.id });
-      if (invoiceRef) {
-        await client.from("transfers").update({ invoice_ref: invoiceRef }).eq("id", transfer.id);
-      }
-
-      // Resolve serials and parts, insert transfer_items
-      const itemInserts: Record<string, unknown>[] = [];
-      for (const line of validLines) {
-        const sn = line.serial_number.trim();
-        const pn = line.part_number.trim();
-
-        let partId: string | null = null;
-        let serialId: string | null = null;
-
-        if (sn) {
-          const { data: serial } = await client
-            .from("serial_numbers")
-            .select("id,part_id,status")
-            .eq("serial_number", sn)
-            .maybeSingle();
-
-          if (!serial) throw new Error(`Serial "${sn}" not found in inventory.`);
-          if (serial.status !== "in_stock") throw new Error(`Serial "${sn}" is not available — ${serial.status === "in_transit" ? "Reserved for another transfer" : serial.status === "transferred" ? "Already transferred out" : serial.status.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())}.`);
-          serialId = serial.id;
-          partId = serial.part_id;
-        } else if (pn) {
-          const { data: part } = await client
-            .from("parts")
-            .select("id")
-            .eq("part_number", pn)
-            .maybeSingle();
-
-          if (!part) throw new Error(`Part number "${pn}" not found.`);
-          partId = part.id;
-        }
-
-        if (!partId) continue;
-        const item: Record<string, unknown> = { transfer_id: transfer.id, part_id: partId, qty: line.qty };
-        if (serialId) item.serial_id = serialId;
-        itemInserts.push(item);
-      }
-
-      const { error: itemErr } = await client.from("transfer_items").insert(itemInserts);
-      if (itemErr) throw new Error(itemErr.message);
+      await api.post("/transfers", {
+        transfer_no: generateTransferNo(),
+        destination_site_id: destinationId,
+        invoice_ref: invoiceRef.trim(),
+        requested_by: actorId,
+        items: validLines.map((l) => ({
+          serial_number: l.serial_number.trim() || undefined,
+          part_number: l.part_number.trim() || undefined,
+          qty: l.qty,
+        })),
+      });
 
       navigate(`/transfers`);
     } catch (err) {
@@ -196,6 +176,10 @@ export function TransferNewPage() {
       setSubmitting(false);
     }
   }
+
+  const hasItems = lines.some(l => l.serial_number.trim() || l.part_number.trim());
+  const hasLineErrors = lines.some(l => l.error);
+  const btnDisabled = submitting || !destinationId || !invoiceSuffix.trim() || !hasItems || hasLineErrors || !!invoiceDupError;
 
   const inputStyle: React.CSSProperties = {
     border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 8px",
@@ -233,6 +217,27 @@ export function TransferNewPage() {
             </div>
           </div>
 
+          {/* Invoice Reference */}
+          <div style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", marginBottom: 16, overflow: "hidden" }}>
+            <div style={{ padding: "12px 20px", borderBottom: "1px solid var(--line)" }}>
+              <h2 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "var(--text)" }}>Invoice Reference</h2>
+            </div>
+            <div style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: 0 }}>
+              <span style={{ fontSize: 13, fontFamily: "monospace", color: "var(--muted)", padding: "5px 0", whiteSpace: "nowrap" }}>{invoicePrefix}{datePart}-</span>
+              <input
+                ref={invoiceSuffixRef}
+                required
+                type="text"
+                value={invoiceSuffix}
+                onChange={(e) => setInvoiceSuffix(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && invoiceSuffix.trim()) serialRefs.current[0]?.focus(); }}
+                placeholder="001"
+                style={{ border: `1px solid ${invoiceDupError ? "#fca5a5" : "var(--line)"}`, borderRadius: "var(--radius)", padding: "5px 10px", fontSize: 13, color: "var(--text)", background: "var(--bg-surface)", outline: "none", width: 100, fontFamily: "monospace", marginLeft: 0 }}
+              />
+              {invoiceDupError && <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--negative)" }}>{invoiceDupError}</p>}
+            </div>
+          </div>
+
           {/* Line items */}
           <div style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", marginBottom: 16, overflow: "hidden" }}>
             <div style={{ padding: "12px 20px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -253,11 +258,11 @@ export function TransferNewPage() {
                 <div key={i} style={{ marginBottom: 6 }}>
                   <div style={{ display: "grid", gridTemplateColumns: "180px 160px 1fr 80px 32px", gap: 10, alignItems: "center" }}>
                     <input
+                      ref={(el) => { serialRefs.current[i] = el; }}
                       type="text"
                       placeholder="Scan or type serial"
                       value={line.serial_number}
-                      onChange={(e) => updateLine(i, "serial_number", e.target.value)}
-                      onBlur={(e) => void resolveSerial(i, e.target.value)}
+                      onChange={(e) => onSerialChange(i, e.target.value)}
                       style={{ border: `1px solid ${line.error ? "#fca5a5" : "#d1d5db"}`, borderRadius: "var(--radius)", padding: "7px 8px", fontSize: 12, fontFamily: "monospace", outline: "none", width: "100%", boxSizing: "border-box" as const }}
                     />
                     {hasSerial && line.part_number ? (
@@ -265,7 +270,7 @@ export function TransferNewPage() {
                         style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 8px", fontSize: 12, fontFamily: "monospace", background: "var(--bg-surface-elevated)", color: "var(--blue)", width: "100%", boxSizing: "border-box" as const, outline: "none" }} />
                     ) : (
                       <PartNumberInput value={line.part_number}
-                        onChange={(pn, part) => { updateLine(i, "part_number", pn); if (part) updateLine(i, "part_name", part.part_name); }}
+                        onChange={(pn, part) => { updateLine(i, "part_number", pn); if (part) { updateLine(i, "part_name", part.part_name); focusSerial(i); } }}
                         placeholder="Part number" style={{ fontSize: 12 }} />
                     )}
                     <input type="text" readOnly
@@ -309,8 +314,8 @@ export function TransferNewPage() {
               style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 12, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
               Cancel
             </button>
-            <button type="submit" disabled={submitting || lines.some(l => l.error)}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--blue)", opacity: submitting || lines.some(l => l.error) ? 0.4 : 1, color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "5px 14px", fontSize: 12, fontWeight: 600, cursor: submitting || lines.some(l => l.error) ? "not-allowed" : "pointer" }}>
+            <button type="submit" disabled={btnDisabled}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "5px 14px", fontSize: 12, fontWeight: 600, cursor: btnDisabled ? "not-allowed" : "pointer", opacity: 1, pointerEvents: "auto" }}>
               {submitting ? "Creating…" : "Review & Create"}
             </button>
           </div>
@@ -339,6 +344,10 @@ export function TransferNewPage() {
                 Please review before creating. This cannot be undone without cancelling the transfer.
               </p>
               <div style={{ background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: 0, padding: "12px 14px", marginBottom: 16, fontSize: 13 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                  <span style={{ color: "var(--muted)" }}>Invoice ref</span>
+                  <strong style={{ color: "var(--text)", fontFamily: "monospace" }}>{invoiceRef}</strong>
+                </div>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                   <span style={{ color: "var(--muted)" }}>Destination</span>
                   <strong style={{ color: "var(--text)" }}>{dest?.site_name ?? "—"}</strong>

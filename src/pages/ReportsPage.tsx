@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { BarChart3, Download } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { getSupabaseClient } from "@/lib/supabase";
+import { api } from "@/lib/api";
 import { AppLayout } from "@/components/AppLayout";
 import { useTableResize } from "@/components/ResizableColumns";
 import { DatePicker } from "@/components/DatePicker";
@@ -37,30 +37,12 @@ function TransfersBySiteReport() {
   useEffect(() => { void load(); }, [range]);
 
   async function load() {
-    const client = getSupabaseClient();
-    if (!client) { setLoading(false); return; }
     setLoading(true); setError(null);
     try {
       const since = new Date(Date.now() - parseInt(range) * 86400000).toISOString();
-      const { data, error: err } = await client
-        .from("transfers")
-        .select("status, destination_site_id, sites!destination_site_id(site_name, site_code), transfer_items(id)")
-        .in("status", ["received", "in_transit"])
-        .gte("created_at", since);
-      if (err) throw new Error(err.message);
-
-      const map = new Map<string, TransferBySiteRow>();
-      for (const t of (data ?? []) as any[]) {
-        const site = Array.isArray(t.sites) ? t.sites[0] : t.sites;
-        if (!site) continue;
-        const key = site.site_code ?? t.destination_site_id;
-        if (!map.has(key)) map.set(key, { site_name: site.site_name, site_code: site.site_code, count: 0, item_count: 0 });
-        const row = map.get(key)!;
-        row.count++;
-        row.item_count += Array.isArray(t.transfer_items) ? t.transfer_items.length : 0;
-      }
-      setRows(Array.from(map.values()).sort((a, b) => b.count - a.count));
-    } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
+      const data = await api.get(`/reports/transfers-by-site?since=${since}&range=${range}`);
+      setRows((data ?? []) as TransferBySiteRow[]);
+    } catch (e: any) { setError(e?.message ?? "Failed"); }
     finally { setLoading(false); }
   }
 
@@ -117,23 +99,12 @@ function StockInThisWeekReport() {
   useEffect(() => { void load(); }, []);
 
   async function load() {
-    const client = getSupabaseClient();
-    if (!client) { setLoading(false); return; }
     setLoading(true); setError(null);
     try {
       const since = new Date(Date.now() - 7 * 86400000).toISOString();
-      const { data, error: err } = await client
-        .from("stock_in_batches")
-        .select("id, imported_at, total_rows, operator:profiles!imported_by(full_name, username)")
-        .gte("imported_at", since)
-        .order("imported_at", { ascending: false })
-        .limit(100);
-      if (err) throw new Error(err.message);
-      setRows((data ?? []).map((b: any) => {
-        const p = Array.isArray(b.operator) ? b.operator[0] : b.operator;
-        return { id: b.id, batch_date: b.imported_at, operator: p?.full_name ?? p?.username ?? "—", row_count: b.total_rows ?? 0 };
-      }));
-    } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
+      const data = await api.get(`/reports/stock-in-this-week?since=${since}`);
+      setRows((data ?? []) as StockInRow[]);
+    } catch (e: any) { setError(e?.message ?? "Failed"); }
     finally { setLoading(false); }
   }
 
@@ -142,18 +113,8 @@ function StockInThisWeekReport() {
   async function toggleExpand(id: string) {
     if (expandedId === id) { setExpandedId(null); return; }
     setExpandedId(id); setLoadingSerials(true); setSerials([]);
-    const client = getSupabaseClient();
-    if (!client) { setLoadingSerials(false); return; }
-    const { data } = await client
-      .from("serial_numbers")
-      .select("serial_number, parts(part_number)")
-      .eq("stock_in_batch_id", id)
-      .order("serial_number")
-      .limit(500);
-    setSerials((data ?? []).map((r: any) => {
-      const p = Array.isArray(r.parts) ? r.parts[0] : r.parts;
-      return { serial_number: r.serial_number, part_number: p?.part_number ?? "—" };
-    }));
+    const data = await api.get(`/reports/batch-serials/${id}`);
+    setSerials((data ?? []) as { serial_number: string; part_number: string }[]);
     setLoadingSerials(false);
   }
 
@@ -226,29 +187,12 @@ function TopMovedPartsReport() {
   useEffect(() => { void load(); }, [range]);
 
   async function load() {
-    const client = getSupabaseClient();
-    if (!client) { setLoading(false); return; }
     setLoading(true); setError(null);
     try {
       const since = new Date(Date.now() - parseInt(range) * 86400000).toISOString();
-      const { data, error: err } = await client
-        .from("transfer_items")
-        .select("part_id, parts(part_name, part_number), transfers!inner(status, created_at)")
-        .in("transfers.status", ["in_transit", "received"])
-        .gte("transfers.created_at", since)
-        .limit(5000);
-      if (err) throw new Error(err.message);
-
-      const map = new Map<string, TopPartRow>();
-      for (const item of (data ?? []) as any[]) {
-        const part = Array.isArray(item.parts) ? item.parts[0] : item.parts;
-        if (!part) continue;
-        const key = part.part_number;
-        if (!map.has(key)) map.set(key, { part_name: part.part_name, part_number: part.part_number, transferred_qty: 0 });
-        map.get(key)!.transferred_qty++;
-      }
-      setRows(Array.from(map.values()).sort((a, b) => b.transferred_qty - a.transferred_qty).slice(0, 20));
-    } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
+      const data = await api.get(`/reports/top-moved-parts?since=${since}&range=${range}`);
+      setRows((data ?? []) as TopPartRow[]);
+    } catch (e: any) { setError(e?.message ?? "Failed"); }
     finally { setLoading(false); }
   }
 

@@ -1,6 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
-import { getSupabaseClient } from "./supabase";
-import { useAuth } from "./auth";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { api } from "./api";
 
 export type Notification = {
   id: string;
@@ -13,104 +12,31 @@ export type Notification = {
   created_at: string;
 };
 
-const NOTIFICATION_CACHE_TTL = 60_000;
-const notificationsByUser = new Map<string, Notification[]>();
-const notificationsFetchedAt = new Map<string, number>();
-
 export function useNotifications() {
-  const { state } = useAuth();
-  const userId = state.status === "authenticated" ? state.user.id : null;
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
+  const query = useQuery<Notification[]>({
+    queryKey: ["notifications"],
+    queryFn: () => api.get<Notification[]>("/notifications"),
+    refetchInterval: 15000,
+  });
 
-  const unreadCount = notifications.filter((n) => !n.read_at).length;
+  const markReadMutation = useMutation({
+    mutationFn: (id: string) => api.put(`/notifications/${id}/read`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+  });
 
-  const fetchNotifications = useCallback(async () => {
-    const client = getSupabaseClient();
-    if (!client || !userId) return;
-    const { data } = await client
-      .from("notifications")
-      .select("id,type,title,body,entity_type,entity_id,read_at,created_at")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(50);
-    const next = (data ?? []) as Notification[];
-    notificationsByUser.set(userId, next);
-    notificationsFetchedAt.set(userId, Date.now());
-    setNotifications(next);
-    setLoading(false);
-  }, [userId]);
+  const allNotifications = query.data ?? [];
+  const unread = allNotifications.filter((n) => !n.read_at);
 
-  // Initial fetch
-  useEffect(() => {
-    if (!userId) {
-      setNotifications([]);
-      setLoading(false);
-      return;
-    }
-    const cached = notificationsByUser.get(userId);
-    const fetchedAt = notificationsFetchedAt.get(userId) ?? 0;
-    const isFresh = cached && Date.now() - fetchedAt < NOTIFICATION_CACHE_TTL;
-    if (cached) {
-      setNotifications(cached);
-      setLoading(false);
-    } else {
-      setLoading(true);
-    }
-    if (isFresh) return;
-    void fetchNotifications();
-  }, [fetchNotifications, userId]);
-
-  // Realtime subscription
-  useEffect(() => {
-    const client = getSupabaseClient();
-    if (!client || !userId) return;
-
-    const channel = client
-      .channel(`notifications:${userId}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
-        (payload) => {
-          setNotifications((prev) => {
-            const next = [payload.new as Notification, ...prev];
-            notificationsByUser.set(userId, next);
-            return next;
-          });
-        }
-      )
-      .subscribe();
-
-    return () => { void client.removeChannel(channel); };
-  }, [userId]);
-
-  const markAllRead = useCallback(async () => {
-    const client = getSupabaseClient();
-    if (!client || !userId) return;
-    const now = new Date().toISOString();
-    await client
-      .from("notifications")
-      .update({ read_at: now })
-      .eq("user_id", userId)
-      .is("read_at", null);
-    setNotifications((prev) => {
-      const next = prev.map((n) => ({ ...n, read_at: n.read_at ?? now }));
-      notificationsByUser.set(userId, next);
-      return next;
-    });
-  }, [userId]);
-
-  const markRead = useCallback(async (id: string) => {
-    const client = getSupabaseClient();
-    if (!client) return;
-    const now = new Date().toISOString();
-    await client.from("notifications").update({ read_at: now }).eq("id", id);
-    setNotifications((prev) => {
-      const next = prev.map((n) => n.id === id ? { ...n, read_at: now } : n);
-      if (userId) notificationsByUser.set(userId, next);
-      return next;
-    });
-  }, [userId]);
-
-  return { notifications, unreadCount, loading, markAllRead, markRead };
+  return {
+    ...query,
+    notifications: allNotifications,
+    unreadCount: unread.length,
+    markAllRead: async () => {
+      for (const n of unread) {
+        await markReadMutation.mutateAsync(n.id);
+      }
+    },
+    markRead: (id: string) => markReadMutation.mutate(id),
+  };
 }

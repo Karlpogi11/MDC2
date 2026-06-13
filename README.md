@@ -1,3 +1,14 @@
+---
+title: MDC Inventory System
+tags:
+  - readme
+  - overview
+  - project
+aliases:
+  - README
+  - Home
+---
+
 # MDC Inventory System (Standalone)
 
 ## Recommendation (Direct)
@@ -40,10 +51,10 @@ Reason:
 - P1: approval flow for high-risk corrections and transfer reversals
 - P1: rate-limit import and analytics endpoints
 
-See `docs/implementation-blueprint.md` for full architecture and execution plan.
+See [[implementation-blueprint]] for full architecture and execution plan.
 
 ## Live Documentation System
-- `docs/development-live-checklist.md`: single-file live checklist + compact playbook + inline templates
+- [[development-live-checklist]]: single-file live checklist + compact playbook + inline templates
 
 ## Phase 1 Implemented (UI + Data Baseline)
 - React + TypeScript + Vite app shell
@@ -69,3 +80,7 @@ See `docs/implementation-blueprint.md` for full architecture and execution plan.
   - `GMAIL_USER=your-gmail@gmail.com`
   - `GMAIL_APP_PASSWORD=your-16-char-app-password`
 - `jspdf` and `jspdf-autotable` remain frontend dependencies because transfer packing lists are generated in-browser before download/upload. `pdf-lib` is used only by Supabase Edge Functions via URL imports, so it is not part of the frontend package.
+
+---
+
+**Related:** [[implementation-blueprint]], [[development-live-checklist]], [[system-design]], [[prd]], [[pilot-and-deployment-checklist]]

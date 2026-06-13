@@ -4,7 +4,7 @@ import { DangerAction } from "@/components/DangerAction";
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Package, CheckCircle, Truck, Check, X, FileText, ScanLine } from "lucide-react";
-import { getSupabaseClient } from "@/lib/supabase";
+import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { AppLayout } from "@/components/AppLayout";
 import { toCapitalized } from "@/lib/format";
@@ -20,8 +20,7 @@ type TransferDetail = {
   status: TransferStatus;
   created_at: string;
   packed_at: string | null;
-  courier: string | null;
-  awb: string | null;
+  fixably_series: string | null;
   receipt_token: string | null;
   source_site: { site_name: string; invoice_prefix: string | null; address: string | null; is_dc: boolean } | null;
   destination_site: { site_name: string; site_code: string; address: string | null } | null;
@@ -66,7 +65,7 @@ export function TransferDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { state: authState } = useAuth();
-  const actorId = authState.status === "authenticated" ? authState.user.id : null;
+  const actorId = authState.status === "authenticated" ? authState.profile.id : null;
   const role = authState.status === "authenticated" ? authState.profile.role : null;
   const canAdvance = role === "system_admin" || role === "dc_admin" || role === "dc_operator";
 
@@ -81,10 +80,9 @@ export function TransferDetailPage() {
   const { brandName } = useBranding();
   const orgName = brandName ?? window.location.hostname;
 
-  // Tracking modal (shown before Mark as In Transit)
-  const [showTrackingModal, setShowTrackingModal] = useState(false);
-  const [trackingCourier, setTrackingCourier] = useState("");
-  const [trackingAwb, setTrackingAwb] = useState("");
+  // Fixably series modal (shown before Mark as In Transit)
+  const [showFixablyModal, setShowFixablyModal] = useState(false);
+  const [fixablySeries, setFixablySeries] = useState("");
   const [showReceiptConfirm, setShowReceiptConfirm] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
   const RESEND_COOLDOWN_MS = 3 * 60 * 1000; // 3 minutes
@@ -112,59 +110,32 @@ export function TransferDetailPage() {
   async function assignSerial(itemId: string, partId: string, value: string) {
     const sn = value.trim();
     if (!sn) return;
-    const client = getSupabaseClient();
-    if (!client) return;
     setSerialSaving(p => ({ ...p, [itemId]: true }));
     setSerialErrors(p => ({ ...p, [itemId]: "" }));
 
-    const { data: serial, error } = await client
-      .from("serial_numbers")
-      .select("id, part_id, status")
-      .eq("serial_number", sn)
-      .maybeSingle();
+    try {
+      const serial = await api.get(`/serials/${encodeURIComponent(sn)}`);
+      if (!serial) {
+        setSerialErrors(p => ({ ...p, [itemId]: "Serial not found" }));
+        setSerialSaving(p => ({ ...p, [itemId]: false }));
+        return;
+      }
+      if (serial.status !== "in_stock") {
+        setSerialErrors(p => ({ ...p, [itemId]: `Not available — ${serial.status === "in_transit" ? "Reserved for another transfer" : serial.status === "transferred" ? "Already transferred out" : serial.status.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())}` }));
+        setSerialSaving(p => ({ ...p, [itemId]: false }));
+        return;
+      }
+      if (serial.part_id !== partId) {
+        setSerialErrors(p => ({ ...p, [itemId]: "Serial belongs to a different part" }));
+        setSerialSaving(p => ({ ...p, [itemId]: false }));
+        return;
+      }
 
-    if (error || !serial) {
-      setSerialErrors(p => ({ ...p, [itemId]: "Serial not found" }));
-      setSerialSaving(p => ({ ...p, [itemId]: false }));
-      return;
-    }
-    if (serial.status !== "in_stock") {
-      setSerialErrors(p => ({ ...p, [itemId]: `Not available — ${serial.status === "in_transit" ? "Reserved for another transfer" : serial.status === "transferred" ? "Already transferred out" : serial.status.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())}` }));
-      setSerialSaving(p => ({ ...p, [itemId]: false }));
-      return;
-    }
-    if (serial.part_id !== partId) {
-      setSerialErrors(p => ({ ...p, [itemId]: "Serial belongs to a different part" }));
-      setSerialSaving(p => ({ ...p, [itemId]: false }));
-      return;
-    }
-
-    // Check not already assigned to another active transfer (draft/packed/in_transit)
-    const { data: conflict } = await client
-      .from("transfer_items")
-      .select("transfer_id, transfers!inner(transfer_no, status)")
-      .eq("serial_id", serial.id)
-      .neq("id", itemId)
-      .in("transfers.status", ["draft", "packed", "in_transit"])
-      .maybeSingle();
-
-    if (conflict) {
-      const t = conflict.transfers as any;
-      setSerialErrors(p => ({ ...p, [itemId]: `Already on transfer ${t?.transfer_no ?? ""} (${t?.status ?? ""})` }));
-      setSerialSaving(p => ({ ...p, [itemId]: false }));
-      return;
-    }
-
-    const { error: updateErr } = await client
-      .from("transfer_items")
-      .update({ serial_id: serial.id })
-      .eq("id", itemId);
-
-    if (updateErr) {
-      setSerialErrors(p => ({ ...p, [itemId]: "Save failed" }));
-    } else {
+      await api.put(`/transfers/${id}/assign-serial`, { itemId, serialId: serial.id });
       setSerialInputs(p => ({ ...p, [itemId]: "" }));
       await load(true);
+    } catch {
+      setSerialErrors(p => ({ ...p, [itemId]: "Save failed" }));
     }
     setSerialSaving(p => ({ ...p, [itemId]: false }));
   }
@@ -180,22 +151,6 @@ export function TransferDetailPage() {
     setGeneratingPDF(true);
     setActionError(null);
     try {
-      const client = getSupabaseClient();
-
-      // Always regenerate token + expiry to ensure the link is fresh
-      let token = transfer.receipt_token;
-      if (client) {
-        const bytes = new Uint8Array(32);
-        crypto.getRandomValues(bytes);
-        token = Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
-        await client.from("transfers").update({
-          receipt_token: token,
-          receipt_token_expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        }).eq("id", transfer.id);
-      }
-      const receiveUrl = token ? `${window.location.origin}/transfers/${transfer.id}/receive?token=${token}` : null;
-
-      // Always regenerate fresh — ensures latest layout/data is used
       const { generatePackingListPDF } = await import("@/lib/packingList");
       const doc = await generatePackingListPDF({
         transferNo: transfer.transfer_no,
@@ -208,8 +163,7 @@ export function TransferDetailPage() {
         destinationSite: transfer.destination_site?.site_name ?? "—",
         destinationAddress: transfer.destination_site?.address ?? null,
         requestedBy: transfer.requested_by_profile?.full_name ?? transfer.requested_by_profile?.username ?? "—",
-        courier: transfer.courier ?? null,
-        awb: transfer.awb ?? null,
+        fixablySeries: transfer.fixably_series ?? null,
         items: transfer.items.map((item) => ({
           serialNumber: item.serial?.serial_number ?? null,
           partNumber: item.part?.part_number ?? "—",
@@ -218,18 +172,9 @@ export function TransferDetailPage() {
         })),
       });
 
-      // Upload to storage and save reference
-      if (client) {
-        const fileName = `${transfer.transfer_no}.pdf`;
-        const pdfBlob = doc.output("blob") as Blob;
-        await client.storage.from("packing-lists").upload(fileName, pdfBlob, { contentType: "application/pdf", upsert: true });
-        await client.from("packing_lists").upsert(
-          { transfer_id: transfer.id, file_path: fileName, generated_by: actorId },
-          { onConflict: "transfer_id" }
-        );
-      }
+      const pdfBlob = doc.output("blob") as Blob;
+      await api.post(`/transfers/${transfer.id}/generate-pdf`, { pdfBlob, fileName: `${transfer.transfer_no}.pdf` });
 
-      // Download
       doc.save(`${transfer.transfer_no}-packing-list.pdf`);
     } catch (err) {
       setActionError(err instanceof Error ? friendlyError(err) : "PDF generation failed.");
@@ -238,59 +183,38 @@ export function TransferDetailPage() {
   }
 
   async function load(silent = false) {
-    const client = getSupabaseClient();
-    if (!client || !id) return;
+    if (!id) return;
     if (!silent) setLoading(true);
 
-    const { data, error: err } = await client
-      .from("transfers")
-      .select(`
-        id, transfer_no, invoice_ref, status, created_at, packed_at, courier, awb, receipt_token,
-        source_site:sites!source_site_id(site_name, invoice_prefix, address, is_dc),
-        destination_site:sites!destination_site_id(site_name, site_code, address),
-        requested_by_profile:profiles!requested_by(full_name, username),
-        packed_by_profile:profiles!packed_by(full_name, username),
-        items:transfer_items(
-          id, qty,
-          part:parts(id, part_number, part_name, category),
-          serial:serial_numbers(serial_number, status)
-        )
-      `)
-      .eq("id", id)
-      .single();
+    try {
+      const d = await api.get(`/transfers/${id}`);
+      if (!d) { setLoadError("Transfer not found."); setLoading(false); return; }
 
-    if (err || !data) { setLoadError("Transfer not found."); setLoading(false); return; }
-
-    // Normalize Supabase join arrays
-    const d = data as any;
-    setTransfer({
-      ...d,
-      source_site: Array.isArray(d.source_site) ? d.source_site[0] ?? null : d.source_site,
-      destination_site: Array.isArray(d.destination_site) ? d.destination_site[0] ?? null : d.destination_site,
-      requested_by_profile: Array.isArray(d.requested_by_profile) ? d.requested_by_profile[0] ?? null : d.requested_by_profile,
-      packed_by_profile: Array.isArray(d.packed_by_profile) ? d.packed_by_profile[0] ?? null : d.packed_by_profile,
-      items: (d.items ?? []).map((item: any) => ({
-        ...item,
-        part: Array.isArray(item.part) ? item.part[0] ?? null : item.part,
-        serial: Array.isArray(item.serial) ? item.serial[0] ?? null : item.serial,
-      })),
-    });
+      setTransfer({
+        ...d,
+        source_site: Array.isArray(d.source_site) ? d.source_site[0] ?? null : d.source_site,
+        destination_site: Array.isArray(d.destination_site) ? d.destination_site[0] ?? null : d.destination_site,
+        requested_by_profile: Array.isArray(d.requested_by_profile) ? d.requested_by_profile[0] ?? null : d.requested_by_profile,
+        packed_by_profile: Array.isArray(d.packed_by_profile) ? d.packed_by_profile[0] ?? null : d.packed_by_profile,
+        items: (d.items ?? []).map((item: any) => ({
+          ...item,
+          part: Array.isArray(item.part) ? item.part[0] ?? null : item.part,
+          serial: Array.isArray(item.serial) ? item.serial[0] ?? null : item.serial,
+        })),
+      });
+    } catch {
+      setLoadError("Transfer not found.");
+    }
     setLoading(false);
   }
 
   useEffect(() => { void load(); }, [id]);
 
-  // Realtime: reload when this transfer changes (e.g. received from ReceivePage)
+  // Poll for updates every 10 seconds
   useEffect(() => {
-    const client = getSupabaseClient();
-    if (!client || !id) return;
-    const channel = client
-      .channel(`transfer-detail-${id}`)
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "transfers", filter: `id=eq.${id}` }, () => {
-        void load();
-      })
-      .subscribe();
-    return () => { void client.removeChannel(channel); };
+    if (!id) return;
+    const interval = setInterval(() => void load(true), 10000);
+    return () => clearInterval(interval);
   }, [id]);
 
 
@@ -310,69 +234,36 @@ export function TransferDetailPage() {
     transferId: string,
     options?: { attempts?: number; includeAttachment?: boolean; allowAttachmentFallback?: boolean; pdfBase64?: string | null; forceSend?: boolean },
   ): Promise<{ ok: boolean; detail?: string; packingListAttached?: boolean; pdfError?: string | null; smtpAttachmentError?: string | null }> {
-    const client = getSupabaseClient();
-    if (!client) return { ok: false, detail: "Supabase not configured." };
-
     const attempts = Math.max(1, options?.attempts ?? 1);
-    const includeAttachment = options?.includeAttachment ?? true;
-    const allowAttachmentFallback = options?.allowAttachmentFallback ?? true;
-    const attachmentModes = includeAttachment && allowAttachmentFallback ? [true, false] : [includeAttachment];
     let detail = "Unknown error";
 
-    for (let modeIndex = 0; modeIndex < attachmentModes.length; modeIndex++) {
-      const includeAttachmentInAttempt = attachmentModes[modeIndex];
-      for (let attempt = 1; attempt <= attempts; attempt++) {
-        try {
-          await client.auth.getSession();
-          const invokeResult = client.functions.invoke<{
-            ok?: boolean;
-            reason?: string;
-            error?: string;
-            skipped?: boolean;
-            packing_list_attached?: boolean;
-            pdf_error?: string | null;
-            smtp_attachment_error?: string | null;
-          }>("send-transfer-email", {
-            body: {
-              transfer_id: transferId,
-              include_attachment: includeAttachmentInAttempt,
-              ...(options?.pdfBase64 ? { pdf_base64: options.pdfBase64 } : {}),
-              ...(options?.forceSend ? { force_send: true } : {}),
-            },
-          });
-          const { data: emailResult, error: emailErr } = await invokeResult;
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        const emailResult = await api.post(`/transfers/${transferId}/send-email`, {
+          include_attachment: options?.includeAttachment ?? true,
+          ...(options?.pdfBase64 ? { pdf_base64: options.pdfBase64 } : {}),
+          ...(options?.forceSend ? { force_send: true } : {}),
+        });
 
-          if (emailErr) {
-            detail = emailErr.message;
-            try {
-              const body = (emailErr as any).context;
-              if (body?.reason) detail = body.reason;
-              else if (body?.error) detail = body.error;
-            } catch {
-              // Keep default detail.
-            }
-          } else if (emailResult?.ok === false) {
-            detail = emailResult.reason ?? emailResult.error ?? "Unknown error";
-          } else {
-            return { ok: true, packingListAttached: emailResult?.packing_list_attached ?? false, pdfError: emailResult?.pdf_error ?? null, smtpAttachmentError: emailResult?.smtp_attachment_error ?? null };
-          }
-        } catch (err) {
-          detail = err instanceof Error ? friendlyError(err) : String(err);
+        if (!emailResult || (emailResult as any).ok === false) {
+          detail = (emailResult as any)?.reason ?? (emailResult as any)?.error ?? "Unknown error";
+        } else {
+          return { ok: true, packingListAttached: (emailResult as any)?.packing_list_attached ?? false, pdfError: (emailResult as any)?.pdf_error ?? null, smtpAttachmentError: (emailResult as any)?.smtp_attachment_error ?? null };
         }
+      } catch (err) {
+        detail = err instanceof Error ? friendlyError(err) : String(err);
+      }
 
-        if (attempt < attempts) {
-          await new Promise((resolve) => setTimeout(resolve, 250));
-        }
+      if (attempt < attempts) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
       }
     }
 
     return { ok: false, detail };
   }
 
-  async function generateAndUploadPDF(courierOverride?: string | null, awbOverride?: string | null): Promise<string | null> {
+  async function generateAndUploadPDF(fixablySeriesOverride?: string | null): Promise<string | null> {
     if (!transfer || !actorId) return null;
-    const client = getSupabaseClient();
-    if (!client) return null;
     try {
       const { generatePackingListPDF } = await import("@/lib/packingList");
       const doc = await generatePackingListPDF({
@@ -386,8 +277,7 @@ export function TransferDetailPage() {
         destinationSite: transfer.destination_site?.site_name ?? "—",
         destinationAddress: transfer.destination_site?.address ?? null,
         requestedBy: transfer.requested_by_profile?.full_name ?? transfer.requested_by_profile?.username ?? "—",
-        courier: courierOverride ?? transfer.courier ?? null,
-        awb: awbOverride ?? transfer.awb ?? null,
+        fixablySeries: fixablySeriesOverride ?? transfer.fixably_series ?? null,
         items: transfer.items.map((item) => ({
           serialNumber: item.serial?.serial_number ?? null,
           partNumber: item.part?.part_number ?? "—",
@@ -396,14 +286,9 @@ export function TransferDetailPage() {
         })),
       });
       const pdfBlob = doc.output("blob") as Blob;
-      // Upload to storage (best-effort, for record keeping)
       const fileName = `${transfer.transfer_no}.pdf`;
-      void client.storage.from("packing-lists").upload(fileName, pdfBlob, { contentType: "application/pdf", upsert: true });
-      void client.from("packing_lists").upsert(
-        { transfer_id: transfer.id, file_path: fileName, generated_by: actorId },
-        { onConflict: "transfer_id" }
-      );
-      // Return base64 for direct attachment
+      // Upload to storage via API and return base64
+      await api.post(`/transfers/${transfer.id}/generate-pdf`, { pdfBlob, fileName, actorId });
       const arrayBuffer = await pdfBlob.arrayBuffer();
       const bytes = new Uint8Array(arrayBuffer);
       let binary = "";
@@ -457,59 +342,46 @@ export function TransferDetailPage() {
     setTimeout(() => setScanFeedback(null), 4000);
   }
 
-  async function advanceStatus(courier?: string, awb?: string) {
+  async function advanceStatus(fixablySeries?: string) {
     if (!transfer || !actorId) return;
     const next = NEXT_STATUS[transfer.status];
     if (!next) return;
     setAdvancing(true); setActionError(null);
-    const client = getSupabaseClient()!;
 
-    // Update tracking fields before transitioning (packed_by, courier, awb)
-    if (next === "packed") {
-      await client.from("transfers").update({ packed_by: actorId, packed_at: new Date().toISOString() }).eq("id", transfer.id);
+    try {
+      await api.put(`/transfers/${transfer.id}/status`, {
+        status: next,
+        actorId,
+        ...(next === "packed" ? { packed_by: actorId, packed_at: new Date().toISOString() } : {}),
+        ...(next === "in_transit" && fixablySeries?.trim() ? { fixablySeries: fixablySeries.trim() } : {}),
+      });
+    } catch (err) {
+      setActionError(friendlyError(err instanceof Error ? err : new Error(String(err))));
+      setAdvancing(false);
+      return;
     }
+
+    // When dispatched (in_transit), generate PDF + send email
     if (next === "in_transit") {
-      const trackingUpdate: Record<string, unknown> = {};
-      if (courier?.trim()) trackingUpdate.courier = courier.trim();
-      if (awb?.trim()) trackingUpdate.awb = awb.trim();
-      if (Object.keys(trackingUpdate).length) {
-        await client.from("transfers").update(trackingUpdate).eq("id", transfer.id);
-      }
-    }
-
-    // Use state machine RPC — enforces valid transitions server-side
-    const { error: err } = await client.rpc("transition_transfer_status", {
-      p_transfer_id: transfer.id,
-      p_new_status: next,
-    });
-    if (err) { setActionError(friendlyError(err)); setAdvancing(false); return; }
-
-    // When dispatched (in_transit), generate PDF first so email attachment uses the canonical layout
-    if (next === "in_transit") {
-      const pdfBase64 = await generateAndUploadPDF(courier?.trim(), awb?.trim());
-      setSendingEmail(true);
-      const result = await invokeTransferEmail(transfer.id, { attempts: 1, includeAttachment: true, pdfBase64 });
-      if (!result.ok) {
-        const isMissingEmail = (result.detail ?? "").includes("contact_emails") || (result.detail ?? "").includes("No valid");
-        setActionError(
-          isMissingEmail
-            ? "Transfer dispatched. No email sent — destination site has no contact email. Add one in Config → Sites."
-            : `Transfer dispatched, but email failed: ${result.detail ?? "Unknown error"}`
-        );
-      }
-      setSendingEmail(false);
-    }
-    if (next === "received") {
-      const destSiteId = transfer.destination_site
-        ? await getDestSiteId(client, transfer.destination_site.site_code)
-        : undefined;
-      if (destSiteId) {
-        const serialIds = transfer.items.map((i) => i.serial?.serial_number).filter(Boolean) as string[];
-        if (serialIds.length > 0) {
-          await client.from("serial_numbers")
-            .update({ current_site_id: destSiteId })
-            .in("serial_number", serialIds);
+      const pdfBase64 = await generateAndUploadPDF(fixablySeries?.trim());
+      try {
+        const cfg = await api.get(`/transfers/${transfer.id}/email-config`);
+        const emailEnabled = (cfg as any)?.value !== "false";
+        if (emailEnabled) {
+          setSendingEmail(true);
+          const result = await invokeTransferEmail(transfer.id, { attempts: 1, includeAttachment: true, pdfBase64 });
+          if (!result.ok) {
+            const isMissingEmail = (result.detail ?? "").includes("contact_emails") || (result.detail ?? "").includes("No valid");
+            setActionError(
+              isMissingEmail
+                ? "Transfer dispatched. No email sent — destination site has no contact email. Add one in Config → Sites."
+                : `Transfer dispatched, but email failed: ${result.detail ?? "Unknown error"}`
+            );
+          }
+          setSendingEmail(false);
         }
+      } catch {
+        // email config lookup non-fatal
       }
     }
 
@@ -517,22 +389,15 @@ export function TransferDetailPage() {
     setAdvancing(false);
   }
 
-  async function getDestSiteId(client: ReturnType<typeof getSupabaseClient>, siteCode: string): Promise<string | undefined> {
-    if (!client) return undefined;
-    const { data } = await client.from("sites").select("id").eq("site_code", siteCode).maybeSingle();
-    return data?.id;
-  }
-
   async function cancelTransfer() {
     if (!transfer) return;
     setCancelling(true); setActionError(null);
-    const client = getSupabaseClient()!;
-    const { error: err } = await client.rpc("transition_transfer_status", {
-      p_transfer_id: transfer.id,
-      p_new_status: "cancelled",
-    });
-    if (err) setActionError(friendlyError(err));
-    else await load(true);
+    try {
+      await api.put(`/transfers/${transfer.id}/status`, { status: "cancelled", actorId });
+      await load(true);
+    } catch (err) {
+      setActionError(friendlyError(err instanceof Error ? err : new Error(String(err))));
+    }
     setCancelling(false);
   }
 
@@ -627,7 +492,7 @@ export function TransferDetailPage() {
                 <button type="button"
                   onClick={() => {
                     if (NEXT_STATUS[transfer.status] === "in_transit") {
-                      setTrackingCourier(""); setTrackingAwb(""); setShowTrackingModal(true);
+                      setFixablySeries(""); setShowFixablyModal(true);
                     } else if (NEXT_STATUS[transfer.status] === "packed") {
                       if (transfer.items.length === 0) {
                         setActionError("Cannot pack: transfer has no items."); return;
@@ -691,7 +556,7 @@ export function TransferDetailPage() {
                       width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center",
                       background: done ? (active ? "var(--blue)" : "var(--bg-surface-elevated)") : "var(--bg-surface-elevated)",
                       color: done ? (active ? "#fff" : "var(--text)") : "var(--muted)",
-                      border: active ? "2px solid var(--blue)" : "2px solid transparent",
+                      border: active ? "2px solid var(--blue)" : "2px solid var(--line)",
                     }}>
                       {done && !active ? <Check size={14} /> : sm.icon}
                     </div>
@@ -760,7 +625,7 @@ export function TransferDetailPage() {
             </div>
             <div className="table-scroll">
               <table ref={tableRef}>
-                <thead>
+                <thead style={{ position: "sticky", top: 0, zIndex: 1, background: "var(--bg-surface)" }}>
                   <tr>
                     {transfer.status === "in_transit" && <th style={{ width: 40 }}></th>}
                     <th>Serial</th>
@@ -839,8 +704,7 @@ export function TransferDetailPage() {
               {transfer.source_site?.invoice_prefix && !transfer.invoice_ref && (
                 <InfoRow label="Invoice prefix" value={transfer.source_site.invoice_prefix} mono />
               )}
-              {transfer.courier && <InfoRow label="Courier" value={transfer.courier} />}
-              {transfer.awb && <InfoRow label="Tracking #" value={transfer.awb} mono />}
+              {transfer.fixably_series && <InfoRow label="Fixably series" value={transfer.fixably_series} />}
             </InfoCard>
 
             <InfoCard title="Destination">
@@ -854,48 +718,38 @@ export function TransferDetailPage() {
         </div>
       </main>
 
-      {/* Tracking number modal */}
-      {showTrackingModal && (
+      {/* Fixably series modal */}
+      {showFixablyModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
           <form
-            onSubmit={(e) => { e.preventDefault(); if (!trackingAwb.trim() || advancing) return; setShowTrackingModal(false); void advanceStatus(trackingCourier, trackingAwb); }}
+            onSubmit={(e) => { e.preventDefault(); if (!fixablySeries.trim() || advancing) return; setShowFixablyModal(false); void advanceStatus(fixablySeries); }}
             style={{ background: "var(--bg-surface)", borderRadius: 0, width: "100%", maxWidth: 420, padding: 24, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
           >
             <h2 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700, color: "var(--text)" }}>Mark as In Transit</h2>
-            <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--muted)" }}>Enter tracking details before dispatching.</p>
-
-            <div style={{ marginBottom: 14 }}>
-              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#666", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 5 }}>Courier</label>
-              <input
-                value={trackingCourier}
-                onChange={(e) => setTrackingCourier(e.target.value)}
-                placeholder="e.g. LBC, J&T, Lalamove"
-                style={{ width: "100%", border: "1px solid var(--line)", borderRadius: 0, padding: "5px 8px", fontSize: 13, outline: "none", boxSizing: "border-box" }}
-              />
-            </div>
+            <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--muted)" }}>Enter Fixably series before dispatching.</p>
 
             <div style={{ marginBottom: 24 }}>
               <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#666", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 5 }}>
-                Tracking Number (AWB) <span style={{ color: "var(--negative)" }}>*</span>
+                Fixably Series <span style={{ color: "var(--negative)" }}>*</span>
               </label>
               <input
-                value={trackingAwb}
-                onChange={(e) => setTrackingAwb(e.target.value)}
-                placeholder="e.g. 1234567890"
+                value={fixablySeries}
+                onChange={(e) => setFixablySeries(e.target.value)}
+                placeholder="e.g. iPhone 15 Pro Max"
                 autoFocus
-                style={{ width: "100%", border: `1px solid ${trackingAwb.trim() ? "var(--line)" : "#fca5a5"}`, borderRadius: 0, padding: "5px 8px", fontSize: 13, fontFamily: "monospace", outline: "none", boxSizing: "border-box" }}
+                style={{ width: "100%", border: `1px solid ${fixablySeries.trim() ? "var(--line)" : "#fca5a5"}`, borderRadius: 0, padding: "5px 8px", fontSize: 13, outline: "none", boxSizing: "border-box" }}
               />
-              {!trackingAwb.trim() && <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--negative)" }}>Tracking number is required.</p>}
+              {!fixablySeries.trim() && <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--negative)" }}>Fixably series is required.</p>}
             </div>
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button type="button" onClick={() => setShowTrackingModal(false)}
+              <button type="button" onClick={() => setShowFixablyModal(false)}
                 style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: 0, padding: "4px 10px", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
                 Cancel
               </button>
               <button type="submit"
-                disabled={!trackingAwb.trim() || advancing}
-                style={{ background: trackingAwb.trim() ? "var(--blue)" : "#d1d5db", color: "#fff", border: "none", borderRadius: 0, padding: "7px 18px", fontSize: 13, fontWeight: 600, cursor: trackingAwb.trim() ? "pointer" : "not-allowed" }}>
+                disabled={!fixablySeries.trim() || advancing}
+                style={{ background: fixablySeries.trim() ? "var(--blue)" : "#d1d5db", color: "#fff", border: "none", borderRadius: 0, padding: "7px 18px", fontSize: 13, fontWeight: 600, cursor: fixablySeries.trim() ? "pointer" : "not-allowed" }}>
                 Dispatch
               </button>
             </div>
@@ -916,24 +770,12 @@ export function TransferDetailPage() {
               <button type="button"
                 onClick={() => { setShowReceiptConfirm(false); void (async () => {
                   setAdvancing(true); setActionError(null);
-                  const client = getSupabaseClient()!;
-                  const { error: err } = await client.rpc("transition_transfer_status", {
-                    p_transfer_id: transfer.id,
-                    p_new_status: "received",
-                  });
-                  if (err) { setActionError(friendlyError(err)); setAdvancing(false); return; }
-                  const destId = transfer.destination_site ? await getDestSiteId(client, transfer.destination_site.site_code) : undefined;
-                  if (destId) {
-                    const receivedSerials = transfer.items
-                      .filter((i) => receivedItems.has(i.id) && i.serial?.serial_number)
-                      .map((i) => i.serial!.serial_number);
-                    if (receivedSerials.length > 0) {
-                      await client.from("serial_numbers")
-                        .update({ current_site_id: destId })
-                        .in("serial_number", receivedSerials);
-                    }
+                  try {
+                    await api.put(`/transfers/${transfer.id}/status`, { status: "received", actorId });
+                    await load(true);
+                  } catch (err) {
+                    setActionError(friendlyError(err instanceof Error ? err : new Error(String(err))));
                   }
-                  await load(true);
                   setAdvancing(false);
                 })(); }}
                 style={{ flex: 1, background: "var(--blue)", color: "#fff", border: "none", borderRadius: 0, padding: "5px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>

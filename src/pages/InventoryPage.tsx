@@ -10,9 +10,9 @@ import { ReservedSerialDrawer } from "@/components/ReservedSerialDrawer";
 import { ImportHistoryTab } from "@/components/ImportHistoryTab";
 import { SerialNumbersTab } from "@/components/SerialNumbersTab";
 import {
-  ArrowDown, ArrowUp, ArrowUpDown, RefreshCw, Download, CheckSquare,
+  ArrowDown, ArrowUp, ArrowUpDown, RefreshCw, Download, CheckSquare, ChevronLeft, ChevronRight,
 } from "lucide-react";
-import { getSupabaseClient } from "@/lib/supabase";
+import { api } from "@/lib/api";
 import { useRealtimeTable } from "@/lib/useRealtimeTable";
 import { useFeatureFlag } from "@/lib/useFeatureFlag";
 import { toCapitalized } from "@/lib/format";
@@ -316,7 +316,7 @@ function InventoryTab() {
       <section className="table-card">
         <div className="table-scroll">
           <table ref={inventoryTableRef}>
-            <thead>
+            <thead style={{ position: "sticky", top: 0, zIndex: 1, background: "var(--bg-surface)" }}>
               <tr>
                 <th className="cell-check">
                   <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} aria-label="Select all visible rows" />
@@ -418,36 +418,20 @@ function InventoryTab() {
 
       {/* Pagination controls */}
       {state.source !== "demo" && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", fontSize: 13, color: "var(--muted)" }}>
-          <span>
-            {state.total != null
-              ? `${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, state.total)} of ${state.total} parts`
-              : `Page ${page + 1}`}
-          </span>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              disabled={page === 0 || state.loading}
-              style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "5px 14px", fontSize: 13, fontWeight: 600, cursor: page === 0 ? "not-allowed" : "pointer", opacity: page === 0 ? 0.4 : 1 }}
-            >
-              ← Prev
-            </button>
-            {state.total != null && (
-              <span style={{ fontSize: 12, color: "var(--muted)" }}>
-                {page + 1} / {Math.ceil(state.total / PAGE_SIZE)}
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={() => setPage((p) => p + 1)}
-              disabled={state.total != null ? (page + 1) * PAGE_SIZE >= state.total : sortedRows.length < PAGE_SIZE}
-              style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "5px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer",
-                opacity: (state.total != null ? (page + 1) * PAGE_SIZE >= state.total : sortedRows.length < PAGE_SIZE) ? 0.4 : 1 }}
-            >
-              Next →
-            </button>
-          </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, padding: "12px 0" }}>
+          <button type="button" disabled={page === 0 || state.loading} onClick={() => setPage((p) => Math.max(0, p - 1))}
+            style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", fontSize: 12, fontWeight: 600, border: "1px solid var(--line)", borderRadius: "var(--radius)", background: "var(--bg-surface)", color: "var(--text)", cursor: page === 0 || state.loading ? "not-allowed" : "pointer", opacity: page === 0 ? 0.4 : 1 }}>
+            <ChevronLeft size={14} /> Prev
+          </button>
+          {state.total != null && (
+            <span style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap" }}>
+              Page {page + 1} of {Math.ceil(state.total / PAGE_SIZE).toLocaleString()}
+            </span>
+          )}
+          <button type="button" disabled={state.total != null ? (page + 1) * PAGE_SIZE >= state.total : sortedRows.length < PAGE_SIZE} onClick={() => setPage((p) => p + 1)}
+            style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", fontSize: 12, fontWeight: 600, border: "1px solid var(--line)", borderRadius: "var(--radius)", background: "var(--bg-surface)", color: "var(--text)", cursor: state.total != null && (page + 1) * PAGE_SIZE >= state.total ? "not-allowed" : "pointer", opacity: state.total != null && (page + 1) * PAGE_SIZE >= state.total ? 0.4 : 1 }}>
+            Next <ChevronRight size={14} />
+          </button>
         </div>
       )}
     </main>
@@ -475,27 +459,17 @@ function SerialLookupDrawer({ serialNumber, onClose }: { serialNumber: string; o
   }, [serialNumber]);
 
   async function load() {
-    const client = getSupabaseClient();
-    if (!client) { setLoading(false); return; }
     setLoading(true); setNotFound(false);
 
-    // Query 1: serial + part + site
-    const { data: row } = await client
-      .from("serial_numbers")
-      .select("id, serial_number, status, stock_in_at, parts(part_name, part_number, category), sites!current_site_id(site_name, site_code)")
-      .eq("serial_number", serialNumber)
-      .maybeSingle();
+    try {
+      const row = await api.get(`/serials/${encodeURIComponent(serialNumber)}`);
+      if (!row) { setNotFound(true); setLoading(false); return; }
 
-    if (!row) { setNotFound(true); setLoading(false); return; }
-
-    // Query 2: transfer history via transfer_items
-    const { data: items } = await client
-      .from("transfer_items")
-      .select("transfers(transfer_no, status, created_at, sites!destination_site_id(site_name))")
-      .eq("serial_id", (row as any).id ?? "")
-      .limit(20);
-
-    setData({ ...row, transfer_items: items ?? [] });
+      const items = await api.get(`/serials/${(row as any).id}/transfer-history`);
+      setData({ ...row, transfer_items: items ?? [] });
+    } catch {
+      setNotFound(true);
+    }
     setLoading(false);
   }
 
@@ -606,28 +580,15 @@ function SiteInventoryTab() {
   }, [selectedSite]);
 
   async function loadSites() {
-    const client = getSupabaseClient();
-    if (!client) return;
-    const { data } = await client.from("sites").select("id, site_name, site_code").eq("is_active", true).order("site_name");
+    const data = await api.get("/sites");
     setSites(data ?? []);
   }
 
   async function loadSiteInventory(siteId: string) {
-    const client = getSupabaseClient();
-    if (!client) { setRows([]); return; }
     setLoading(true); setError(null);
     try {
-      let query = client
-        .from("serial_numbers")
-        .select("current_site_id, parts(part_name, part_number), sites!current_site_id(site_name, site_code)")
-        .eq("status", "transferred")
-        .not("current_site_id", "is", null)
-        .limit(5000);
-
-      if (siteId !== "all") query = query.eq("current_site_id", siteId);
-
-      const { data, error: err } = await query;
-      if (err) throw new Error(err.message);
+      const url = siteId !== "all" ? `/inventory/site/${siteId}` : "/inventory/site";
+      const data = await api.get(url);
 
       // Aggregate by site + part
       const map = new Map<string, SiteRow>();

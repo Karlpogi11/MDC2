@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { Truck, CheckCircle } from "lucide-react";
-import { getSupabaseClient } from "@/lib/supabase";
+import { api } from "@/lib/api";
 import { AppLayout } from "@/components/AppLayout";
 import { useAuth } from "@/lib/auth";
 import { useBranding } from "@/lib/useBranding";
@@ -30,98 +30,83 @@ export function ReceivePage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const client = getSupabaseClient();
-    if (!client || !id) return;
+    if (!id) return;
 
     if (token) {
-      // Public token-based access — use security definer RPC
-      client.rpc("get_transfer_by_token", { p_transfer_id: id, p_token: token })
-        .single()
-        .then(({ data, error: err }) => {
-          if (err || !data) {
-            const raw = err?.message ?? "TRANSFER_NOT_FOUND";
-            const code = Object.keys(ERROR_MESSAGES).find((k) => raw.includes(k)) ?? "TRANSFER_NOT_FOUND";
-            if ((code === "INVALID_TOKEN" || code === "TOKEN_EXPIRED") && isLoggedIn) {
-              loadAuthenticated(client, id);
-              return;
-            }
-            setError(ERROR_MESSAGES[code] ?? raw);
-            setLoading(false);
+      // Public token-based access
+      api.get(`/receive/transfer/${id}?token=${token}`)
+        .then((data: any) => {
+          if (data.status === "received") {
+            setDone(true); setTransferNo(data.transfer_no); setInvoiceRef(data.invoice_ref ?? "");
+            setLoading(false); return;
+          }
+          if (data.status !== "in_transit") {
+            setError(`Transfer is "${data.status}" — not ready to receive.`);
+            setLoading(false); return;
+          }
+          setTransferNo(data.transfer_no);
+          setInvoiceRef(data.invoice_ref ?? "");
+          setSourceSite(data.source_site_name ?? "DC");
+          setDestSite(data.destination_site_name ?? "—");
+          setLoading(false);
+        })
+        .catch((err: any) => {
+          const raw = err?.message ?? "TRANSFER_NOT_FOUND";
+          const code = Object.keys(ERROR_MESSAGES).find((k) => raw.includes(k)) ?? "TRANSFER_NOT_FOUND";
+          if ((code === "INVALID_TOKEN" || code === "TOKEN_EXPIRED") && isLoggedIn) {
+            loadAuthenticated(id);
             return;
           }
-          const d = data as any;
-          if (d.status === "received") {
-            setDone(true); setTransferNo(d.transfer_no); setInvoiceRef(d.invoice_ref ?? "");
-            setLoading(false); return;
-          }
-          if (d.status !== "in_transit") {
-            setError(`Transfer is "${d.status}" — not ready to receive.`);
-            setLoading(false); return;
-          }
-          setTransferNo(d.transfer_no);
-          setInvoiceRef(d.invoice_ref ?? "");
-          setSourceSite(d.source_site_name ?? "DC");
-          setDestSite(d.destination_site_name ?? "—");
+          setError(ERROR_MESSAGES[code] ?? raw);
           setLoading(false);
         });
     } else if (isLoggedIn) {
-      loadAuthenticated(client, id);
+      loadAuthenticated(id);
     } else {
       setError("Access denied. Use the link from your email.");
       setLoading(false);
     }
   }, [id, token, isLoggedIn]);
 
-  function loadAuthenticated(client: ReturnType<typeof getSupabaseClient>, transferId: string) {
-    client!
-      .from("transfers")
-      .select(`
-        transfer_no, status, invoice_ref,
-        source_site:sites!source_site_id(site_name),
-        destination_site:sites!destination_site_id(id, site_name)
-      `)
-      .eq("id", transferId)
-      .single()
-      .then(({ data, error: err }) => {
-        if (err || !data) { setError("Transfer not found."); setLoading(false); return; }
-        const d = data as any;
+  function loadAuthenticated(transferId: string) {
+    api.get(`/transfers/${transferId}`)
+      .then((d: any) => {
         if (d.status === "received") { setDone(true); setTransferNo(d.transfer_no); setInvoiceRef(d.invoice_ref ?? ""); setLoading(false); return; }
         if (d.status !== "in_transit") { setError(`Transfer is "${d.status}" — not ready to receive.`); setLoading(false); return; }
-        const src = Array.isArray(d.source_site) ? d.source_site[0] : d.source_site;
-        const dst = Array.isArray(d.destination_site) ? d.destination_site[0] : d.destination_site;
         setTransferNo(d.transfer_no);
         setInvoiceRef(d.invoice_ref ?? "");
-        setSourceSite(src?.site_name ?? "DC");
-        setDestSite(dst?.site_name ?? "—");
+        setSourceSite(d.source_site_name ?? "DC");
+        setDestSite(d.destination_site_name ?? "—");
+        setLoading(false);
+      })
+      .catch(() => {
+        setError("Transfer not found.");
         setLoading(false);
       });
   }
 
   async function handleConfirm() {
     setSubmitting(true); setError(null);
-    const client = getSupabaseClient();
-    if (!client) { setSubmitting(false); return; }
 
-    if (token) {
-      // Use token-based RPC for unauthenticated confirm
-      const { error: err } = await client.rpc("confirm_receipt_by_token", {
-        p_transfer_id: id, p_token: token,
-      });
-      if (err) {
-        const raw = err.message;
+    try {
+      if (token) {
+        // Token-based confirm for unauthenticated path
+        await api.post(`/receive/transfer/${id}/confirm`, { token });
+      } else {
+        // Authenticated path
+        await api.put(`/transfers/${id}/status`, { status: "received" });
+      }
+      setDone(true); setSubmitting(false);
+    } catch (err: any) {
+      const raw = err?.message ?? "An error occurred";
+      if (token) {
         const code = Object.keys(ERROR_MESSAGES).find((k) => raw.includes(k));
         setError(code ? ERROR_MESSAGES[code] : raw);
-        setSubmitting(false); return;
+      } else {
+        setError(raw);
       }
-    } else {
-      // Authenticated path: use the same state-machine RPC as the main transfer flow.
-      const { error: err } = await client.rpc("transition_transfer_status", {
-        p_transfer_id: id,
-        p_new_status: "received",
-      });
-      if (err) { setError(err.message); setSubmitting(false); return; }
+      setSubmitting(false);
     }
-    setDone(true); setSubmitting(false);
   }
 
   const confirmDisabled = submitting;

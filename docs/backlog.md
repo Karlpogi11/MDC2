@@ -1,3 +1,15 @@
+---
+title: Backlog (MVP)
+tags:
+  - backlog
+  - planning
+  - mvp
+date: 2026-05-16
+aliases:
+  - Backlog
+  - MVP Backlog
+---
+
 # Backlog (MVP)
 
 ## Epic 1: Access and Security
@@ -34,3 +46,9 @@
 - [ ] DC team can operate end-to-end without SaaS tenant dependency
 - [ ] All critical actions are audited
 - [ ] UAT pass with business approver signoff
+
+See [[prd]] for full feature requirements and [[implementation-blueprint]] for the delivery sequence.
+
+---
+
+**Related:** [[prd]], [[implementation-blueprint]], [[definition-of-done]]

@@ -3,9 +3,9 @@ import { useTableResize } from "@/components/ResizableColumns";
 import { DangerAction } from "@/components/DangerAction";
 import { useState, useEffect, useRef, type FormEvent, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Boxes, UserPlus, Check, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, Boxes, UserPlus, Check, X, ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { getSupabaseClient } from "@/lib/supabase";
+import { api } from "@/lib/api";
 import type { UserRole } from "@/lib/auth";
 import { getTheme } from "@/lib/theme";
 
@@ -117,31 +117,71 @@ export function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(0);
+  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [sortCol, setSortCol] = useState<string>("role");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const pageCount = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
-  const loadPage = useCallback(async (p: number) => {
+  const ROLE_ORDER: Record<string, number> = { system_admin: 0, dc_admin: 1, dc_operator: 2, dc_viewer: 3 };
+
+  function handleSort(col: string) {
+    if (sortCol === col) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortCol(col); setSortDir("asc"); }
+  }
+
+  function applySorter(rows: UserRow[]) {
+    return [...rows].sort((a, b) => {
+      const av = (a as any)[sortCol];
+      const bv = (b as any)[sortCol];
+      let cmp: number;
+      if (sortCol === "role") {
+        cmp = (ROLE_ORDER[av ?? ""] ?? 99) - (ROLE_ORDER[bv ?? ""] ?? 99);
+      } else if (sortCol === "is_active") {
+        cmp = (bv ? 1 : 0) - (av ? 1 : 0);
+      } else {
+        cmp = typeof av === "string" ? (av ?? "").localeCompare(bv ?? "") : Number(av ?? 0) - Number(bv ?? 0);
+      }
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  }
+
+  async function loadPage(p: number, q: string) {
     setLoading(true);
     setActionError(null);
-    const client = getSupabaseClient();
-    if (!client) { setLoading(false); return; }
-    const from = p * PAGE_SIZE;
-    const to = from + PAGE_SIZE - 1;
     try {
-      const { data, error, count } = await client
-        .from("profiles")
-        .select("id,full_name,email,username,role,is_active,created_at", { count: "exact", head: false })
-        .order("email", { ascending: true })
-        .range(from, to);
-      if (error) { setActionError(error.message); setLoading(false); return; }
-      if (data) setUsers(data as UserRow[]);
-      if (count !== null) setTotalCount(count);
-    } catch (e) {
-      setActionError(e instanceof Error ? e.message : "Failed to load users.");
+      const params = new URLSearchParams({ page: String(p), pageSize: String(PAGE_SIZE) });
+      if (q) params.set("q", q);
+      const [usersData, countData] = await Promise.all([
+        api.get("/users?" + params.toString()),
+        api.get("/users/count"),
+      ]);
+      setUsers(applySorter(usersData ?? []));
+      if (typeof countData === "number") setTotalCount(countData);
+      else if (countData?.count !== undefined) setTotalCount(countData.count);
+    } catch (e: any) {
+      setActionError(e?.message ?? "Failed to load users.");
     }
     setLoading(false);
-  }, []);
+  }
 
-  useEffect(() => { loadPage(0); }, [loadPage]);
+  // Fetch on mount, search change, or page change
+  useEffect(() => { loadPage(page, search); }, [search, page]);
+
+  // Client-side re-sort when sort column/direction changes
+  useEffect(() => {
+    setUsers((prev) => applySorter(prev));
+  }, [sortCol, sortDir]);
+
+  // Debounced search
+  useEffect(() => {
+    const t = setTimeout(() => { setSearch(searchInput); setPage(0); }, 350);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  function goToPage(p: number) {
+    setPage(p);
+  }
 
   // Invite form state
   const [email, setEmail] = useState("");
@@ -158,10 +198,12 @@ export function UsersPage() {
     if (username.length < 2) { setUsernameStatus("idle"); return; }
     setUsernameStatus("checking");
     const t = setTimeout(async () => {
-      const client = getSupabaseClient();
-      if (!client) return;
-      const { data } = await client.from("profiles").select("id").eq("username", username.trim()).maybeSingle();
-      setUsernameStatus(data ? "taken" : "available");
+      try {
+        const data = await api.get(`/users/check-username?username=${encodeURIComponent(username.trim())}`);
+        setUsernameStatus(data?.taken ? "taken" : "available");
+      } catch {
+        setUsernameStatus("available");
+      }
     }, 350);
     return () => clearTimeout(t);
   }, [username]);
@@ -170,7 +212,7 @@ export function UsersPage() {
   const [changingRoleId, setChangingRoleId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const currentUserId = authState.status === "authenticated" ? authState.user.id : null;
+  const currentUserId = authState.status === "authenticated" ? authState.profile.id : null;
 
   async function handleInvite(e: FormEvent) {
     e.preventDefault();
@@ -180,53 +222,45 @@ export function UsersPage() {
 
     if (usernameStatus === "taken") { setInviteError("Username already taken."); setInviting(false); return; }
 
-    const client = getSupabaseClient();
-    if (!client) { setInviteError("Supabase not configured."); setInviting(false); return; }
-
-    const { data, error } = await client.functions.invoke("invite-user", {
-      body: { email, username, full_name: fullName, role },
-    });
-
-    if (error || data?.error) {
-      setInviteError(data?.error ?? error?.message ?? "Invite failed.");
+    try {
+      const data = await api.post("/users/invite", { email, username, fullName, role });
+      const emailNote = data?.email_sent
+        ? `Credentials emailed to ${email}.`
+        : `Account created — email delivery failed (${data?.email_error ?? "unknown"}). Share credentials manually.`;
+      setInviteSuccess(`User "${username}" created as ${role.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())}. ${emailNote}`);
+    } catch (e: any) {
+      setInviteError(e?.message ?? "Invite failed.");
       setInviting(false);
       return;
     }
-
-    const emailNote = data?.email_sent
-      ? `Credentials emailed to ${email}.`
-      : `Account created — email delivery failed (${data?.email_error ?? "unknown"}). Share credentials manually.`;
-    setInviteSuccess(`User "${username}" created as ${role.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())}. ${emailNote}`);
     setEmail(""); setUsername(""); setFullName(""); setRole("dc_operator"); setUsernameStatus("idle");
     setPage(0);
-    await loadPage(0);
+    setSearch("");
+    setSearchInput("");
     setInviting(false);
   }
 
   async function toggleActive(user: UserRow) {
     setTogglingId(user.id);
     setActionError(null);
-    const client = getSupabaseClient();
-    if (!client) { setActionError("Supabase not configured."); setTogglingId(null); return; }
-
-    const { error } = await client
-      .from("profiles")
-      .update({ is_active: !user.is_active })
-      .eq("id", user.id);
-
-    if (error) { setActionError(friendlyError(error)); }
-    else { setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, is_active: !u.is_active } : u)); }
+    try {
+      await api.put(`/users/${user.id}/status`, { isActive: !user.is_active });
+      setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, is_active: !u.is_active } : u));
+    } catch (e: any) {
+      setActionError(friendlyError(e));
+    }
     setTogglingId(null);
   }
 
   async function changeRole(user: UserRow, newRole: UserRole) {
     setChangingRoleId(user.id);
     setActionError(null);
-    const client = getSupabaseClient();
-    if (!client) { setChangingRoleId(null); return; }
-    const { error } = await client.from("profiles").update({ role: newRole }).eq("id", user.id);
-    if (error) setActionError(`Failed to change role: ${error.message}`);
-    else setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, role: newRole } : u));
+    try {
+      await api.put(`/users/${user.id}/role`, { role: newRole });
+      setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, role: newRole } : u));
+    } catch (e: any) {
+      setActionError(`Failed to change role: ${e?.message ?? "Unknown error"}`);
+    }
     setChangingRoleId(null);
   }
 
@@ -338,10 +372,17 @@ export function UsersPage() {
 
         {/* User list */}
         <div className="table-card">
-          <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
             <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text)" }}>
-              All users {!loading && <span style={{ fontWeight: 400, color: "var(--muted)" }}>({totalCount.toLocaleString()})</span>}
+              All users {!loading && <span style={{ fontWeight: 400, color: "var(--muted)" }}>{totalCount > 0 ? `(${totalCount.toLocaleString()})` : ""}</span>}
             </h2>
+            <div style={{ display: "flex", alignItems: "center", border: "1px solid var(--line)", borderRadius: "var(--radius-pill)", overflow: "hidden", padding: "0 12px", width: 220 }}>
+              <Search size={14} color="var(--muted)" style={{ flexShrink: 0 }} />
+              <input type="text" value={searchInput} onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Search users…"
+                data-plain
+                style={{ flex: 1, border: "none", outline: "none", padding: "7px 8px", fontSize: 12, color: "var(--text)", background: "transparent", boxShadow: "none", minWidth: 0 }} />
+            </div>
           </div>
 
           {actionError && (
@@ -352,13 +393,23 @@ export function UsersPage() {
 
           <div className="table-scroll">
           <table ref={tableRef} style={{ tableLayout: "fixed", width: "100%" }}>
-            <thead>
+            <thead style={{ position: "sticky", top: 0, zIndex: 1, background: "var(--bg-surface)" }}>
               <tr>
-                <th style={{ width: "18%" }}>Name</th>
-                <th style={{ width: "14%" }}>Username</th>
-                <th style={{ width: "25%" }}>Email</th>
-                <th style={{ width: "14%" }}>Role</th>
-                <th style={{ width: "10%" }}>Status</th>
+                <th style={{ width: "18%", cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("full_name")}>
+                  Name {sortCol === "full_name" && <span style={{ fontSize: 10 }}>{sortDir === "asc" ? "▲" : "▼"}</span>}
+                </th>
+                <th style={{ width: "14%", cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("username")}>
+                  Username {sortCol === "username" && <span style={{ fontSize: 10 }}>{sortDir === "asc" ? "▲" : "▼"}</span>}
+                </th>
+                <th style={{ width: "25%", cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("email")}>
+                  Email {sortCol === "email" && <span style={{ fontSize: 10 }}>{sortDir === "asc" ? "▲" : "▼"}</span>}
+                </th>
+                <th style={{ width: "14%", cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("role")}>
+                  Role {sortCol === "role" && <span style={{ fontSize: 10 }}>{sortDir === "asc" ? "▲" : "▼"}</span>}
+                </th>
+                <th style={{ width: "10%", cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("is_active")}>
+                  Status {sortCol === "is_active" && <span style={{ fontSize: 10 }}>{sortDir === "asc" ? "▲" : "▼"}</span>}
+                </th>
                 <th style={{ width: "19%" }} />
               </tr>
             </thead>
@@ -421,23 +472,23 @@ export function UsersPage() {
             </tbody>
           </table>
           </div>
-
-          {totalCount > PAGE_SIZE && (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "10px 20px", borderTop: "1px solid var(--line)" }}>
-              <button type="button" disabled={page === 0 || loading} onClick={() => { const p = page - 1; setPage(p); loadPage(p); }}
-                style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", fontSize: 12, fontWeight: 600, border: "1px solid var(--line)", borderRadius: "var(--radius)", background: "var(--bg-surface)", color: "var(--text)", cursor: page === 0 || loading ? "not-allowed" : "pointer", opacity: page === 0 ? 0.4 : 1 }}>
-                <ChevronLeft size={14} /> Prev
-              </button>
-              <span style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap" }}>
-                Page {page + 1} of {pageCount.toLocaleString()}
-              </span>
-              <button type="button" disabled={page >= pageCount - 1 || loading} onClick={() => { const p = page + 1; setPage(p); loadPage(p); }}
-                style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", fontSize: 12, fontWeight: 600, border: "1px solid var(--line)", borderRadius: "var(--radius)", background: "var(--bg-surface)", color: "var(--text)", cursor: page >= pageCount - 1 || loading ? "not-allowed" : "pointer", opacity: page >= pageCount - 1 ? 0.4 : 1 }}>
-                Next <ChevronRight size={14} />
-              </button>
-            </div>
-          )}
         </div>
+
+        {totalCount > PAGE_SIZE && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, padding: "12px 0" }}>
+            <button type="button" disabled={page === 0 || loading} onClick={() => goToPage(page - 1)}
+              style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", fontSize: 12, fontWeight: 600, border: "1px solid var(--line)", borderRadius: "var(--radius)", background: "var(--bg-surface)", color: "var(--text)", cursor: page === 0 || loading ? "not-allowed" : "pointer", opacity: page === 0 ? 0.4 : 1 }}>
+              <ChevronLeft size={14} /> Prev
+            </button>
+            <span style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap" }}>
+              Page {page + 1} of {pageCount.toLocaleString()}
+            </span>
+            <button type="button" disabled={(page + 1) * PAGE_SIZE >= totalCount || loading} onClick={() => goToPage(page + 1)}
+              style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", fontSize: 12, fontWeight: 600, border: "1px solid var(--line)", borderRadius: "var(--radius)", background: "var(--bg-surface)", color: "var(--text)", cursor: (page + 1) * PAGE_SIZE >= totalCount || loading ? "not-allowed" : "pointer", opacity: (page + 1) * PAGE_SIZE >= totalCount ? 0.4 : 1 }}>
+              Next <ChevronRight size={14} />
+            </button>
+          </div>
+        )}
       </main>
     </div>
   );

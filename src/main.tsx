@@ -6,7 +6,6 @@ import { AuthProvider } from "@/lib/auth";
 import { App } from "./App";
 import "./styles.css";
 import "./theme-enterprise.css";
-import { getSupabaseClient } from "@/lib/supabase";
 import { NAVIGATION_CACHE_GC_TIME, NAVIGATION_CACHE_STALE_TIME } from "@/services/navigationCache";
 
 // Remove the flash-prevention style now that real CSS is loaded
@@ -19,17 +18,8 @@ if (window.location.pathname === "/login" || window.location.pathname === "/chan
   document.documentElement.style.background = "#f5f5f7";
 }
 
-// Capture PASSWORD_RECOVERY event before React renders
 export let pendingPasswordRecovery = false;
 export let hadRecoveryHash = window.location.hash.includes("type=recovery") || window.location.hash.includes("type=invite");
-const client = getSupabaseClient();
-if (client) {
-  client.auth.onAuthStateChange((event) => {
-    if (event === "PASSWORD_RECOVERY") {
-      pendingPasswordRecovery = true;
-    }
-  });
-}
 
 const queryClient = new QueryClient({
   defaultOptions: {

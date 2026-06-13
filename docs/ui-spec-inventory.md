@@ -1,3 +1,15 @@
+---
+title: UI Spec — Inventory View
+tags:
+  - ui
+  - inventory
+  - frontend
+  - spec
+date: 2026-05-16
+aliases:
+  - Inventory Spec
+---
+
 # UI Spec (Katana-like Inventory View)
 
 ## Goal
@@ -43,3 +55,9 @@ Provide a dense operational inventory screen that feels like a real warehouse co
 - keep summary cards on top
 - table switches to card list with key quantities
 - sticky action bar for stock-in/export
+
+See [[ui-ux-pattern]] for the full brand system and interaction standards.
+
+---
+
+**Related:** [[ui-ux-pattern]], [[system-design]], [[prd]]

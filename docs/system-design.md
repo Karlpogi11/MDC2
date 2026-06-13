@@ -1,3 +1,17 @@
+---
+title: System Design
+tags:
+  - architecture
+  - design
+  - system
+date: 2026-05-16
+status: Approved
+version: "1.0"
+aliases:
+  - System Design
+  - architecture
+---
+
 # MDC Inventory System — System Design
 
 **Version:** 1.0
@@ -89,6 +103,8 @@
   <StockInPage />
 </RoleGuard>
 ```
+
+See [[ui-ux-pattern]] for brand guidelines and [[ui-spec-inventory]] for the inventory grid spec.
 
 ---
 
@@ -276,3 +292,7 @@ RESEND_FROM_EMAIL=
 **Decision:** Use `jspdf`/`jspdf-autotable` in the browser for the operator-facing packing-list layout, and use `pdf-lib` only inside Supabase Edge Functions through URL imports when Deno has to build or attach PDFs.
 **Alternatives rejected:** Shipping `pdf-lib` in the frontend bundle when it is only needed by Deno. `@react-pdf/renderer` because it does not run in Supabase Edge Functions.
 **Consequences:** Frontend dependencies stay limited to the browser PDF path; Edge Function PDF code owns its own Deno import.
+
+---
+
+**Related:** [[prd]], [[implementation-blueprint]], [[ui-spec-inventory]], [[definition-of-done]]

@@ -1,3 +1,16 @@
+---
+title: Definition of Done
+tags:
+  - quality
+  - process
+  - engineering
+date: 2026-05-16
+version: "1.0"
+aliases:
+  - DoD
+  - Quality Gates
+---
+
 # MDC Inventory System — Definition of Done
 
 **Version:** 1.0
@@ -27,7 +40,7 @@ Before any PR is merged, all of these must be true:
 
 A feature is complete when:
 
-- [ ] All acceptance criteria from the PRD are met (check `docs/prd.md`)
+- [ ] All acceptance criteria from the PRD are met (check [[prd]])
 - [ ] Happy path works correctly
 - [ ] Error states are handled and shown to the user (not silent failures)
 - [ ] Loading states are shown during async operations
@@ -47,7 +60,7 @@ A milestone is complete when all features in that milestone pass Level 1 and Lev
 - [ ] All new DB migrations applied to staging
 - [ ] At least one real user (DC operator or admin) has tested the flow on staging
 - [ ] No P0 or P1 bugs open
-- [ ] Performance targets met (see `docs/system-design.md` section 7)
+- [ ] Performance targets met (see [[system-design]] section 7)
 - [ ] All `docs/` files updated to reflect what was built
 
 ---
@@ -125,3 +138,9 @@ This document must be updated when:
 - The team agrees a gate is no longer relevant (with a written reason)
 
 Every update requires a commit with message: `docs(dod): <what changed and why>`
+
+See [[audit-checklist]] for the completed audit trail and [[implementation-blueprint]] for delivery planning.
+
+---
+
+**Related:** [[prd]], [[system-design]], [[implementation-blueprint]], [[audit-checklist]]
