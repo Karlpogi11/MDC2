@@ -6,22 +6,32 @@
 - Node.js 18+
 - npm
 
-## 1. Database
+---
 
-Start XAMPP MariaDB and create the database:
+## First Time Setup
+
+### 1. Create database
 
 ```bash
 mysql -u root -h 127.0.0.1 -P 3307 -e "CREATE DATABASE IF NOT EXISTS mdc"
 ```
 
-Then push the Drizzle schema:
+### 2. Install dependencies
 
 ```bash
-cd backend
-npx drizzle-kit push
+cd backend && npm install
+cd .. && npm install
 ```
 
-Seed the admin user via the register API. First start the backend (step 2), then run:
+### 3. Push schema
+
+```bash
+cd backend && npx drizzle-kit push
+```
+
+### 4. Seed admin user
+
+Start the backend first, then:
 
 ```bash
 curl -X POST http://localhost:3001/api/auth/register \
@@ -29,24 +39,22 @@ curl -X POST http://localhost:3001/api/auth/register \
   -d '{"username":"admin","password":"admin123","email":"admin@mdc.local","fullName":"Administrator","role":"dc_admin"}'
 ```
 
-Default credentials: `admin` / `admin123`
+Default login: `admin` / `admin123`
 
-## 2. Backend (port 3001)
+---
+
+## Daily Dev Commands
+
+Run in two separate terminals:
 
 ```bash
-cd backend
-npx tsx --env-file=.env src/index.ts
+# Terminal 1 — Backend (port 3001)
+cd backend && npx tsx --env-file=.env src/index.ts
 ```
 
-## 3. Frontend (port 5173)
-
-In a separate terminal, from the project root:
-
 ```bash
-npm install
+# Terminal 2 — Frontend (port 5173)
 npx vite
 ```
 
-## 4. Login
-
-Open `http://localhost:5173` and log in with `admin` / `admin123`.
+Open `http://localhost:5173` and log in.
