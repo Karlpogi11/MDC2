@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { getDb } from "../db/connection";
-import { parts, serialNumbers, transfers, transferItems, sites } from "../db/schema";
-import { eq, and, inArray, like, desc, sql } from "drizzle-orm";
+import { parts, serialNumbers } from "../db/schema";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 
 export const inventoryRouter = Router();
@@ -25,19 +25,40 @@ inventoryRouter.get("/", authMiddleware, async (req, res) => {
     limit: 5000,
   });
 
-  const activeTransfers = await db.query.transfers.findMany({
-    columns: { createdAt: true, packedAt: true, status: true },
-    where: inArray(transfers.status, ["packed", "in_transit", "received"]),
-    limit: 1500,
-    with: { items: { columns: { partId: true } } },
-  });
+  const [activeTransfersRes, transferItemsRes, reservedItemsRes] = await Promise.all([
+    db.execute(sql`
+      SELECT t.id, t.created_at, t.packed_at, t.status
+      FROM transfers t
+      WHERE t.status IN ('packed', 'in_transit', 'received')
+      ORDER BY t.created_at DESC LIMIT 1500
+    `),
+    db.execute(sql`
+      SELECT ti.transfer_id, ti.part_id
+      FROM transfer_items ti
+      JOIN transfers t ON t.id = ti.transfer_id
+      WHERE t.status IN ('packed', 'in_transit', 'received')
+      LIMIT 10000
+    `),
+    db.execute(sql`
+      SELECT ti.transfer_id, ti.part_id, ti.serial_id
+      FROM transfer_items ti
+      JOIN transfers t ON t.id = ti.transfer_id
+      WHERE t.status IN ('draft', 'packed')
+      LIMIT 10000
+    `),
+  ]);
 
-  const reservedItems = await db.query.transferItems.findMany({
-    columns: { partId: true, serialId: true, qty: true },
-    where: inArray(transfers.status, ["draft", "packed"]),
-    limit: 10000,
-    with: { transfer: { columns: { status: true } } },
-  });
+  const activeTransfersRows = (activeTransfersRes as any[])[0] ?? [];
+  const transferItemsRows = (transferItemsRes as any[])[0] ?? [];
+  const reservedItemsRows = (reservedItemsRes as any[])[0] ?? [];
+
+  const itemsByTransfer = new Map<string, any[]>();
+  for (const item of transferItemsRows) {
+    if (!itemsByTransfer.has(item.transfer_id)) {
+      itemsByTransfer.set(item.transfer_id, []);
+    }
+    itemsByTransfer.get(item.transfer_id)!.push(item);
+  }
 
   const byPart = new Map<string, {
     partId: string; partName: string; partNumber: string; category: string;
@@ -69,10 +90,11 @@ inventoryRouter.get("/", authMiddleware, async (req, res) => {
     }
   }
 
-  for (const t of activeTransfers) {
-    const stkOutAt = t.packedAt ?? t.createdAt;
-    for (const item of t.items) {
-      const entry = byPart.get(item.partId);
+  for (const t of activeTransfersRows) {
+    const stkOutAt = t.packed_at ?? t.created_at;
+    const items = itemsByTransfer.get(t.id) ?? [];
+    for (const item of items) {
+      const entry = byPart.get(item.part_id);
       if (!entry) continue;
       const outAt = stkOutAt ? new Date(stkOutAt).toISOString() : null;
       if (outAt && (!entry.lastStockOutAt || outAt > entry.lastStockOutAt)) {
@@ -82,13 +104,12 @@ inventoryRouter.get("/", authMiddleware, async (req, res) => {
   }
 
   const reservedSerialKeys = new Set<string>();
-  for (const item of reservedItems) {
-    if (!item.partId || !item.serialId) continue;
-    if (item.transfer?.status !== "draft" && item.transfer?.status !== "packed") continue;
-    const key = `${item.partId}:${item.serialId}`;
+  for (const item of reservedItemsRows) {
+    if (!item.part_id || !item.serial_id) continue;
+    const key = `${item.part_id}:${item.serial_id}`;
     if (reservedSerialKeys.has(key)) continue;
     reservedSerialKeys.add(key);
-    const entry = byPart.get(item.partId);
+    const entry = byPart.get(item.part_id);
     if (entry) entry.reserved++;
   }
 
@@ -120,28 +141,32 @@ inventoryRouter.get("/", authMiddleware, async (req, res) => {
 
 inventoryRouter.get("/site/:siteId", authMiddleware, async (req, res) => {
   const db = await getDb();
-  const serials = await db.query.serialNumbers.findMany({
-    where: and(
-      eq(serialNumbers.currentSiteId, req.params.siteId),
-      eq(serialNumbers.status, "transferred"),
-    ),
-    limit: 5000,
-    with: {
-      part: { columns: { partName: true, partNumber: true } },
-      site: { columns: { siteName: true, siteCode: true } },
-    },
-  });
+  const result = await db.execute(sql`
+    SELECT
+      sn.id, sn.serial_number AS serialNumber, sn.part_id AS partId,
+      sn.current_site_id AS currentSiteId, sn.status, sn.stock_in_at AS stockInAt,
+      p.part_name AS partName, p.part_number AS partNumber,
+      s.site_name AS siteName, s.site_code AS siteCode
+    FROM serial_numbers sn
+    LEFT JOIN parts p ON p.id = sn.part_id
+    LEFT JOIN sites s ON s.id = sn.current_site_id
+    WHERE sn.current_site_id = ${req.params.siteId}
+      AND sn.status = 'transferred'
+    ORDER BY sn.stock_in_at DESC
+    LIMIT 5000
+  `);
+  const serials = (result as any[])[0] ?? [];
 
   const grouped = new Map<string, any>();
   for (const s of serials) {
-    const key = `${s.site?.siteCode}:${s.part?.partNumber}`;
+    const key = `${s.siteCode}:${s.partNumber}`;
     if (!grouped.has(key)) {
       grouped.set(key, {
         siteId: req.params.siteId,
-        siteName: s.site?.siteName,
-        siteCode: s.site?.siteCode,
-        partName: s.part?.partName,
-        partNumber: s.part?.partNumber,
+        siteName: s.siteName,
+        siteCode: s.siteCode,
+        partName: s.partName,
+        partNumber: s.partNumber,
         qty: 0,
       });
     }

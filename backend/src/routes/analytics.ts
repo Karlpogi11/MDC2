@@ -11,7 +11,6 @@ analyticsRouter.get("/dc-activity", authMiddleware, async (req, res) => {
   const rawResults = await Promise.all([
     db.execute(sql`SELECT COUNT(*) as count FROM serial_numbers WHERE status = 'in_stock'`),
     db.execute(sql`SELECT COUNT(*) as count FROM serial_numbers WHERE status = 'transferred'`),
-    db.execute(sql`SELECT COALESCE(SUM(available), 0) as available FROM inventory_snapshot`),
   ]);
 
   const stockedInRows = (rawResults[0] as any[])[0] as any[];

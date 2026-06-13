@@ -1,3 +1,4 @@
+import "express-async-errors";
 import express from "express";
 import cors from "cors";
 import { getDb } from "./db/connection";
@@ -64,6 +65,11 @@ app.use("/api/physical-counts", physicalCountsRouter);
 app.use("/api/corrections", correctionsRouter);
 app.use("/api/notifications", notificationsRouter);
 app.use("/api/receive", receiveRouter);
+
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error("Unhandled error:", err?.sql ?? err?.message ?? err);
+  res.status(500).json({ error: "Internal server error" });
+});
 
 app.listen(PORT, () => {
   console.log(`MDC backend running on http://localhost:${PORT}`);

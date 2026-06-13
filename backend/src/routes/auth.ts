@@ -42,11 +42,11 @@ authRouter.post("/signin", async (req, res) => {
       token,
       user: {
         id: user.id,
-        fullName: user.fullName,
+        full_name: user.fullName,
         email: user.email,
         username: user.username,
         role: user.role,
-        forcePasswordChange: user.forcePasswordChange,
+        force_password_change: user.forcePasswordChange,
       },
     });
   } catch (err) {
@@ -105,11 +105,11 @@ authRouter.get("/me", authMiddleware, async (req, res) => {
   }
   res.json({
     id: user.id,
-    fullName: user.fullName,
+    full_name: user.fullName,
     email: user.email,
     username: user.username,
     role: user.role,
-    forcePasswordChange: user.forcePasswordChange,
+    force_password_change: user.forcePasswordChange,
   });
 });
 

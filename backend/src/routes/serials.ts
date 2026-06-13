@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { getDb } from "../db/connection";
 import { serialNumbers, parts, sites, stockInBatches } from "../db/schema";
-import { eq, and, like, inArray, desc } from "drizzle-orm";
+import { eq, and, like, inArray, desc, sql } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 
 export const serialsRouter = Router();
@@ -14,63 +14,104 @@ serialsRouter.get("/", authMiddleware, async (req, res) => {
   const page = Math.max(0, parseInt(req.query.page as string) || 0);
   const limit = Math.min(parseInt(req.query.limit as string) || 5000, 10000);
 
-  let conditions = undefined;
+  const clauses: any[] = [];
+  if (status) clauses.push(sql`sn.status = ${status}`);
+  if (q) clauses.push(sql`sn.serial_number LIKE ${`%${q}%`}`);
+  if (partId) clauses.push(sql`sn.part_id = ${partId}`);
+  const whereClause = clauses.length ? sql`WHERE ${sql.join(clauses, sql` AND `)}` : sql``;
 
-  if (status) conditions = eq(serialNumbers.status, status);
-  if (q) conditions = and(conditions, like(serialNumbers.serialNumber, `%${q}%`));
-  if (partId) conditions = and(conditions, eq(serialNumbers.partId, partId));
-
-  const rows = await db.query.serialNumbers.findMany({
-    where: conditions,
-    limit,
-    offset: page * limit,
-    orderBy: [desc(serialNumbers.stockInAt)],
-    with: {
-      part: { columns: { partNumber: true, partName: true, category: true } },
-      site: { columns: { siteName: true, siteCode: true } },
-      batch: { columns: { sourceType: true, importedAt: true } },
-    },
-  });
+  const result = await db.execute(sql`
+    SELECT
+      sn.id, sn.serial_number AS serialNumber, sn.part_id AS partId,
+      sn.current_site_id AS currentSiteId, sn.status, sn.stock_in_batch_id AS stockInBatchId,
+      sn.stock_in_at AS stockInAt, sn.created_at AS createdAt, sn.updated_at AS updatedAt,
+      p.part_number AS partNumber, p.part_name AS partName, p.category,
+      s.site_name AS siteName, s.site_code AS siteCode,
+      b.source_type AS sourceType, b.imported_at AS importedAt
+    FROM serial_numbers sn
+    LEFT JOIN parts p ON p.id = sn.part_id
+    LEFT JOIN sites s ON s.id = sn.current_site_id
+    LEFT JOIN stock_in_batches b ON b.id = sn.stock_in_batch_id
+    ${whereClause}
+    ORDER BY sn.stock_in_at DESC
+    LIMIT ${limit} OFFSET ${page * limit}
+  `);
+  const rawRows = (result as any[])[0] ?? [];
+  const rows = rawRows.map((r: any) => ({
+    id: r.id,
+    serialNumber: r.serialNumber,
+    partId: r.partId,
+    currentSiteId: r.currentSiteId,
+    status: r.status,
+    stockInBatchId: r.stockInBatchId,
+    stockInAt: r.stockInAt,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+    part: { partNumber: r.partNumber, partName: r.partName, category: r.category },
+    site: { siteName: r.siteName, siteCode: r.siteCode },
+    batch: { sourceType: r.sourceType, importedAt: r.importedAt },
+  }));
   res.json(rows);
 });
 
 serialsRouter.get("/:serialNumber", authMiddleware, async (req, res) => {
   const db = await getDb();
-  const serial = await db.query.serialNumbers.findFirst({
-    where: eq(serialNumbers.serialNumber, req.params.serialNumber),
-    with: {
-      part: { columns: { partNumber: true, partName: true, category: true } },
-      site: { columns: { siteName: true, siteCode: true } },
-    },
-  });
+  const result = await db.execute(sql`
+    SELECT
+      sn.id, sn.serial_number AS serialNumber, sn.part_id AS partId,
+      sn.current_site_id AS currentSiteId, sn.status, sn.stock_in_batch_id AS stockInBatchId,
+      sn.stock_in_at AS stockInAt, sn.created_at AS createdAt, sn.updated_at AS updatedAt,
+      p.part_number AS partNumber, p.part_name AS partName, p.category,
+      s.site_name AS siteName, s.site_code AS siteCode
+    FROM serial_numbers sn
+    LEFT JOIN parts p ON p.id = sn.part_id
+    LEFT JOIN sites s ON s.id = sn.current_site_id
+    WHERE sn.serial_number = ${req.params.serialNumber}
+    LIMIT 1
+  `);
+  const rawRows = (result as any[])[0] ?? [];
+  const serial = rawRows.length ? {
+    id: rawRows[0].id,
+    serialNumber: rawRows[0].serialNumber,
+    partId: rawRows[0].partId,
+    currentSiteId: rawRows[0].currentSiteId,
+    status: rawRows[0].status,
+    stockInBatchId: rawRows[0].stockInBatchId,
+    stockInAt: rawRows[0].stockInAt,
+    createdAt: rawRows[0].createdAt,
+    updatedAt: rawRows[0].updatedAt,
+    part: { partNumber: rawRows[0].partNumber, partName: rawRows[0].partName, category: rawRows[0].category },
+    site: { siteName: rawRows[0].siteName, siteCode: rawRows[0].siteCode },
+  } : null;
   res.json(serial ?? null);
 });
 
 serialsRouter.get("/:id/transfer-history", authMiddleware, async (req, res) => {
   const db = await getDb();
-  const serial = await db.query.serialNumbers.findFirst({
-    where: eq(serialNumbers.id, req.params.id),
-  });
-  if (!serial) { res.json([]); return; }
+  const serialResult = await db.execute(sql`
+    SELECT id FROM serial_numbers WHERE id = ${req.params.id} LIMIT 1
+  `);
+  const serialRows = (serialResult as any[])[0] ?? [];
+  if (!serialRows.length) { res.json([]); return; }
 
-  const items = await db.query.transferItems.findMany({
-    where: eq(serialNumbers.id, serial.id),
-    with: {
-      transfer: {
-        columns: { transferNo: true, status: true, createdAt: true },
-        with: {
-          destinationSite: { columns: { siteName: true } },
-        },
-      },
-    },
-    limit: 20,
-  });
+  const itemResult = await db.execute(sql`
+    SELECT
+      t.transfer_no AS transferNo, t.status, t.created_at AS createdAt,
+      s.site_name AS destSiteName
+    FROM transfer_items ti
+    JOIN transfers t ON t.id = ti.transfer_id
+    LEFT JOIN sites s ON s.id = t.destination_site_id
+    WHERE ti.serial_id = ${req.params.id}
+    ORDER BY t.created_at DESC
+    LIMIT 20
+  `);
+  const items = (itemResult as any[])[0] ?? [];
 
-  res.json(items.map((i) => ({
-    transferNo: i.transfer.transferNo,
-    status: i.transfer.status,
-    createdAt: i.transfer.createdAt,
-    destName: i.transfer.destinationSite?.siteName,
+  res.json(items.map((i: any) => ({
+    transferNo: i.transferNo,
+    status: i.status,
+    createdAt: i.createdAt,
+    destName: i.destSiteName,
   })));
 });
 

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { getDb } from "../db/connection";
 import { stockInBatches, stockInItems, serialNumbers, parts, sites } from "../db/schema";
-import { eq, and, desc, inArray, gte } from "drizzle-orm";
+import { eq, and, desc, inArray, gte, sql } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 import { randomUUID as uuid } from "node:crypto";
 
@@ -86,27 +86,49 @@ stockInRouter.get("/batches", authMiddleware, async (req, res) => {
   const db = await getDb();
   const since = req.query.since as string;
 
-  let conditions = undefined;
-  if (since) conditions = gte(stockInBatches.importedAt, new Date(since));
+  const clauses: any[] = [];
+  if (since) clauses.push(sql`sb.imported_at >= ${new Date(since)}`);
+  const whereClause = clauses.length ? sql`WHERE ${sql.join(clauses, sql` AND `)}` : sql``;
 
-  const rows = await db.query.stockInBatches.findMany({
-    where: conditions,
-    orderBy: [desc(stockInBatches.importedAt)],
-    limit: 100,
-    with: {
-      operator: { columns: { fullName: true, username: true } },
-    },
-  });
-
+  const result = await db.execute(sql`
+    SELECT
+      sb.id, sb.source_type AS sourceType, sb.source_file_name AS sourceFileName,
+      sb.file_hash AS fileHash, sb.imported_by AS importedBy,
+      sb.imported_at AS importedAt, sb.total_rows AS totalRows,
+      sb.success_rows AS successRows, sb.failed_rows AS failedRows,
+      p.full_name AS operatorFullName, p.username AS operatorUsername
+    FROM stock_in_batches sb
+    LEFT JOIN profiles p ON p.id = sb.imported_by
+    ${whereClause}
+    ORDER BY sb.imported_at DESC
+    LIMIT 100
+  `);
+  const rawRows = (result as any[])[0] ?? [];
+  const rows = rawRows.map((r: any) => ({
+    id: r.id,
+    sourceType: r.sourceType,
+    sourceFileName: r.sourceFileName,
+    fileHash: r.fileHash,
+    importedBy: r.importedBy,
+    importedAt: r.importedAt,
+    totalRows: r.totalRows,
+    successRows: r.successRows,
+    failedRows: r.failedRows,
+    operator: { fullName: r.operatorFullName, username: r.operatorUsername },
+  }));
   res.json(rows);
 });
 
 stockInRouter.get("/batches/:id/serials", authMiddleware, async (req, res) => {
   const db = await getDb();
-  const rows = await db.query.serialNumbers.findMany({
-    where: eq(serialNumbers.stockInBatchId, req.params.id),
-    limit: 500,
-    with: { part: { columns: { partNumber: true } } },
-  });
-  res.json(rows.map((s) => ({ serialNumber: s.serialNumber, partNumber: s.part?.partNumber })));
+  const result = await db.execute(sql`
+    SELECT sn.serial_number AS serialNumber, p.part_number AS partNumber
+    FROM serial_numbers sn
+    LEFT JOIN parts p ON p.id = sn.part_id
+    WHERE sn.stock_in_batch_id = ${req.params.id}
+    LIMIT 500
+  `);
+  const rawRows = (result as any[])[0] ?? [];
+  const rows = rawRows.map((s: any) => ({ serialNumber: s.serialNumber, partNumber: s.partNumber }));
+  res.json(rows);
 });
