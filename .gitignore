@@ -1,4 +1,8 @@
 node_modules/
+scripts/_fix.mjs
+scripts/cleanup_test_stockin.mjs
+scripts/test_profiles_500k.mjs
+scripts/test_stockin_200k.mjs
 dist/
 .vite/
 .DS_Store
