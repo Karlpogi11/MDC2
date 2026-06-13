@@ -47,13 +47,21 @@ Default login: `admin` / `admin123`
 
 Run in two separate terminals:
 
+Run both backend (3001) and frontend (5173) together:
+
 ```bash
-# Terminal 1 — Backend (port 3001)
+npm run dev:all
+```
+
+Or in two separate terminals:
+
+```bash
+# Terminal 1 — Backend
 cd backend && npx tsx --env-file=.env src/index.ts
 ```
 
 ```bash
-# Terminal 2 — Frontend (port 5173)
+# Terminal 2 — Frontend
 npx vite
 ```
 

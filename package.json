@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:all": "npx concurrently -n be,fe -c yellow,cyan \"cd backend && npx tsx --env-file=.env src/index.ts\" \"vite\"",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
     "build": "vite build",
     "test": "vitest run",
