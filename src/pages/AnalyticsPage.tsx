@@ -15,7 +15,7 @@ import { DatePicker } from "@/components/DatePicker";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type UploadRecord = { id: string; source_type: string; file_name: string; uploaded_at: string; row_count: number; status: string };
+type UploadRecord = { id: string; sourceType: string; fileName: string; uploadedAt: string; rowCount: number; status: string };
 type RawRow = { part_number: string; site_code: string | null; used_at: string | null; qty: number };
 type DCData = {
   kpi: { totalStockedIn: number; totalStockedOut: number; totalTransfers: number; receivedRate: number; totalAvailable: number; totalCommitted: number };
@@ -1018,11 +1018,11 @@ export function AnalyticsPage() {
                 {uploads.map((u) => (
                   <div key={u.id} style={{ padding: "12px 20px", borderBottom: `1px solid ${FAINT}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: INK, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={u.file_name}>{u.file_name}</div>
-                      <div style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>{fmtDate(u.uploaded_at)} · {u.row_count.toLocaleString()} rows</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: INK, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={u.fileName}>{u.fileName}</div>
+                      <div style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>{fmtDate(u.uploadedAt)} · {u.rowCount.toLocaleString()} rows</div>
                     </div>
                     <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                      <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: "var(--bg-surface-elevated)", color: "var(--muted)", border: "1px solid var(--line)" }}>{u.source_type}</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: "var(--bg-surface-elevated)", color: "var(--muted)", border: "1px solid var(--line)" }}>{u.sourceType}</span>
                       <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: u.status === "done" ? "var(--bg-surface-elevated)" : u.status === "error" ? "var(--bg-surface-elevated)" : "var(--bg-surface-elevated)", color: u.status === "done" ? "var(--text)" : u.status === "error" ? "var(--negative)" : "var(--muted)", border: "1px solid var(--line)" }}>
                         {u.status === "done" ? "✓ active" : u.status}
                       </span>
@@ -1050,7 +1050,7 @@ export function AnalyticsPage() {
               <FilterField label="Site">
                 <select value={demandSite} onChange={(e) => setDemandSite(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", padding: "0 10px", fontSize: 13, outline: "none", fontFamily: "inherit", background: "var(--bg-surface)", cursor: "pointer", height: 34, color: demandSite ? INK : MUTED, minWidth: 160 }}>
                   <option value="">All sites</option>
-                  {sites.map((s) => <option key={s.id} value={s.ship_to_code ?? s.site_code}>{s.site_name}</option>)}
+                  {sites.map((s) => <option key={s.id} value={s.shipToCode ?? s.siteCode}>{s.siteName}</option>)}
                 </select>
               </FilterField>
               <FilterField label="Device Series">

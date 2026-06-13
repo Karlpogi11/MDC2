@@ -98,9 +98,9 @@ export function StockInPage() {
     const dcSite = await api.get("/sites/dc");
     if (!dcSite) throw new Error("DC site not configured.");
     const uniqueParts = [...new Set(serials.map((r) => r.partNumber))];
-    const allParts = await api.get("/parts");
-    const existingParts = (allParts ?? []).filter((p: any) => uniqueParts.includes(p.part_number));
-    const partMap = new Map(existingParts.map((p: any) => [p.part_number, p.id]));
+    const allParts = await api.get("/parts?is_active=all");
+    const existingParts = (allParts ?? []).filter((p: any) => uniqueParts.includes(p.partNumber ?? p.part_number));
+    const partMap = new Map(existingParts.map((p: any) => [p.partNumber ?? p.part_number, p.id]));
     const missing = uniqueParts.filter((pn) => !partMap.has(pn));
     if (missing.length > 0) {
       throw new Error(`Unknown part number${missing.length > 1 ? "s" : ""}: ${missing.join(", ")}. Add them in Config → Parts first.`);
@@ -544,7 +544,7 @@ export function StockInPage() {
                   disabled={draftList.length > 0}
                   onChange={(pn, part) => {
                     setDraftPartNumber(pn);
-                    if (part) { setDraftPartName(part.part_name); setDraftPartConfirmed(true); }
+                    if (part) { setDraftPartName(part.partName); setDraftPartConfirmed(true); }
                     else { setDraftPartConfirmed(false); }
                   }}
                 />
@@ -663,8 +663,6 @@ export function StockInPage() {
     </AppLayout>
   );
 }
-
-
 
 
 

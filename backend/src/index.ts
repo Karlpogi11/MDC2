@@ -26,9 +26,28 @@ import { receiveRouter } from "./routes/receive";
 
 const app = express();
 const PORT = parseInt(process.env.PORT ?? "3001", 10);
+const allowedOriginPattern = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
 
 app.use(cors({
-  origin: process.env.CORS_ORIGIN ?? "http://localhost:5173",
+  origin(origin, callback) {
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+
+    const explicitOrigin = process.env.CORS_ORIGIN;
+    if (explicitOrigin && origin === explicitOrigin) {
+      callback(null, true);
+      return;
+    }
+
+    if (allowedOriginPattern.test(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error("CORS blocked"));
+  },
   credentials: true,
 }));
 app.use(express.json({ limit: "50mb" }));

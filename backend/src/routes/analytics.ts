@@ -16,10 +16,17 @@ analyticsRouter.get("/dc-activity", authMiddleware, async (req, res) => {
   const stockedInRows = (rawResults[0] as any[])[0] as any[];
   const transferredRows = (rawResults[1] as any[])[0] as any[];
 
+  const totalAvailable = Number(stockedInRows?.[0]?.count ?? 0);
+  const totalCommitted = Number(transferredRows?.[0]?.count ?? 0);
+
   res.json({
     kpi: {
-      totalStockedIn: Number(stockedInRows?.[0]?.count ?? 0),
-      totalStockedOut: Number(transferredRows?.[0]?.count ?? 0),
+      totalStockedIn: totalAvailable,
+      totalStockedOut: totalCommitted,
+      totalTransfers: 0,
+      receivedRate: 0,
+      totalAvailable,
+      totalCommitted,
     },
     monthly: [],
     topParts: [],
@@ -38,5 +45,17 @@ analyticsRouter.get("/uploads", authMiddleware, async (req, res) => {
 });
 
 analyticsRouter.get("/demand", authMiddleware, async (req, res) => {
-  res.json({ kpi: {}, monthly: [], topParts: [], bySite: [], isFiltered: false });
+  res.json({ kpi: { totalRepairs: 0, uniqueParts: 0, topSite: null }, monthly: [], topParts: [], bySite: [], isFiltered: false });
+});
+
+analyticsRouter.get("/series-list", authMiddleware, async (req, res) => {
+  res.json([]);
+});
+
+analyticsRouter.get("/abc", authMiddleware, async (req, res) => {
+  res.json({ donut: [], rows: [] });
+});
+
+analyticsRouter.get("/velocity", authMiddleware, async (req, res) => {
+  res.json({ donut: [], rows: [] });
 });

@@ -11,10 +11,8 @@ import { getTheme, applyTheme, type Theme } from "@/lib/theme";
 type ConfigMap = Record<string, string | null>;
 
 async function loadConfig(): Promise<ConfigMap> {
-  const rows = await api.get("/config");
-  const map: ConfigMap = {};
-  for (const row of rows ?? []) map[row.key] = row.value;
-  return map;
+  const data = await api.get<ConfigMap>("/config");
+  return data ?? {};
 }
 
 async function saveConfig(key: string, value: string | null, actorId: string): Promise<string | null> {

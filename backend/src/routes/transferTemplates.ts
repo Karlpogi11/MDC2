@@ -4,6 +4,7 @@ import { transferTemplates, transferTemplateItems, sites, parts } from "../db/sc
 import { eq, desc, sql } from "drizzle-orm";
 import { authMiddleware, requireRole } from "../middleware/auth";
 import { randomUUID as uuid } from "node:crypto";
+import { queryString } from "../utils/query";
 
 export const transferTemplatesRouter = Router();
 
@@ -81,13 +82,15 @@ transferTemplatesRouter.post("/", authMiddleware, requireRole("dc_admin"), async
 
 transferTemplatesRouter.put("/:id/toggle", authMiddleware, async (req, res) => {
   const db = await getDb();
-  await db.update(transferTemplates).set({ isActive: req.body.isActive }).where(eq(transferTemplates.id, req.params.id));
+  const id = queryString(req.params.id) ?? "";
+  await db.update(transferTemplates).set({ isActive: req.body.isActive }).where(eq(transferTemplates.id, id));
   res.json({ ok: true });
 });
 
 transferTemplatesRouter.delete("/:id", authMiddleware, requireRole("dc_admin"), async (req, res) => {
   const db = await getDb();
-  await db.delete(transferTemplateItems).where(eq(transferTemplateItems.templateId, req.params.id));
-  await db.delete(transferTemplates).where(eq(transferTemplates.id, req.params.id));
+  const id = queryString(req.params.id) ?? "";
+  await db.delete(transferTemplateItems).where(eq(transferTemplateItems.templateId, id));
+  await db.delete(transferTemplates).where(eq(transferTemplates.id, id));
   res.json({ ok: true });
 });

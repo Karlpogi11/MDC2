@@ -9,11 +9,11 @@ import { PartNumberInput } from "@/components/PartNumberInput";
 
 type Part = {
   id: string;
-  part_number: string;
-  part_name: string;
+  partNumber: string;
+  partName: string;
   category: string | null;
-  average_cost: number;
-  is_active: boolean;
+  averageCost: number;
+  isActive: boolean;
 };
 
 const PARTS_TEMPLATE = "part_number,part_name,category,average_cost\n923-03861,Display Assembly - iPhone 14 Pro,Display,\n661-18041,Battery - iPad 10th Gen,Battery,";
@@ -81,8 +81,12 @@ export function PartsTab() {
   const [importMode, setImportMode] = useState<"merge" | "deactivate_unlisted" | "replace_all">("merge");
 
   async function load() {
-    const data = await api.get("/parts");
-    setParts((data ?? []) as Part[]);
+    const data: any[] = (await api.get("/parts?is_active=all")) ?? [];
+    const parsed = data.map((p: any) => ({
+      ...p,
+      averageCost: typeof p.averageCost === "string" ? parseFloat(p.averageCost) : (p.averageCost ?? 0),
+    }));
+    setParts(parsed);
     setLoading(false);
   }
 
@@ -98,25 +102,25 @@ export function PartsTab() {
     setCsvRows(rows);
     setCsvHeaders(headers);
     setColMap({
-      part_number: guess(["part_number", "part_no", "partno", "number"]),
-      part_name:   guess(["part_name", "name", "description", "desc"]),
+      partNumber: guess(["part_number", "part_no", "partno", "number"]),
+      partName:   guess(["part_name", "name", "description", "desc"]),
       category:    guess(["cat"]),
-      average_cost: guess(["cost", "price"]),
+      averageCost: guess(["cost", "price"]),
     });
     setImportResult(null);
   }
 
   async function handleConfirmImport() {
-    if (!csvRows || !colMap.part_number || !colMap.part_name) return;
+    if (!csvRows || !colMap.partNumber || !colMap.partName) return;
     setImporting(true);
 
     const valid = csvRows
-      .filter((r) => r[colMap.part_number]?.trim() && r[colMap.part_name]?.trim())
+      .filter((r) => r[colMap.partNumber]?.trim() && r[colMap.partName]?.trim())
       .map((r) => ({
-        part_number:  r[colMap.part_number].trim(),
-        part_name:    r[colMap.part_name].trim(),
+        partNumber:  r[colMap.partNumber].trim(),
+        partName:    r[colMap.partName].trim(),
         category:     colMap.category ? r[colMap.category]?.trim() || null : null,
-        average_cost: colMap.average_cost ? parseFloat(r[colMap.average_cost]) || 0 : 0,
+        averageCost: colMap.averageCost ? parseFloat(r[colMap.averageCost]) || 0 : 0,
         part_type:    "product",
       }));
 
@@ -141,8 +145,8 @@ export function PartsTab() {
     setAddError(null); setAdding(true);
     try {
       await api.post("/parts", {
-        part_number: pn.trim(), part_name: name.trim(),
-        category: category.trim() || null, average_cost: parseFloat(cost) || 0,
+        partNumber: pn.trim(), partName: name.trim(),
+        category: category.trim() || null, averageCost: parseFloat(cost) || 0,
       });
       setPn(""); setName(""); setCategory(""); setCost("");
       setAddSuccess(true); setTimeout(() => setAddSuccess(false), 2000);
@@ -155,26 +159,26 @@ export function PartsTab() {
   async function handleSaveEdit(id: string) {
     setSaving(true);
     await api.put("/parts/" + id, {
-      part_name: editName.trim(), category: editCategory.trim() || null,
-      average_cost: parseFloat(editCost) || 0,
+      partName: editName.trim(), category: editCategory.trim() || null,
+      averageCost: parseFloat(editCost) || 0,
     });
     setSaving(false); setEditId(null); void load();
   }
 
   async function toggleActive(part: Part) {
-    await api.put("/parts/" + part.id, { is_active: !part.is_active });
+    await api.put("/parts/" + part.id, { isActive: !part.isActive });
     void load();
   }
 
   function startEdit(part: Part) {
-    setEditId(part.id); setEditName(part.part_name);
-    setEditCategory(part.category ?? ""); setEditCost(String(part.average_cost));
+    setEditId(part.id); setEditName(part.partName);
+    setEditCategory(part.category ?? ""); setEditCost(String(part.averageCost));
   }
 
   const tableRef = useTableResize();
   const filtered = parts.filter((p) =>
-    !search || p.part_number.toLowerCase().includes(search.toLowerCase()) ||
-    p.part_name.toLowerCase().includes(search.toLowerCase())
+    !search || p.partNumber.toLowerCase().includes(search.toLowerCase()) ||
+    p.partName.toLowerCase().includes(search.toLowerCase())
   );
 
   const addInputStyle: React.CSSProperties = {
@@ -213,7 +217,7 @@ export function PartsTab() {
             ))}
           </div>
           {/* Preview table — shows exactly what will be imported */}
-          {colMap.part_number && colMap.part_name && (
+          {colMap.partNumber && colMap.partName && (
             <div style={{ marginBottom: 12, border: "1px solid var(--line)", overflow: "auto", maxHeight: 220 }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                 <thead>
@@ -224,20 +228,20 @@ export function PartsTab() {
                   </tr>
                 </thead>
                 <tbody>
-                  {csvRows.filter(r => r[colMap.part_number]?.trim() && r[colMap.part_name]?.trim()).slice(0, 10).map((r, i) => (
+                  {csvRows.filter(r => r[colMap.partNumber]?.trim() && r[colMap.partName]?.trim()).slice(0, 10).map((r, i) => (
                     <tr key={i} style={{ borderBottom: "1px solid var(--line-soft)" }}>
-                      <td style={{ padding: "5px 10px", fontFamily: "monospace", color: "var(--blue)" }}>{r[colMap.part_number]}</td>
-                      <td style={{ padding: "5px 10px", color: "#111" }}>{r[colMap.part_name]}</td>
+                      <td style={{ padding: "5px 10px", fontFamily: "monospace", color: "var(--blue)" }}>{r[colMap.partNumber]}</td>
+                      <td style={{ padding: "5px 10px", color: "#111" }}>{r[colMap.partName]}</td>
                       {colMap.category && <td style={{ padding: "5px 10px", color: "var(--muted)" }}>{r[colMap.category] || "—"}</td>}
                     </tr>
                   ))}
                 </tbody>
               </table>
               <div style={{ padding: "6px 10px", fontSize: 11, color: "var(--muted)", borderTop: "1px solid var(--line-soft)" }}>
-                Showing first 10 of {csvRows.filter(r => r[colMap.part_number]?.trim() && r[colMap.part_name]?.trim()).length} valid rows
-                {csvRows.length - csvRows.filter(r => r[colMap.part_number]?.trim() && r[colMap.part_name]?.trim()).length > 0 &&
+                Showing first 10 of {csvRows.filter(r => r[colMap.partNumber]?.trim() && r[colMap.partName]?.trim()).length} valid rows
+                {csvRows.length - csvRows.filter(r => r[colMap.partNumber]?.trim() && r[colMap.partName]?.trim()).length > 0 &&
                   <span style={{ color: "var(--muted)", marginLeft: 8 }}>
-                    · {csvRows.length - csvRows.filter(r => r[colMap.part_number]?.trim() && r[colMap.part_name]?.trim()).length} rows will be skipped (empty part number or name)
+                    · {csvRows.length - csvRows.filter(r => r[colMap.partNumber]?.trim() && r[colMap.partName]?.trim()).length} rows will be skipped (empty part number or name)
                   </span>
                 }
               </div>
@@ -257,9 +261,9 @@ export function PartsTab() {
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button type="button" onClick={() => void handleConfirmImport()}
-              disabled={importing || !colMap.part_number || !colMap.part_name}
-              style={{ background: "var(--blue)", color: "#fff", border: "none", padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: (!colMap.part_number || !colMap.part_name) ? 0.5 : 1 }}>
-              {importing ? "Importing…" : `Import ${csvRows.filter(r => r[colMap.part_number]?.trim() && r[colMap.part_name]?.trim()).length} rows`}
+              disabled={importing || !colMap.partNumber || !colMap.partName}
+              style={{ background: "var(--blue)", color: "#fff", border: "none", padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: (!colMap.partNumber || !colMap.partName) ? 0.5 : 1 }}>
+              {importing ? "Importing…" : `Import ${csvRows.filter(r => r[colMap.partNumber]?.trim() && r[colMap.partName]?.trim()).length} rows`}
             </button>
             <button type="button" onClick={() => setCsvRows(null)}
               style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", padding: "5px 10px", fontSize: 13, color: "#666", cursor: "pointer" }}>
@@ -285,7 +289,7 @@ export function PartsTab() {
                 value={pn}
                 onChange={(v, part) => {
                   setPn(v);
-                  if (part) { setName(part.part_name); setCategory(part.category ?? ""); }
+                  if (part) { setName(part.partName); setCategory(part.category ?? ""); }
                 }}
                 required
                 style={{ padding: "5px 8px", fontSize: 13 }}
@@ -339,14 +343,14 @@ export function PartsTab() {
               {filtered.map((part) => {
                 const isEditing = editId === part.id;
                 return (
-                  <tr key={part.id} style={{ opacity: part.is_active ? 1 : 0.5, background: isEditing ? "#f0f9ff" : undefined }}>
+                  <tr key={part.id} style={{ opacity: part.isActive ? 1 : 0.5, background: isEditing ? "#f0f9ff" : undefined }}>
                     <td style={{ fontFamily: "monospace", fontWeight: 700, color: "var(--blue)", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {part.part_number}
+                      {part.partNumber}
                     </td>
-                    <td title={part.part_name} style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <td title={part.partName} style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
                       {isEditing
                         ? <input value={editName} onChange={(e) => setEditName(e.target.value)} style={fieldStyle} />
-                        : part.part_name}
+                        : part.partName}
                     </td>
                     <td title={part.category ?? ""} style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
                       {isEditing
@@ -356,13 +360,13 @@ export function PartsTab() {
                     <td className="num">
                       {isEditing
                         ? <input type="number" value={editCost} onChange={(e) => setEditCost(e.target.value)} style={{ ...fieldStyle, textAlign: "right" }} />
-                        : part.average_cost > 0 ? `$${part.average_cost}` : <span style={{ color: "#aaa" }}>—</span>}
+                        : part.averageCost > 0 ? `$${part.averageCost}` : <span style={{ color: "#aaa" }}>—</span>}
                     </td>
                     <td>
                       <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: "var(--radius-pill)",
-                        background: part.is_active ? "#dcfce7" : "#f3f4f6",
-                        color: part.is_active ? "#15803d" : "#9ca3af" }}>
-                        {part.is_active ? "Active" : "Inactive"}
+                        background: part.isActive ? "#dcfce7" : "#f3f4f6",
+                        color: part.isActive ? "#15803d" : "#9ca3af" }}>
+                        {part.isActive ? "Active" : "Inactive"}
                       </span>
                     </td>
                     <td>
@@ -386,8 +390,8 @@ export function PartsTab() {
                             </button>
                             <button type="button" onClick={() => void toggleActive(part)}
                               style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                                color: part.is_active ? "#b91c1c" : "#15803d" }}>
-                              {part.is_active ? "Disable" : "Enable"}
+                                color: part.isActive ? "#b91c1c" : "#15803d" }}>
+                              {part.isActive ? "Disable" : "Enable"}
                             </button>
                           </>
                         )}
@@ -405,8 +409,6 @@ export function PartsTab() {
     </div>
   );
 }
-
-
 
 
 

@@ -10,20 +10,20 @@ type TransferStatus = "draft" | "packed" | "in_transit" | "received" | "cancelle
 
 type TransferRow = {
   id: string;
-  transfer_no: string;
+  transferNo: string;
   status: TransferStatus;
-  created_at: string;
-  packed_at: string | null;
-  destination_site: { site_name: string; site_code: string } | null;
-  requested_by_profile: { full_name: string | null; username: string | null } | null;
-  item_count: number;
+  createdAt: string;
+  packedAt: string | null;
+  destinationSite: { siteName: string; siteCode: string } | null;
+  requestedByProfile: { fullName: string | null; username: string | null } | null;
+  itemCount: number;
 };
 
 const PAGE_SIZE = 30;
 
 function getAge(transfer: TransferRow): string | null {
   if (transfer.status === "received" || transfer.status === "cancelled") return null;
-  const from = transfer.packed_at ?? transfer.created_at;
+  const from = transfer.packedAt ?? transfer.createdAt;
   const ms = Date.now() - new Date(from).getTime();
   const mins = Math.floor(ms / 60000);
   if (mins < 1) return "just now";
@@ -48,13 +48,13 @@ function formatDate(iso: string) {
 function formatRow(row: any): TransferRow {
   return {
     id: row.id,
-    transfer_no: row.transfer_no,
+    transferNo: row.transferNo,
     status: row.status,
-    created_at: row.created_at,
-    packed_at: row.packed_at,
-    destination_site: Array.isArray(row.destination_site) ? row.destination_site[0] ?? null : row.destination_site,
-    requested_by_profile: Array.isArray(row.requested_by_profile) ? row.requested_by_profile[0] ?? null : row.requested_by_profile,
-    item_count: Array.isArray(row.transfer_items) ? row.transfer_items.length : 0,
+    createdAt: row.createdAt,
+    packedAt: row.packedAt,
+    destinationSite: Array.isArray(row.destinationSite) ? row.destinationSite[0] ?? null : row.destinationSite,
+    requestedByProfile: Array.isArray(row.requestedByProfile) ? row.requestedByProfile[0] ?? null : row.requestedByProfile,
+    itemCount: Array.isArray(row.transfer_items) ? row.transfer_items.length : 0,
   };
 }
 
@@ -63,7 +63,7 @@ export function TransfersPage() {
   const tableRef = useTableResize();
   const [statusFilter, setStatusFilter] = useState<TransferStatus | "all">("all");
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useState<{ key: "transfer_no" | "destination" | "items" | "date"; dir: "asc" | "desc" }>({ key: "date", dir: "desc" });
+  const [sort, setSort] = useState<{ key: "transferNo" | "destination" | "items" | "date"; dir: "asc" | "desc" }>({ key: "date", dir: "desc" });
   // Pagination state
   const [transfers, setTransfers] = useState<TransferRow[]>([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -83,10 +83,10 @@ export function TransfersPage() {
   function applySorter(rows: TransferRow[]) {
     return [...rows].sort((a, b) => {
       const mul = sort.dir === "asc" ? 1 : -1;
-      if (sort.key === "transfer_no") return mul * a.transfer_no.localeCompare(b.transfer_no);
-      if (sort.key === "destination") return mul * ((a.destination_site?.site_name ?? "").localeCompare(b.destination_site?.site_name ?? ""));
-      if (sort.key === "items") return mul * (a.item_count - b.item_count);
-      return mul * (new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      if (sort.key === "transferNo") return mul * a.transferNo.localeCompare(b.transferNo);
+      if (sort.key === "destination") return mul * ((a.destinationSite?.siteName ?? "").localeCompare(b.destinationSite?.siteName ?? ""));
+      if (sort.key === "items") return mul * (a.itemCount - b.itemCount);
+      return mul * (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
     });
   }
 
@@ -97,7 +97,7 @@ export function TransfersPage() {
       const params = new URLSearchParams({ page: String(p), pageSize: String(PAGE_SIZE) });
       if (status !== "all") params.set("status", status);
       const data = await api.get(`/transfers?${params.toString()}`);
-      setTransfers(applySorter(((data as any).rows ?? []).map(formatRow)));
+      setTransfers(applySorter(((data as any).data ?? []).map(formatRow)));
       setTotalCount((data as any).total ?? 0);
     } catch (err) {
       setFetchError(err instanceof Error ? friendlyError(err) : "Failed to load transfers.");
@@ -116,9 +116,9 @@ export function TransfersPage() {
     if (!search.trim()) return true;
     const q = search.toLowerCase();
     return (
-      t.transfer_no.toLowerCase().includes(q) ||
-      (t.destination_site?.site_name ?? "").toLowerCase().includes(q) ||
-      (t.destination_site?.site_code ?? "").toLowerCase().includes(q)
+      t.transferNo.toLowerCase().includes(q) ||
+      (t.destinationSite?.siteName ?? "").toLowerCase().includes(q) ||
+      (t.destinationSite?.siteCode ?? "").toLowerCase().includes(q)
     );
   });
 
@@ -194,7 +194,7 @@ export function TransfersPage() {
           <table ref={tableRef}>
             <thead style={{ position: "sticky", top: 0, zIndex: 1, background: "var(--bg-surface)" }}>
               <tr>
-                <th><button className="col-sort" type="button" onClick={() => toggleSort("transfer_no")}><span>Transfer #</span><SortIcon k="transfer_no" /></button></th>
+                <th><button className="col-sort" type="button" onClick={() => toggleSort("transferNo")}><span>Transfer #</span><SortIcon k="transferNo" /></button></th>
                 <th><button className="col-sort" type="button" onClick={() => toggleSort("destination")}><span>Destination</span><SortIcon k="destination" /></button></th>
                 <th className="num"><button className="col-sort" type="button" onClick={() => toggleSort("items")}><span>Items</span><SortIcon k="items" /></button></th>
                 <th>Status</th>
@@ -230,14 +230,14 @@ export function TransfersPage() {
                 return (
                   <tr key={t.id}>
                     <td style={{ padding: "10px 12px", fontWeight: 700, color: "var(--blue)", fontFamily: "monospace" }}>
-                      {t.transfer_no}
+                      {t.transferNo}
                     </td>
                     <td style={{ padding: "10px 12px" }}>
-                      {t.destination_site
-                        ? <><span style={{ fontWeight: 600 }}>{t.destination_site.site_name}</span> <span style={{ color: "var(--muted)", fontSize: 11 }}>{t.destination_site.site_code}</span></>
+                      {t.destinationSite
+                        ? <><span style={{ fontWeight: 600 }}>{t.destinationSite.siteName}</span> <span style={{ color: "var(--muted)", fontSize: 11 }}>{t.destinationSite.siteCode}</span></>
                         : <span style={{ color: "var(--muted)" }}>—</span>}
                     </td>
-                    <td className="num" style={{ padding: "10px 12px" }}>{t.item_count}</td>
+                    <td className="num" style={{ padding: "10px 12px" }}>{t.itemCount}</td>
                     <td style={{ padding: "10px 12px" }}>
                       <span className="status-badge" style={{ background: s.bg, color: s.color }}>
                         {s.label}
@@ -257,9 +257,9 @@ export function TransfersPage() {
                       })()}
                     </td>
                     <td style={{ padding: "10px 12px", color: "var(--muted)" }}>
-                      {t.requested_by_profile?.full_name ?? t.requested_by_profile?.username ?? "—"}
+                      {t.requestedByProfile?.fullName ?? t.requestedByProfile?.username ?? "—"}
                     </td>
-                    <td style={{ padding: "10px 12px", color: "var(--muted)" }}>{formatDate(t.created_at)}</td>
+                    <td style={{ padding: "10px 12px", color: "var(--muted)" }}>{formatDate(t.createdAt)}</td>
                     <td style={{ padding: "10px 12px" }}>
                       <button type="button" onClick={() => navigate(`/transfers/${t.id}`)}
                         style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", padding: "5px 12px", fontSize: 12, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>

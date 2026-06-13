@@ -4,6 +4,7 @@ import { physicalCounts, physicalCountItems, serialNumbers } from "../db/schema"
 import { eq, and, inArray, ne, sql } from "drizzle-orm";
 import { authMiddleware, requireRole } from "../middleware/auth";
 import { randomUUID as uuid } from "node:crypto";
+import { queryString } from "../utils/query";
 
 export const physicalCountsRouter = Router();
 
@@ -72,8 +73,9 @@ physicalCountsRouter.post("/", authMiddleware, async (req, res) => {
 
 physicalCountsRouter.get("/:id/items", authMiddleware, async (req, res) => {
   const db = await getDb();
+  const id = queryString(req.params.id) ?? "";
   const rows = await db.query.physicalCountItems.findMany({
-    where: eq(physicalCountItems.countId, req.params.id),
+    where: eq(physicalCountItems.countId, id),
     orderBy: [physicalCountItems.variance],
     limit: 500,
   });
@@ -83,10 +85,11 @@ physicalCountsRouter.get("/:id/items", authMiddleware, async (req, res) => {
 physicalCountsRouter.put("/:id/approve", authMiddleware, requireRole("dc_admin"), async (req, res) => {
   const db = await getDb();
   const { actorId } = req.body;
+  const id = queryString(req.params.id) ?? "";
 
   const items = await db.query.physicalCountItems.findMany({
     where: and(
-      eq(physicalCountItems.countId, req.params.id),
+      eq(physicalCountItems.countId, id),
       ne(physicalCountItems.variance, "match"),
     ),
   });
@@ -101,7 +104,7 @@ physicalCountsRouter.put("/:id/approve", authMiddleware, requireRole("dc_admin")
 
   await db.update(physicalCounts)
     .set({ status: "approved", reviewedBy: actorId ?? req.user!.id, reviewedAt: new Date() })
-    .where(eq(physicalCounts.id, req.params.id));
+    .where(eq(physicalCounts.id, id));
 
   res.json({ ok: true });
 });

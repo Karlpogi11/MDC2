@@ -3,6 +3,7 @@ import { getDb } from "../db/connection";
 import { reportJobs } from "../db/schema";
 import { eq, desc } from "drizzle-orm";
 import { authMiddleware, requireRole } from "../middleware/auth";
+import { queryString } from "../utils/query";
 
 export const reportJobsRouter = Router();
 
@@ -21,6 +22,7 @@ reportJobsRouter.post("/", authMiddleware, requireRole("system_admin", "dc_admin
 
 reportJobsRouter.put("/:id/toggle", authMiddleware, requireRole("system_admin", "dc_admin"), async (req, res) => {
   const db = await getDb();
-  await db.update(reportJobs).set({ isActive: req.body.isActive }).where(eq(reportJobs.id, req.params.id));
+  const id = queryString(req.params.id) ?? "";
+  await db.update(reportJobs).set({ isActive: req.body.isActive }).where(eq(reportJobs.id, id));
   res.json({ ok: true });
 });

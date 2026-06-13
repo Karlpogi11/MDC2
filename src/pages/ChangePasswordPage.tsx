@@ -20,10 +20,6 @@ export function ChangePasswordPage() {
     setSaving(true);
     try {
       await api.auth.updatePassword(currentPassword, newPassword);
-      // Clear force_password_change flag
-      if (authState.status === "authenticated") {
-        await api.put("/auth/me", { forcePasswordChange: false });
-      }
       navigate("/", { replace: true });
     } catch (err: any) {
       setError(err?.message ?? "Failed to update password");

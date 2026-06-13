@@ -8,7 +8,6 @@ import { AppLayout } from "@/components/AppLayout";
 import { PartNumberInput } from "@/components/PartNumberInput";
 import { useSites } from "@/hooks/useSites";
 
-type Site = { id: string; site_name: string; site_code: string };
 type LineItem = {
   serial_number: string;
   part_number: string;
@@ -16,12 +15,9 @@ type LineItem = {
   qty: number;
   resolving: boolean;
   error?: string;
+  partId?: string;
+  serialId?: string;
 };
-
-async function fetchSites(): Promise<Site[]> {
-  const data = await api.get("/sites?is_dc=false");
-  return (data ?? []) as Site[];
-}
 
 function generateTransferNo(): string {
   const now = new Date();
@@ -35,16 +31,16 @@ function generateTransferNo(): string {
 export function TransferNewPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const prefill = (location.state as { prefill?: { part_number: string; part_name: string }[] } | null)?.prefill;
+  const prefill = (location.state as { prefill?: { partId: string; partNumber: string; partName: string }[] } | null)?.prefill;
   const { state: authState } = useAuth();
   const actorId = authState.status === "authenticated" ? authState.profile.id : null;
 
   const { data: allSites = [] } = useSites();
-  const sites = allSites.filter((s) => !s.is_dc);
+  const sites = allSites.filter((s) => !s.isDc);
   const [destinationId, setDestinationId] = useState("");
   const [lines, setLines] = useState<LineItem[]>(() =>
     prefill && prefill.length > 0
-      ? prefill.map((p) => ({ serial_number: "", part_number: p.part_number, part_name: p.part_name, qty: 1, resolving: false }))
+      ? prefill.map((p) => ({ serial_number: "", part_number: p.partNumber, part_name: p.partName, partId: p.partId, qty: 1, resolving: false }))
       : [{ serial_number: "", part_number: "", part_name: "", qty: 1, resolving: false }]
   );
   const [invoicePrefix, setInvoicePrefix] = useState("");
@@ -53,7 +49,7 @@ export function TransferNewPage() {
   const invoiceRef = invoicePrefix + datePart + "-" + invoiceSuffix;
   useEffect(() => {
     api.get("/sites/dc").then((data) => {
-      if (data?.invoice_prefix) setInvoicePrefix(data.invoice_prefix);
+      if (data?.invoicePrefix) setInvoicePrefix(data.invoicePrefix);
     });
   }, []);
   const invoiceSuffixRef = useRef<HTMLInputElement>(null);
@@ -84,7 +80,7 @@ export function TransferNewPage() {
       const monthStart = `${invoicePrefix}${datePart.slice(0, 6)}`;
       const monthEnd = `${invoicePrefix}${String(Number(datePart.slice(0, 6)) + 1).padStart(6, "0")}`;
       const dups = await api.get(`/transfers?invoice_ref_gte=${monthStart}&invoice_ref_lt=${monthEnd}`);
-      const found = (dups ?? []).some((r: any) => r.invoice_ref?.endsWith(`-${invoiceSuffix.trim()}`));
+      const found = (dups ?? []).some((r: any) => r.invoiceRef?.endsWith(`-${invoiceSuffix.trim()}`));
       setInvoiceDupError(found ? `Sequence "${invoiceSuffix.trim()}" already used this month.` : null);
     }, 400);
     return () => clearTimeout(t);
@@ -102,7 +98,7 @@ export function TransferNewPage() {
         setLines((prev) => prev.map((l, idx) => idx === i ? { ...l, resolving: false, error: "Serial not found in inventory." } : l));
         return;
       }
-      const part = Array.isArray(data.parts) ? data.parts[0] : data.parts as { part_number: string; part_name: string } | null;
+      const part = data.part as { partNumber: string; partName: string } | null;
       const statusLabel = (s: string) =>
         s === "in_transit" ? "Reserved for another transfer" :
         s === "transferred" ? "Already transferred out" :
@@ -113,8 +109,10 @@ export function TransferNewPage() {
       setLines((prev) => prev.map((l, idx) => idx === i ? {
         ...l,
         resolving: false,
-        part_number: part?.part_number ?? l.part_number,
-        part_name: part?.part_name ?? "",
+        part_number: part?.partNumber ?? l.part_number,
+        part_name: part?.partName ?? "",
+        partId: data.partId ?? l.partId,
+        serialId: data.id ?? l.serialId,
         error: statusErr,
       } : l));
     } catch {
@@ -147,7 +145,7 @@ export function TransferNewPage() {
     const monthStart = `${invoicePrefix}${datePart.slice(0, 6)}`;
     const monthEnd = `${invoicePrefix}${String(Number(datePart.slice(0, 6)) + 1).padStart(6, "0")}`;
     const dups = await api.get(`/transfers?invoice_ref_gte=${monthStart}&invoice_ref_lt=${monthEnd}`);
-    const found = (dups ?? []).some((r: any) => r.invoice_ref?.endsWith(`-${invoiceSuffix.trim()}`));
+    const found = (dups ?? []).some((r: any) => r.invoiceRef?.endsWith(`-${invoiceSuffix.trim()}`));
     if (found) { setError(`Invoice sequence "${invoiceSuffix.trim()}" already used this month.`); return; }
     setShowConfirm(true); // show confirmation instead of submitting directly
   }
@@ -159,13 +157,11 @@ export function TransferNewPage() {
 
     try {
       await api.post("/transfers", {
-        transfer_no: generateTransferNo(),
-        destination_site_id: destinationId,
-        invoice_ref: invoiceRef.trim(),
-        requested_by: actorId,
+        destinationSiteId: destinationId,
+        invoiceRefSuffix: invoiceSuffix.trim(),
         items: validLines.map((l) => ({
-          serial_number: l.serial_number.trim() || undefined,
-          part_number: l.part_number.trim() || undefined,
+          partId: l.partId ?? undefined,
+          serialId: l.serialId ?? undefined,
           qty: l.qty,
         })),
       });
@@ -211,7 +207,7 @@ export function TransferNewPage() {
               >
                 <option value="">— Select destination —</option>
                 {sites.map((s) => (
-                  <option key={s.id} value={s.id}>{s.site_name} ({s.site_code})</option>
+                  <option key={s.id} value={s.id}>{s.siteName} ({s.siteCode})</option>
                 ))}
               </select>
             </div>
@@ -270,7 +266,7 @@ export function TransferNewPage() {
                         style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 8px", fontSize: 12, fontFamily: "monospace", background: "var(--bg-surface-elevated)", color: "var(--blue)", width: "100%", boxSizing: "border-box" as const, outline: "none" }} />
                     ) : (
                       <PartNumberInput value={line.part_number}
-                        onChange={(pn, part) => { updateLine(i, "part_number", pn); if (part) { updateLine(i, "part_name", part.part_name); focusSerial(i); } }}
+                        onChange={(pn, part) => { updateLine(i, "part_number", pn); if (part) { updateLine(i, "part_name", part.partName); updateLine(i, "partId", part.id); focusSerial(i); } }}
                         placeholder="Part number" style={{ fontSize: 12 }} />
                     )}
                     <input type="text" readOnly
@@ -350,7 +346,7 @@ export function TransferNewPage() {
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                   <span style={{ color: "var(--muted)" }}>Destination</span>
-                  <strong style={{ color: "var(--text)" }}>{dest?.site_name ?? "—"}</strong>
+                  <strong style={{ color: "var(--text)" }}>{dest?.siteName ?? "—"}</strong>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                   <span style={{ color: "var(--muted)" }}>Total items</span>
@@ -382,7 +378,6 @@ export function TransferNewPage() {
     </AppLayout>
   );
 }
-
 
 
 

@@ -3,6 +3,7 @@ import { getDb } from "../db/connection";
 import { appConfig, featureFlags } from "../db/schema";
 import { eq } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
+import { queryString } from "../utils/query";
 
 export const configRouter = Router();
 
@@ -25,8 +26,9 @@ configRouter.get("/flags", authMiddleware, async (req, res) => {
 configRouter.put("/:key", authMiddleware, async (req, res) => {
   const db = await getDb();
   const { value } = req.body;
+  const key = queryString(req.params.key) ?? "";
   await db.insert(appConfig)
-    .values({ key: req.params.key, value, updatedBy: req.user!.id, updatedAt: new Date() })
+    .values({ key, value, updatedBy: req.user!.id, updatedAt: new Date() })
     .onDuplicateKeyUpdate({ set: { value, updatedBy: req.user!.id, updatedAt: new Date() } });
   res.json({ ok: true });
 });

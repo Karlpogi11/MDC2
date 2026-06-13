@@ -4,14 +4,15 @@ import { transfers, transferItems, sites, profiles, parts, serialNumbers, appCon
 import { eq, and, desc, inArray, like, gte, lt, sql } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 import { randomUUID as uuid } from "node:crypto";
+import { queryNumber, queryString } from "../utils/query";
 
 export const transfersRouter = Router();
 
 transfersRouter.get("/", authMiddleware, async (req, res) => {
   const db = await getDb();
-  const status = req.query.status as string;
-  const page = Math.max(0, parseInt(req.query.page as string) || 0);
-  const limit = Math.min(parseInt(req.query.limit as string) || 100, 200);
+  const status = queryString(req.query.status);
+  const page = Math.max(0, queryNumber(req.query.page, 0));
+  const limit = Math.min(queryNumber(req.query.limit, 100), 200);
 
   const clauses: any[] = [];
   if (status) clauses.push(sql`t.status = ${status}`);
@@ -197,13 +198,14 @@ transfersRouter.post("/", authMiddleware, async (req, res) => {
 transfersRouter.put("/:id/status", authMiddleware, async (req, res) => {
   const db = await getDb();
   const { status, actorId } = req.body;
+  const id = queryString(req.params.id) ?? "";
 
   await db.update(transfers)
     .set({
       status,
       ...(status === "packed" ? { packedBy: actorId ?? req.user!.id, packedAt: new Date() } : {}),
     })
-    .where(eq(transfers.id, req.params.id));
+    .where(eq(transfers.id, id));
 
   res.json({ ok: true });
 });
@@ -220,9 +222,10 @@ transfersRouter.put("/:id/assign-serial", authMiddleware, async (req, res) => {
 transfersRouter.put("/:id/receipt-token", authMiddleware, async (req, res) => {
   const db = await getDb();
   const { token, expiresAt } = req.body;
+  const id = queryString(req.params.id) ?? "";
   await db.update(transfers)
     .set({ receiptToken: token, tokenExpiresAt: expiresAt ? new Date(expiresAt) : undefined })
-    .where(eq(transfers.id, req.params.id));
+    .where(eq(transfers.id, id));
   res.json({ ok: true });
 });
 

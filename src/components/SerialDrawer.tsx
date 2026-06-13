@@ -4,10 +4,10 @@ import { api } from "@/lib/api";
 
 type Serial = {
   id: string;
-  serial_number: string;
+  serialNumber: string;
   status: string;
-  stock_in_at: string;
-  current_site: { site_name: string; site_code: string } | null;
+  stockInAt: string;
+  site: { siteName: string; siteCode: string } | null;
 };
 
 type TimelineEvent = {
@@ -67,7 +67,7 @@ function actionLabel(action: string, newVal: any, oldVal: any): string {
       if (ns === "in_stock") return "Returned to Stock";
       return `Status -> ${ns}`;
     }
-    if (nv.current_site_id && nv.current_site_id !== ov.current_site_id) return "Site Updated";
+    if (nv.currentSiteId && nv.currentSiteId !== ov.currentSiteId) return "Site Updated";
     return "Updated";
   }
   if (action === "delete") return "Deleted";
@@ -89,8 +89,8 @@ function SerialTimeline({ serialId, serialNumber, stockInAt }: { serialId: strin
       // Audit log events
       for (const row of (auditData ?? [])) {
         const actor = Array.isArray(row.actor) ? row.actor[0] : row.actor;
-        const nv = row.new_value as any;
-        const ov = row.old_value as any;
+        const nv = row.newValue as any;
+        const ov = row.oldValue as any;
         const label = actionLabel(row.action, nv, ov);
 
         // Skip audit events that duplicate transfer events (Packed / Received)
@@ -102,9 +102,9 @@ function SerialTimeline({ serialId, serialNumber, stockInAt }: { serialId: strin
 
         timeline.push({
           id: `audit-${row.id}`,
-          at: row.created_at,
+          at: row.createdAt,
           action: label,
-          actor: actor?.full_name ?? actor?.username ?? null,
+          actor: actor?.fullName ?? actor?.username ?? null,
           site: null,
           note: row.note ?? null,
           color: actionColor(row.action + label.toLowerCase()),
@@ -129,36 +129,36 @@ function SerialTimeline({ serialId, serialNumber, stockInAt }: { serialId: strin
       for (const item of (transferData ?? [])) {
         const t = Array.isArray(item.transfer) ? item.transfer[0] : item.transfer;
         if (!t) continue;
-        const dest = Array.isArray(t.destination_site) ? t.destination_site[0] : t.destination_site;
-        const src = Array.isArray(t.source_site) ? t.source_site[0] : t.source_site;
+        const dest = Array.isArray(t.destinationSite) ? t.destinationSite[0] : t.destinationSite;
+        const src = Array.isArray(t.sourceSite) ? t.sourceSite[0] : t.sourceSite;
 
-        if (t.created_at) {
+        if (t.createdAt) {
           timeline.push({
             id: `tr-created-${t.id}`,
-            at: t.created_at,
-            action: `Added to Transfer ${t.transfer_no}`,
+            at: t.createdAt,
+            action: `Added to Transfer ${t.transferNo}`,
             actor: null,
-            site: src?.site_name ?? null,
+            site: src?.siteName ?? null,
             note: null,
             color: "var(--muted)",
           });
         }
-          if (t.packed_at) {
+          if (t.packedAt) {
             timeline.push({
               id: `tr-packed-${t.id}`,
-              at: t.packed_at,
-              action: `Packed - ${t.transfer_no}`,
+              at: t.packedAt,
+              action: `Packed - ${t.transferNo}`,
               actor: null,
-              site: src?.site_name ?? null,
-              note: `→ ${dest?.site_name ?? "unknown"}`,
+              site: src?.siteName ?? null,
+              note: `→ ${dest?.siteName ?? "unknown"}`,
               color: "var(--muted)",
             });
             timeline.push({
               id: `tr-transferred-${t.id}`,
-              at: t.packed_at,
+              at: t.packedAt,
               action: "Transferred out",
               actor: null,
-              site: src?.site_name ?? null,
+              site: src?.siteName ?? null,
               note: null,
               color: "var(--muted)",
             });
@@ -166,11 +166,11 @@ function SerialTimeline({ serialId, serialNumber, stockInAt }: { serialId: strin
           if (t.status === "received") {
           timeline.push({
             id: `tr-received-${t.id}`,
-            at: t.packed_at ?? t.created_at,
-            action: `Received at ${dest?.site_name ?? "site"}`,
+            at: t.packedAt ?? t.createdAt,
+            action: `Received at ${dest?.siteName ?? "site"}`,
             actor: null,
-            site: dest?.site_name ?? null,
-            note: t.transfer_no,
+            site: dest?.siteName ?? null,
+            note: t.transferNo,
             color: "var(--muted)",
           });
         }
@@ -178,14 +178,14 @@ function SerialTimeline({ serialId, serialNumber, stockInAt }: { serialId: strin
 
       // Correction events
       for (const c of (correctionData ?? [])) {
-        const by = Array.isArray(c.corrected_by) ? c.corrected_by[0] : c.corrected_by;
+        const by = Array.isArray(c.correctedBy) ? c.correctedBy[0] : c.correctedBy;
         timeline.push({
           id: `corr-${c.id}`,
-          at: c.corrected_at,
+          at: c.correctedAt,
           action: `Serial Corrected`,
-          actor: by?.full_name ?? by?.username ?? null,
+          actor: by?.fullName ?? by?.username ?? null,
           site: null,
-          note: `${c.old_serial_number} -> ${c.new_serial_number}: ${c.reason}`,
+          note: `${c.oldSerialNumber} -> ${c.newSerialNumber}: ${c.reason}`,
           color: "var(--muted)",
         });
       }
@@ -252,7 +252,7 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
       .then((data) => {
         setSerials((data ?? []).map((s: any) => ({
           ...s,
-          current_site: Array.isArray(s.current_site) ? s.current_site[0] ?? null : s.current_site,
+          site: Array.isArray(s.site) ? s.site[0] ?? null : s.site,
         })));
         setLoading(false);
       });
@@ -269,7 +269,7 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
 
   const filtered = serials.filter((s) => {
     if (statusFilter !== "all" && s.status !== statusFilter) return false;
-    if (search && !s.serial_number.toLowerCase().includes(search.toLowerCase())) return false;
+    if (search && !s.serialNumber.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
 
@@ -348,10 +348,10 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
                         role="button"
                         onClick={() => { setSelectedSerial(serial); setActiveTab("history"); }}
                         style={{ fontFamily: "monospace", fontWeight: 700, fontSize: 12, color: "var(--link)", marginBottom: 2, cursor: "pointer", textDecoration: "underline" }}
-                      >{serial.serial_number}</div>
+                      >{serial.serialNumber}</div>
                       <div style={{ fontSize: 11, color: "var(--muted)" }}>
-                        Stocked in {fmtDate(serial.stock_in_at)}
-                        {serial.current_site && <span> · {serial.current_site.site_name}</span>}
+                        Stocked in {fmtDate(serial.stockInAt)}
+                        {serial.site && <span> · {serial.site.siteName}</span>}
                       </div>
                     </div>
                     <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: "var(--radius-pill)", background: sm.bg, color: sm.color, whiteSpace: "nowrap" }}>{sm.label}</span>
@@ -374,11 +374,11 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
             </div>
             <div style={{ flex: 1, overflowY: "auto" }}>
               {selectedSerial && !timelineSearch.trim() ? (
-                <SerialTimeline serialId={selectedSerial.id} serialNumber={selectedSerial.serial_number} stockInAt={selectedSerial.stock_in_at} />
+                <SerialTimeline serialId={selectedSerial.id} serialNumber={selectedSerial.serialNumber} stockInAt={selectedSerial.stockInAt} />
               ) : (
                 <div>
                   {serials
-                    .filter(s => !timelineSearch.trim() || s.serial_number.toLowerCase().includes(timelineSearch.toLowerCase()))
+                    .filter(s => !timelineSearch.trim() || s.serialNumber.toLowerCase().includes(timelineSearch.toLowerCase()))
                     .slice(0, 30)
                     .map(s => (
                       <div key={s.id}
@@ -386,10 +386,10 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
                         style={{ padding: "7px 12px", cursor: "pointer", borderBottom: "1px solid var(--line-soft)", fontSize: 13, fontFamily: "monospace", color: "var(--link)" }}
                         onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
                         onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
-                        {s.serial_number}
+                        {s.serialNumber}
                       </div>
                     ))}
-                  {timelineSearch.trim() && !serials.some(s => s.serial_number.toLowerCase().includes(timelineSearch.toLowerCase())) && (
+                  {timelineSearch.trim() && !serials.some(s => s.serialNumber.toLowerCase().includes(timelineSearch.toLowerCase())) && (
                     <div style={{ padding: 32, textAlign: "center", color: "var(--muted)", fontSize: 13 }}>No serials matching "{timelineSearch}"</div>
                   )}
                   {!timelineSearch.trim() && <div style={{ padding: 32, textAlign: "center", color: "var(--muted)", fontSize: 13 }}>Type a serial number to view its timeline.</div>}

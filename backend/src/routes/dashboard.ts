@@ -2,12 +2,13 @@ import { Router } from "express";
 import { getDb } from "../db/connection";
 import { sql } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
+import { queryString } from "../utils/query";
 
 export const dashboardRouter = Router();
 
 dashboardRouter.get("/search", authMiddleware, async (req, res) => {
   const db = await getDb();
-  const term = (req.query.q as string)?.trim();
+  const term = queryString(req.query.q)?.trim();
   if (!term) { res.json([]); return; }
 
   const rawResults = await Promise.all([

@@ -4,14 +4,15 @@ import { profiles } from "../db/schema";
 import { eq, or, like, desc, sql } from "drizzle-orm";
 import { authMiddleware, requireRole, hashPassword } from "../middleware/auth";
 import { randomUUID as uuid } from "node:crypto";
+import { queryNumber, queryString } from "../utils/query";
 
 export const usersRouter = Router();
 
 usersRouter.get("/", authMiddleware, requireRole("system_admin", "dc_admin"), async (req, res) => {
   const db = await getDb();
-  const page = Math.max(0, parseInt(req.query.page as string) || 0);
-  const pageSize = Math.min(parseInt(req.query.pageSize as string) || 50, 200);
-  const q = (req.query.q as string)?.trim();
+  const page = Math.max(0, queryNumber(req.query.page, 0));
+  const pageSize = Math.min(queryNumber(req.query.pageSize, 50), 200);
+  const q = queryString(req.query.q)?.trim();
 
   let conditions = undefined;
   if (q) {
@@ -43,7 +44,7 @@ usersRouter.get("/count", authMiddleware, async (req, res) => {
 
 usersRouter.get("/check-username", authMiddleware, async (req, res) => {
   const db = await getDb();
-  const username = req.query.username as string;
+  const username = queryString(req.query.username);
   if (!username) { res.json({ available: false }); return; }
   const existing = await db.query.profiles.findFirst({ where: eq(profiles.username, username) });
   res.json({ available: !existing });
@@ -77,12 +78,14 @@ usersRouter.post("/", authMiddleware, requireRole("system_admin"), async (req, r
 
 usersRouter.put("/:id/role", authMiddleware, requireRole("system_admin"), async (req, res) => {
   const db = await getDb();
-  await db.update(profiles).set({ role: req.body.role }).where(eq(profiles.id, req.params.id));
+  const id = queryString(req.params.id) ?? "";
+  await db.update(profiles).set({ role: req.body.role }).where(eq(profiles.id, id));
   res.json({ ok: true });
 });
 
 usersRouter.put("/:id/status", authMiddleware, requireRole("system_admin"), async (req, res) => {
   const db = await getDb();
-  await db.update(profiles).set({ isActive: req.body.isActive }).where(eq(profiles.id, req.params.id));
+  const id = queryString(req.params.id) ?? "";
+  await db.update(profiles).set({ isActive: req.body.isActive }).where(eq(profiles.id, id));
   res.json({ ok: true });
 });

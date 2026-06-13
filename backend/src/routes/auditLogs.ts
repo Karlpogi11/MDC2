@@ -2,15 +2,16 @@ import { Router } from "express";
 import { getDb } from "../db/connection";
 import { sql } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
+import { queryNumber, queryString } from "../utils/query";
 
 export const auditLogsRouter = Router();
 
 auditLogsRouter.get("/", authMiddleware, async (req, res) => {
   const db = await getDb();
-  const page = Math.max(0, parseInt(req.query.page as string) || 0);
-  const pageSize = Math.min(parseInt(req.query.pageSize as string) || 50, 200);
-  const action = req.query.action as string;
-  const entityType = req.query.entity_type as string;
+  const page = Math.max(0, queryNumber(req.query.page, 0));
+  const pageSize = Math.min(queryNumber(req.query.pageSize, 50), 200);
+  const action = queryString(req.query.action);
+  const entityType = queryString(req.query.entity_type);
 
   const clauses: any[] = [];
   if (action) clauses.push(sql`al.action = ${action}`);

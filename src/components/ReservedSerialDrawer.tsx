@@ -60,26 +60,27 @@ export function ReservedSerialDrawer({ partId, partName, partNumber, reservedCou
 
     let mounted = true;
     api.get("/transfers?status=draft,packed")
-      .then((transfers: any) => {
+      .then((resp: any) => {
+        const transfers = resp?.data ?? [];
         if (!mounted) return;
         if (!Array.isArray(transfers)) { if (!cached) setRows([]); setLoading(false); return; }
 
         const mapped: ReservedItemRow[] = [];
         for (const t of transfers) {
           for (const item of (t.items ?? [])) {
-            if (item.part_id !== partId) continue;
+            if (item.partId !== partId) continue;
             const serial = item.serial ?? null;
             mapped.push({
               transferItemId: item.id,
               qty: item.qty ?? 1,
               serialId: serial?.id ?? null,
-              serialNumber: serial?.serial_number ?? null,
+              serialNumber: serial?.serialNumber ?? null,
               serialStatus: serial?.status ?? null,
-              stockInAt: serial?.stock_in_at ?? null,
-              transferNo: t.transfer_no,
+              stockInAt: serial?.stockInAt ?? null,
+              transferNo: t.transferNo,
               transferStatus: t.status,
-              transferAt: t.packed_at ?? t.created_at,
-              destinationSiteName: t.destination_site?.site_name ?? null,
+              transferAt: t.packedAt ?? t.createdAt,
+              destinationSiteName: t.destinationSite?.siteName ?? null,
             });
           }
         }

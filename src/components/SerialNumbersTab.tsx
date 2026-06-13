@@ -7,8 +7,8 @@ type SerialRow = {
   serial_number: string;
   status: string;
   stock_in_at: string | null;
-  parts: { part_number: string; part_name: string } | null;
-  sites: { site_name: string } | null;
+  parts: { partNumber: string; partName: string } | null;
+  sites: { siteName: string } | null;
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -118,8 +118,8 @@ export function SerialNumbersTab() {
                 return (
                   <tr key={r.id}>
                     <td style={{ fontFamily: "monospace", fontSize: 13 }}>{r.serial_number}</td>
-                    <td>{part?.part_number ?? "—"}</td>
-                    <td>{part?.part_name ?? "—"}</td>
+                    <td>{part?.partNumber ?? "—"}</td>
+                    <td>{part?.partName ?? "—"}</td>
                     <td>
                       <span style={{
                         display: "inline-block", padding: "2px 8px", borderRadius: "var(--radius-sm)", fontSize: 12, fontWeight: 600,
@@ -129,7 +129,7 @@ export function SerialNumbersTab() {
                         {STATUS_LABEL[r.status] ?? r.status}
                       </span>
                     </td>
-                    <td>{site?.site_name ?? "—"}</td>
+                    <td>{site?.siteName ?? "—"}</td>
                     <td>{r.stock_in_at ? new Date(r.stock_in_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "2-digit" }) : "—"}</td>
                   </tr>
                 );

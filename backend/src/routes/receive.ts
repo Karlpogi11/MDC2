@@ -3,12 +3,13 @@ import { getDb } from "../db/connection";
 import { transfers, serialNumbers } from "../db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { sql } from "drizzle-orm";
+import { queryString } from "../utils/query";
 
 export const receiveRouter = Router();
 
 receiveRouter.get("/transfer/:id", async (req, res) => {
   const db = await getDb();
-  const token = req.query.token as string;
+  const token = queryString(req.query.token);
   if (!token) { res.status(404).json({ error: "Transfer not found or invalid token" }); return; }
 
   const transferResult = await db.execute(sql`

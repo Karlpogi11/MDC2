@@ -8,7 +8,7 @@ import { DatePicker } from "@/components/DatePicker";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type TransferBySiteRow = { site_name: string; site_code: string; count: number; item_count: number };
+type TransferBySiteRow = { siteName: string; siteCode: string; count: number; itemCount: number };
 type StockInRow = { id: string; batch_date: string; operator: string; row_count: number };
 type TopPartRow = { part_name: string; part_number: string; transferred_qty: number };
 
@@ -58,7 +58,7 @@ function TransfersBySiteReport() {
           ))}
         </div>
         <button type="button" onClick={() => downloadCSV(`transfers-by-site-${range}d.csv`, ["Site", "Code", "Transfers", "Items"],
-          rows.map((r) => [r.site_name, r.site_code, r.count, r.item_count]))}
+          rows.map((r) => [r.siteName, r.siteCode, r.count, r.itemCount]))}
           style={{ display: "inline-flex", alignItems: "center", gap: 5, border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--text)" }}>
           <Download size={13} /> Export
         </button>
@@ -72,11 +72,11 @@ function TransfersBySiteReport() {
               {loading && <tr><td colSpan={4} className="empty-row">Loading…</td></tr>}
               {!loading && rows.length === 0 && <tr><td colSpan={4} className="empty-row">No received transfers in this period.</td></tr>}
               {!loading && rows.map((r) => (
-                <tr key={r.site_code}>
-                  <td style={{ fontWeight: 600 }}>{r.site_name}</td>
-                  <td style={{ color: "var(--muted)", fontSize: 12 }}>{r.site_code}</td>
+                <tr key={r.siteCode}>
+                  <td style={{ fontWeight: 600 }}>{r.siteName}</td>
+                  <td style={{ color: "var(--muted)", fontSize: 12 }}>{r.siteCode}</td>
                   <td className="num">{r.count}</td>
-                  <td className="num">{r.item_count}</td>
+                  <td className="num">{r.itemCount}</td>
                 </tr>
               ))}
             </tbody>

@@ -3,16 +3,17 @@ import { getDb } from "../db/connection";
 import { serialNumbers, parts, sites, stockInBatches } from "../db/schema";
 import { eq, and, like, inArray, desc, sql } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
+import { queryNumber, queryString } from "../utils/query";
 
 export const serialsRouter = Router();
 
 serialsRouter.get("/", authMiddleware, async (req, res) => {
   const db = await getDb();
-  const status = req.query.status as string;
-  const q = (req.query.q as string)?.trim();
-  const partId = req.query.part_id as string;
-  const page = Math.max(0, parseInt(req.query.page as string) || 0);
-  const limit = Math.min(parseInt(req.query.limit as string) || 5000, 10000);
+  const status = queryString(req.query.status);
+  const q = queryString(req.query.q)?.trim();
+  const partId = queryString(req.query.part_id);
+  const page = Math.max(0, queryNumber(req.query.page, 0));
+  const limit = Math.min(queryNumber(req.query.limit, 5000), 10000);
 
   const clauses: any[] = [];
   if (status) clauses.push(sql`sn.status = ${status}`);
@@ -88,8 +89,9 @@ serialsRouter.get("/:serialNumber", authMiddleware, async (req, res) => {
 
 serialsRouter.get("/:id/transfer-history", authMiddleware, async (req, res) => {
   const db = await getDb();
+  const serialId = queryString(req.params.id) ?? "";
   const serialResult = await db.execute(sql`
-    SELECT id FROM serial_numbers WHERE id = ${req.params.id} LIMIT 1
+    SELECT id FROM serial_numbers WHERE id = ${serialId} LIMIT 1
   `);
   const serialRows = (serialResult as any[])[0] ?? [];
   if (!serialRows.length) { res.json([]); return; }
@@ -101,7 +103,7 @@ serialsRouter.get("/:id/transfer-history", authMiddleware, async (req, res) => {
     FROM transfer_items ti
     JOIN transfers t ON t.id = ti.transfer_id
     LEFT JOIN sites s ON s.id = t.destination_site_id
-    WHERE ti.serial_id = ${req.params.id}
+    WHERE ti.serial_id = ${serialId}
     ORDER BY t.created_at DESC
     LIMIT 20
   `);
@@ -130,8 +132,9 @@ serialsRouter.put("/batch-site-update", authMiddleware, async (req, res) => {
 
 serialsRouter.put("/:id/status", authMiddleware, async (req, res) => {
   const db = await getDb();
+  const id = queryString(req.params.id) ?? "";
   await db.update(serialNumbers)
     .set({ status: req.body.status })
-    .where(eq(serialNumbers.id, req.params.id));
+    .where(eq(serialNumbers.id, id));
   res.json({ ok: true });
 });

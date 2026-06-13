@@ -3,6 +3,7 @@ import { getDb } from "../db/connection";
 import { webhooks } from "../db/schema";
 import { eq, desc } from "drizzle-orm";
 import { authMiddleware, requireRole } from "../middleware/auth";
+import { queryString } from "../utils/query";
 
 export const webhooksRouter = Router();
 
@@ -21,6 +22,7 @@ webhooksRouter.post("/", authMiddleware, requireRole("system_admin", "dc_admin")
 
 webhooksRouter.put("/:id/toggle", authMiddleware, requireRole("system_admin", "dc_admin"), async (req, res) => {
   const db = await getDb();
-  await db.update(webhooks).set({ isActive: req.body.isActive }).where(eq(webhooks.id, req.params.id));
+  const id = queryString(req.params.id) ?? "";
+  await db.update(webhooks).set({ isActive: req.body.isActive }).where(eq(webhooks.id, id));
   res.json({ ok: true });
 });

@@ -5,7 +5,7 @@ import { api } from "@/lib/api";
 import { AppLayout } from "@/components/AppLayout";
 import { DatePicker } from "@/components/DatePicker";
 
-type Site = { id: string; site_name: string; site_code: string };
+type Site = { id: string; siteName: string; siteCode: string };
 
 function toCSV(headers: string[], rows: string[][]): string {
   const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
@@ -70,7 +70,7 @@ export function ExportsPage() {
           part?.part_name ?? "",
           part?.category ?? "",
           r.status ?? "",
-          site?.site_name ?? "",
+          site?.siteName ?? "",
           formatDate(r.stock_in_at),
           batch?.source_type ?? "",
         ];
@@ -96,7 +96,7 @@ export function ExportsPage() {
       if (trTo && t.created_at > trTo + "T23:59:59") return false;
       if (trSite) {
         const dest = Array.isArray(t.destination) ? t.destination[0] : t.destination;
-        if (dest?.site_code !== trSite && dest?.id !== trSite) return false;
+        if (dest?.siteCode !== trSite && dest?.id !== trSite) return false;
       }
       return true;
     });
@@ -118,11 +118,11 @@ export function ExportsPage() {
           part?.part_name ?? "",
           part?.category ?? "",
           String(r.qty ?? 1),
-          dest?.site_name ?? "",
+          dest?.siteName ?? "",
           t?.status ?? "",
           formatDate(t?.created_at),
           formatDate(t?.packed_at),
-          req?.full_name ?? req?.username ?? "",
+          req?.fullName ?? req?.username ?? "",
         ];
       })
     );
@@ -187,7 +187,7 @@ export function ExportsPage() {
                   <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#666", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>Destination site</label>
                   <select value={trSite} onChange={(e) => setTrSite(e.target.value)} style={{ ...inputStyle, cursor: "pointer", minWidth: 160 }}>
                     <option value="">All sites</option>
-                    {sites.map((s) => <option key={s.id} value={s.id}>{s.site_name}</option>)}
+                    {sites.map((s) => <option key={s.id} value={s.id}>{s.siteName}</option>)}
                   </select>
                 </div>
                 <div>

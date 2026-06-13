@@ -2,12 +2,13 @@ import { Router } from "express";
 import { getDb } from "../db/connection";
 import { sql } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
+import { queryNumber } from "../utils/query";
 
 export const reportsRouter = Router();
 
 reportsRouter.get("/transfers-by-site", authMiddleware, async (req, res) => {
   const db = await getDb();
-  const range = parseInt(req.query.range as string) || 7;
+  const range = queryNumber(req.query.range, 7);
   const since = new Date(Date.now() - range * 24 * 60 * 60 * 1000);
 
   const result = await db.execute(sql`
@@ -88,7 +89,7 @@ reportsRouter.get("/stock-in-this-week", authMiddleware, async (req, res) => {
 
 reportsRouter.get("/top-moved-parts", authMiddleware, async (req, res) => {
   const db = await getDb();
-  const range = parseInt(req.query.range as string) || 7;
+  const range = queryNumber(req.query.range, 7);
   const since = new Date(Date.now() - range * 24 * 60 * 60 * 1000);
 
   const result = await db.execute(sql`

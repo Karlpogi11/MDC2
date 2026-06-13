@@ -7,11 +7,11 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 type ExportSerial = {
-  serial_number: string;
+  serialNumber: string;
   status: string;
-  stock_in_at: string | null;
-  parts: { part_number: string } | { part_number: string }[] | null;
-  sites: { site_name: string } | { site_name: string }[] | null;
+  stockInAt: string | null;
+  part: { partNumber: string } | null;
+  site: { siteName: string } | null;
 };
 
 export function useExportInventory() {
@@ -33,17 +33,13 @@ export function useExportInventory() {
     ];
 
     for (const row of sortedRows) {
-      const partSerials = serials.filter(s => {
-        const p = Array.isArray(s.parts) ? s.parts[0] : s.parts;
-        return p?.part_number === row.partNumber;
-      });
+      const partSerials = serials.filter(s => s.part?.partNumber === row.partNumber);
       if (partSerials.length === 0) {
         rows.push([row.partNumber, row.partName, row.category,
           String(row.inStock), String(row.stockedOut), String(row.reserved), String(row.available),
           "", "", "", ""]);
       } else {
         partSerials.forEach((s, i) => {
-          const site = Array.isArray(s.sites) ? s.sites[0] : s.sites;
           rows.push([
             i === 0 ? row.partNumber : "",
             i === 0 ? row.partName : "",
@@ -52,10 +48,10 @@ export function useExportInventory() {
             i === 0 ? String(row.stockedOut) : "",
             i === 0 ? String(row.reserved) : "",
             i === 0 ? String(row.available) : "",
-            s.serial_number,
+            s.serialNumber,
             STATUS_LABEL[s.status] ?? s.status,
-            site?.site_name ?? "",
-            s.stock_in_at ? new Date(s.stock_in_at).toLocaleDateString("en-US") : "",
+            s.site?.siteName ?? "",
+            s.stockInAt ? new Date(s.stockInAt).toLocaleDateString("en-US") : "",
           ]);
         });
       }

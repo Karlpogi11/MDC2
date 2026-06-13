@@ -4,6 +4,7 @@ import { workflowRequests, serialCorrections } from "../db/schema";
 import { eq, desc, sql } from "drizzle-orm";
 import { authMiddleware, requireRole } from "../middleware/auth";
 import { randomUUID as uuid } from "node:crypto";
+import { queryString } from "../utils/query";
 
 export const correctionsRouter = Router();
 
@@ -56,17 +57,19 @@ correctionsRouter.get("/workflow-requests/pending", authMiddleware, async (req, 
 
 correctionsRouter.put("/workflow-requests/:id/approve", authMiddleware, requireRole("dc_admin"), async (req, res) => {
   const db = await getDb();
+  const id = queryString(req.params.id) ?? "";
   await db.update(workflowRequests)
     .set({ status: "approved", reviewedBy: req.user!.id, reviewedAt: new Date() })
-    .where(eq(workflowRequests.id, req.params.id));
+    .where(eq(workflowRequests.id, id));
   res.json({ ok: true });
 });
 
 correctionsRouter.put("/workflow-requests/:id/reject", authMiddleware, requireRole("dc_admin"), async (req, res) => {
   const db = await getDb();
+  const id = queryString(req.params.id) ?? "";
   await db.update(workflowRequests)
     .set({ status: "rejected", reviewedBy: req.user!.id, reviewedAt: new Date() })
-    .where(eq(workflowRequests.id, req.params.id));
+    .where(eq(workflowRequests.id, id));
   res.json({ ok: true });
 });
 

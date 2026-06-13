@@ -15,22 +15,22 @@ type TransferStatus = "draft" | "packed" | "in_transit" | "received" | "cancelle
 
 type TransferDetail = {
   id: string;
-  transfer_no: string;
-  invoice_ref: string | null;
+  transferNo: string;
+  invoiceRef: string | null;
   status: TransferStatus;
-  created_at: string;
-  packed_at: string | null;
-  fixably_series: string | null;
-  receipt_token: string | null;
-  source_site: { site_name: string; invoice_prefix: string | null; address: string | null; is_dc: boolean } | null;
-  destination_site: { site_name: string; site_code: string; address: string | null } | null;
-  requested_by_profile: { full_name: string | null; username: string | null } | null;
-  packed_by_profile: { full_name: string | null; username: string | null } | null;
+  createdAt: string;
+  packedAt: string | null;
+  fixablySeries: string | null;
+  receiptToken: string | null;
+  sourceSite: { siteName: string; invoicePrefix: string | null; address: string | null; isDc: boolean } | null;
+  destinationSite: { siteName: string; siteCode: string; address: string | null } | null;
+  requestedByProfile: { fullName: string | null; username: string | null } | null;
+  packedByProfile: { fullName: string | null; username: string | null } | null;
   items: {
     id: string;
     qty: number;
-    part: { id: string; part_number: string; part_name: string; category: string | null } | null;
-    serial: { serial_number: string; status: string } | null;
+    part: { id: string; partNumber: string; partName: string; category: string | null } | null;
+    serial: { serialNumber: string; status: string } | null;
   }[];
 };
 
@@ -153,29 +153,29 @@ export function TransferDetailPage() {
     try {
       const { generatePackingListPDF } = await import("@/lib/packingList");
       const doc = await generatePackingListPDF({
-        transferNo: transfer.transfer_no,
-        invoiceRef: transfer.invoice_ref ?? transfer.transfer_no,
-        createdAt: transfer.created_at,
-        packedAt: transfer.packed_at,
-        sourceSite: transfer.source_site?.site_name ?? "DC",
-        sourceAddress: transfer.source_site?.address ?? null,
-        sourceIsDC: transfer.source_site?.is_dc ?? true,
-        destinationSite: transfer.destination_site?.site_name ?? "—",
-        destinationAddress: transfer.destination_site?.address ?? null,
-        requestedBy: transfer.requested_by_profile?.full_name ?? transfer.requested_by_profile?.username ?? "—",
-        fixablySeries: transfer.fixably_series ?? null,
+        transferNo: transfer.transferNo,
+        invoiceRef: transfer.invoiceRef ?? transfer.transferNo,
+        createdAt: transfer.createdAt,
+        packedAt: transfer.packedAt,
+        sourceSite: transfer.sourceSite?.siteName ?? "DC",
+        sourceAddress: transfer.sourceSite?.address ?? null,
+        sourceIsDC: transfer.sourceSite?.isDc ?? true,
+        destinationSite: transfer.destinationSite?.siteName ?? "—",
+        destinationAddress: transfer.destinationSite?.address ?? null,
+        requestedBy: transfer.requestedByProfile?.fullName ?? transfer.requestedByProfile?.username ?? "—",
+        fixablySeries: transfer.fixablySeries ?? null,
         items: transfer.items.map((item) => ({
-          serialNumber: item.serial?.serial_number ?? null,
-          partNumber: item.part?.part_number ?? "—",
-          partName: item.part?.part_name ?? "—",
+          serialNumber: item.serial?.serialNumber ?? null,
+          partNumber: item.part?.partNumber ?? "—",
+          partName: item.part?.partName ?? "—",
           qty: item.qty,
         })),
       });
 
       const pdfBlob = doc.output("blob") as Blob;
-      await api.post(`/transfers/${transfer.id}/generate-pdf`, { pdfBlob, fileName: `${transfer.transfer_no}.pdf` });
+      await api.post(`/transfers/${transfer.id}/generate-pdf`, { pdfBlob, fileName: `${transfer.transferNo}.pdf` });
 
-      doc.save(`${transfer.transfer_no}-packing-list.pdf`);
+      doc.save(`${transfer.transferNo}-packing-list.pdf`);
     } catch (err) {
       setActionError(err instanceof Error ? friendlyError(err) : "PDF generation failed.");
     }
@@ -192,10 +192,10 @@ export function TransferDetailPage() {
 
       setTransfer({
         ...d,
-        source_site: Array.isArray(d.source_site) ? d.source_site[0] ?? null : d.source_site,
-        destination_site: Array.isArray(d.destination_site) ? d.destination_site[0] ?? null : d.destination_site,
-        requested_by_profile: Array.isArray(d.requested_by_profile) ? d.requested_by_profile[0] ?? null : d.requested_by_profile,
-        packed_by_profile: Array.isArray(d.packed_by_profile) ? d.packed_by_profile[0] ?? null : d.packed_by_profile,
+        sourceSite: Array.isArray(d.sourceSite) ? d.sourceSite[0] ?? null : d.sourceSite,
+        destinationSite: Array.isArray(d.destinationSite) ? d.destinationSite[0] ?? null : d.destinationSite,
+        requestedByProfile: Array.isArray(d.requestedByProfile) ? d.requestedByProfile[0] ?? null : d.requestedByProfile,
+        packedByProfile: Array.isArray(d.packedByProfile) ? d.packedByProfile[0] ?? null : d.packedByProfile,
         items: (d.items ?? []).map((item: any) => ({
           ...item,
           part: Array.isArray(item.part) ? item.part[0] ?? null : item.part,
@@ -267,26 +267,26 @@ export function TransferDetailPage() {
     try {
       const { generatePackingListPDF } = await import("@/lib/packingList");
       const doc = await generatePackingListPDF({
-        transferNo: transfer.transfer_no,
-        invoiceRef: transfer.invoice_ref ?? transfer.transfer_no,
-        createdAt: transfer.created_at,
-        packedAt: transfer.packed_at,
-        sourceSite: transfer.source_site?.site_name ?? "DC",
-        sourceAddress: transfer.source_site?.address ?? null,
-        sourceIsDC: transfer.source_site?.is_dc ?? true,
-        destinationSite: transfer.destination_site?.site_name ?? "—",
-        destinationAddress: transfer.destination_site?.address ?? null,
-        requestedBy: transfer.requested_by_profile?.full_name ?? transfer.requested_by_profile?.username ?? "—",
-        fixablySeries: fixablySeriesOverride ?? transfer.fixably_series ?? null,
+        transferNo: transfer.transferNo,
+        invoiceRef: transfer.invoiceRef ?? transfer.transferNo,
+        createdAt: transfer.createdAt,
+        packedAt: transfer.packedAt,
+        sourceSite: transfer.sourceSite?.siteName ?? "DC",
+        sourceAddress: transfer.sourceSite?.address ?? null,
+        sourceIsDC: transfer.sourceSite?.isDc ?? true,
+        destinationSite: transfer.destinationSite?.siteName ?? "—",
+        destinationAddress: transfer.destinationSite?.address ?? null,
+        requestedBy: transfer.requestedByProfile?.fullName ?? transfer.requestedByProfile?.username ?? "—",
+        fixablySeries: fixablySeriesOverride ?? transfer.fixablySeries ?? null,
         items: transfer.items.map((item) => ({
-          serialNumber: item.serial?.serial_number ?? null,
-          partNumber: item.part?.part_number ?? "—",
-          partName: item.part?.part_name ?? "—",
+          serialNumber: item.serial?.serialNumber ?? null,
+          partNumber: item.part?.partNumber ?? "—",
+          partName: item.part?.partName ?? "—",
           qty: item.qty,
         })),
       });
       const pdfBlob = doc.output("blob") as Blob;
-      const fileName = `${transfer.transfer_no}.pdf`;
+      const fileName = `${transfer.transferNo}.pdf`;
       // Upload to storage via API and return base64
       await api.post(`/transfers/${transfer.id}/generate-pdf`, { pdfBlob, fileName, actorId });
       const arrayBuffer = await pdfBlob.arrayBuffer();
@@ -331,7 +331,7 @@ export function TransferDetailPage() {
   function handleScan(value: string) {
     if (!transfer) return;
     const serial = value.trim().toUpperCase();
-    const match = transfer.items.find(i => i.serial?.serial_number?.toUpperCase() === serial);
+    const match = transfer.items.find(i => i.serial?.serialNumber?.toUpperCase() === serial);
     if (match) {
       setScannedSerials(prev => new Set([...prev, serial]));
       setScanFeedback({ serial, ok: true, msg: `✓ ${serial} — on this transfer` });
@@ -425,17 +425,17 @@ export function TransferDetailPage() {
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
               <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text)", fontFamily: "monospace" }}>
-                {transfer.transfer_no}
+                {transfer.transferNo}
               </h1>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: "var(--radius-pill)", background: meta.bg, color: meta.color }}>
                 {meta.icon} {meta.label}
               </span>
             </div>
             <p style={{ margin: 0, fontSize: 13, color: "var(--muted)" }}>
-              <span>From <strong style={{ color: "var(--text)" }}>{transfer.source_site?.site_name ?? "DC"}</strong></span>
+              <span>From <strong style={{ color: "var(--text)" }}>{transfer.sourceSite?.siteName ?? "DC"}</strong></span>
               <span style={{ margin: "0 6px" }}>·</span>
-              <span>To <strong style={{ color: "var(--text)" }}>{transfer.destination_site?.site_name ?? "—"}</strong></span>
-              {transfer.destination_site?.address && <span style={{ marginLeft: 8 }}>· {transfer.destination_site.address}</span>}
+              <span>To <strong style={{ color: "var(--text)" }}>{transfer.destinationSite?.siteName ?? "—"}</strong></span>
+              {transfer.destinationSite?.address && <span style={{ marginLeft: 8 }}>· {transfer.destinationSite.address}</span>}
             </p>
           </div>
 
@@ -536,7 +536,7 @@ export function TransferDetailPage() {
             {actionNotice}
           </div>
         )}
-        {canAdvance && transfer.status === "in_transit" && !transfer.receipt_token && (
+        {canAdvance && transfer.status === "in_transit" && !transfer.receiptToken && (
           <div role="status" style={{ marginBottom: 16, padding: "10px 14px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", color: "var(--muted)", fontSize: 13 }}>
             This transfer does not have a receipt email token yet. Use More → Resend Email when you're ready.
           </div>
@@ -597,11 +597,11 @@ export function TransferDetailPage() {
 
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {transfer.items.filter(i => i.serial).map(item => {
-                const sn = item.serial!.serial_number.toUpperCase();
+                const sn = item.serial!.serialNumber.toUpperCase();
                 const verified = scannedSerials.has(sn);
                 return (
                   <span key={item.id} style={{ fontSize: 11, fontFamily: "monospace", fontWeight: 600, padding: "3px 8px", borderRadius: "var(--radius-sm)", background: "var(--bg-surface)", color: verified ? "var(--link)" : "var(--text)", border: `1px solid ${verified ? "var(--blue)" : "var(--line)"}` }}>
-                    {verified ? "✓ " : ""}{item.serial!.serial_number}
+                    {verified ? "✓ " : ""}{item.serial!.serialNumber}
                   </span>
                 );
               })}
@@ -653,8 +653,8 @@ export function TransferDetailPage() {
                         </td>
                       )}
                       <td style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--blue)", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {item.serial?.serial_number
-                          ? item.serial.serial_number
+                        {item.serial?.serialNumber
+                          ? item.serial.serialNumber
                           : transfer.status === "draft" && item.part
                             ? (
                               <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -673,11 +673,11 @@ export function TransferDetailPage() {
                                 {serialErrors[item.id] && <span style={{ fontSize: 11, color: "var(--negative)" }}>{serialErrors[item.id]}</span>}
                               </div>
                             )
-                          : item.part?.part_number ?? "—"}
+                          : item.part?.partNumber ?? "—"}
                       </td>
-                      <td title={item.part?.part_name ?? ""} style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
-                        <div>{item.part?.part_name ?? "—"}</div>
-                        {item.part?.part_number && <div style={{ fontSize: 11, fontFamily: "monospace", color: "var(--muted)" }}>{item.part.part_number}</div>}
+                      <td title={item.part?.partName ?? ""} style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                        <div>{item.part?.partName ?? "—"}</div>
+                        {item.part?.partNumber && <div style={{ fontSize: 11, fontFamily: "monospace", color: "var(--muted)" }}>{item.part.partNumber}</div>}
                       </td>
                       <td className="capitalize" style={{ overflow: "hidden", textOverflow: "ellipsis", color: "var(--muted)" }}>
                         {toCapitalized(item.part?.category) || "—"}
@@ -693,25 +693,25 @@ export function TransferDetailPage() {
           {/* Info panel */}
           <div style={{ display: "grid", gap: 12, alignContent: "start" }}>
             <InfoCard title="Transfer info">
-              <InfoRow label="Transfer #" value={transfer.transfer_no} mono />
-              <InfoRow label="Created" value={formatDate(transfer.created_at)} />
-              {transfer.packed_at && <InfoRow label="Packed" value={formatDate(transfer.packed_at)} />}
-              <InfoRow label="Requested by" value={transfer.requested_by_profile?.full_name ?? transfer.requested_by_profile?.username ?? "—"} />
-              {transfer.packed_by_profile && <InfoRow label="Packed by" value={transfer.packed_by_profile.full_name ?? transfer.packed_by_profile.username ?? "—"} />}
-              {transfer.invoice_ref && (
-                <InfoRow label="Invoice ref" value={transfer.invoice_ref} mono />
+              <InfoRow label="Transfer #" value={transfer.transferNo} mono />
+              <InfoRow label="Created" value={formatDate(transfer.createdAt)} />
+              {transfer.packedAt && <InfoRow label="Packed" value={formatDate(transfer.packedAt)} />}
+              <InfoRow label="Requested by" value={transfer.requestedByProfile?.fullName ?? transfer.requestedByProfile?.username ?? "—"} />
+              {transfer.packedByProfile && <InfoRow label="Packed by" value={transfer.packedByProfile.fullName ?? transfer.packedByProfile.username ?? "—"} />}
+              {transfer.invoiceRef && (
+                <InfoRow label="Invoice ref" value={transfer.invoiceRef} mono />
               )}
-              {transfer.source_site?.invoice_prefix && !transfer.invoice_ref && (
-                <InfoRow label="Invoice prefix" value={transfer.source_site.invoice_prefix} mono />
+              {transfer.sourceSite?.invoicePrefix && !transfer.invoiceRef && (
+                <InfoRow label="Invoice prefix" value={transfer.sourceSite.invoicePrefix} mono />
               )}
-              {transfer.fixably_series && <InfoRow label="Fixably series" value={transfer.fixably_series} />}
+              {transfer.fixablySeries && <InfoRow label="Fixably series" value={transfer.fixablySeries} />}
             </InfoCard>
 
             <InfoCard title="Destination">
-              <InfoRow label="Site" value={transfer.destination_site?.site_name ?? "—"} />
-              <InfoRow label="Code" value={transfer.destination_site?.site_code ?? "—"} mono />
-              {transfer.destination_site?.address && (
-                <InfoRow label="Address" value={transfer.destination_site.address} />
+              <InfoRow label="Site" value={transfer.destinationSite?.siteName ?? "—"} />
+              <InfoRow label="Code" value={transfer.destinationSite?.siteCode ?? "—"} mono />
+              {transfer.destinationSite?.address && (
+                <InfoRow label="Address" value={transfer.destinationSite.address} />
               )}
             </InfoCard>
           </div>
@@ -764,7 +764,7 @@ export function TransferDetailPage() {
             <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{orgName}</p>
             <h2 style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700, color: "var(--text)" }}>Confirm Receipt</h2>
             <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--muted)" }}>
-              Confirming receipt of <strong>{receivedItems.size}</strong> of <strong>{transfer.items.length}</strong> item{transfer.items.length !== 1 ? "s" : ""} from <strong>{transfer.source_site?.site_name ?? "DC"}</strong>. This cannot be undone.
+              Confirming receipt of <strong>{receivedItems.size}</strong> of <strong>{transfer.items.length}</strong> item{transfer.items.length !== 1 ? "s" : ""} from <strong>{transfer.sourceSite?.siteName ?? "DC"}</strong>. This cannot be undone.
             </p>
             <div style={{ display: "flex", gap: 10 }}>
               <button type="button"

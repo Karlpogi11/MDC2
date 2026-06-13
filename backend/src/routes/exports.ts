@@ -2,13 +2,14 @@ import { Router } from "express";
 import { getDb } from "../db/connection";
 import { sql } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
+import { queryString } from "../utils/query";
 
 export const exportsRouter = Router();
 
 exportsRouter.get("/stocked-in", authMiddleware, async (req, res) => {
   const db = await getDb();
-  const from = req.query.from as string;
-  const to = req.query.to as string;
+  const from = queryString(req.query.from);
+  const to = queryString(req.query.to);
 
   const result = await db.execute(sql`
     SELECT

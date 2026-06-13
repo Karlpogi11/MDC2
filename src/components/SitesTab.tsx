@@ -8,14 +8,14 @@ import { ImportResult } from "@/components/ImportResult";
 
 type Site = {
   id: string;
-  site_code: string;
-  site_name: string;
-  is_dc: boolean;
-  is_active: boolean;
-  invoice_prefix: string | null;
+  siteCode: string;
+  siteName: string;
+  isDc: boolean;
+  isActive: boolean;
+  invoicePrefix: string | null;
   address: string | null;
-  contact_emails: string[];
-  ship_to_code: string | null;
+  contactEmails: string[];
+  shipToCode: string | null;
 };
 
 const SITES_TEMPLATE = "site_code,site_name,is_dc,invoice_prefix,address\nDC-MNL,Main Distribution Center,true,,123 DC Street Manila\nPODIUM,Podium Site,false,PODSSR#,\"Podium Mall, Ortigas Center\"\nBGC-01,BGC Service Center,false,BGCSSR#,\"BGC High Street, Taguig\"";
@@ -82,8 +82,12 @@ export function SitesTab() {
   const [editSaving, setEditSaving] = useState(false);
 
   async function load() {
-    const data = await api.get("/sites");
-    setSites((data ?? []) as Site[]);
+    const data: any[] = (await api.get("/sites?is_active=all")) ?? [];
+    const parsed = data.map((s: any) => ({
+      ...s,
+      contactEmails: typeof s.contactEmails === "string" ? JSON.parse(s.contactEmails) : (s.contactEmails ?? []),
+    }));
+    setSites(parsed);
     setLoading(false);
   }
 
@@ -109,8 +113,8 @@ export function SitesTab() {
     setAddError(null); setAdding(true);
     try {
       await api.post("/sites", {
-        site_code: code.trim().toUpperCase(), site_name: name.trim(),
-        is_dc: isDC, invoice_prefix: prefix.trim() || null, address: address.trim() || null,
+        siteCode: code.trim().toUpperCase(), siteName: name.trim(),
+        isDc: isDC, invoicePrefix: prefix.trim() || null, address: address.trim() || null,
       });
       setCode(""); setName(""); setIsDC(false); setPrefix(""); setAddress("");
       setAddSuccess(true); setTimeout(() => setAddSuccess(false), 2000);
@@ -121,27 +125,27 @@ export function SitesTab() {
   }
 
   function startEdit(site: Site) {
-    setEditId(site.id); setEditName(site.site_name);
-    setEditPrefix(site.invoice_prefix ?? ""); setEditAddress(site.address ?? "");
-    setEditIsDC(site.is_dc);
-    setEditEmails((site.contact_emails ?? []).join(", "));
-    setEditShipTo(site.ship_to_code ?? "");
+    setEditId(site.id); setEditName(site.siteName);
+    setEditPrefix(site.invoicePrefix ?? ""); setEditAddress(site.address ?? "");
+    setEditIsDC(site.isDc);
+    setEditEmails((site.contactEmails ?? []).join(", "));
+    setEditShipTo(site.shipToCode ?? "");
   }
 
   async function handleSaveEdit(id: string) {
     setEditSaving(true);
     const emails = editEmails.split(/[,\n]/).map((e) => e.trim().toLowerCase()).filter(Boolean);
     await api.put("/sites/" + id, {
-      site_name: editName.trim(), invoice_prefix: editPrefix.trim() || null,
-      address: editAddress.trim() || null, is_dc: editIsDC,
-      contact_emails: emails,
-      ship_to_code: editShipTo.trim() || null,
+      siteName: editName.trim(), invoicePrefix: editPrefix.trim() || null,
+      address: editAddress.trim() || null, isDc: editIsDC,
+      contactEmails: emails,
+      shipToCode: editShipTo.trim() || null,
     });
     setEditSaving(false); setEditId(null); void load();
   }
 
   async function toggleActive(site: Site) {
-    await api.put("/sites/" + site.id, { is_active: !site.is_active });
+    await api.put("/sites/" + site.id, { isActive: !site.isActive });
     void load();
   }
 
@@ -233,20 +237,20 @@ export function SitesTab() {
               {sites.map((site) => {
                 const isEditing = editId === site.id;
                 return (
-                  <tr key={site.id} style={{ opacity: site.is_active ? 1 : 0.5, background: isEditing ? "#f0f9ff" : undefined }}>
+                  <tr key={site.id} style={{ opacity: site.isActive ? 1 : 0.5, background: isEditing ? "#f0f9ff" : undefined }}>
                     <td style={{ fontFamily: "monospace", fontWeight: 700, color: "var(--blue)", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {site.site_code}
+                      {site.siteCode}
                     </td>
-                    <td title={site.site_name} style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <td title={site.siteName} style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
                       {isEditing
                         ? <input value={editName} onChange={(e) => setEditName(e.target.value)} style={fieldStyle} />
-                        : <strong>{site.site_name}</strong>}
+                        : <strong>{site.siteName}</strong>}
                     </td>
                     <td style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
                       {isEditing
                         ? <input value={editPrefix} onChange={(e) => setEditPrefix(e.target.value)} placeholder="e.g. PODSSR#" style={{ ...fieldStyle, fontFamily: "monospace" }} />
-                        : site.invoice_prefix
-                          ? <code style={{ background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius-sm)", padding: "2px 7px", fontSize: 12 }}>{site.invoice_prefix}</code>
+                        : site.invoicePrefix
+                          ? <code style={{ background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius-sm)", padding: "2px 7px", fontSize: 12 }}>{site.invoicePrefix}</code>
                           : <span style={{ color: "#aaa" }}>—</span>}
                     </td>
                     <td title={site.address ?? ""} style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -259,10 +263,10 @@ export function SitesTab() {
                         ? <input value={editEmails} onChange={(e) => setEditEmails(e.target.value)}
                             placeholder="email1@co.com, email2@co.com"
                             style={fieldStyle} title="Comma-separated. First = TO, rest = CC" />
-                        : (site.contact_emails ?? []).length > 0
-                          ? <span style={{ fontSize: 11, color: "var(--text)" }} title={(site.contact_emails ?? []).join(", ")}>
-                              {(site.contact_emails ?? [])[0]}
-                              {(site.contact_emails ?? []).length > 1 && <span style={{ color: "var(--muted)" }}> +{(site.contact_emails ?? []).length - 1}</span>}
+                        : (site.contactEmails ?? []).length > 0
+                          ? <span style={{ fontSize: 11, color: "var(--text)" }} title={(site.contactEmails ?? []).join(", ")}>
+                              {(site.contactEmails ?? [])[0]}
+                              {(site.contactEmails ?? []).length > 1 && <span style={{ color: "var(--muted)" }}> +{(site.contactEmails ?? []).length - 1}</span>}
                             </span>
                           : <span style={{ color: "#f59e0b", fontSize: 11, fontWeight: 600 }} title="No contact email — dispatch emails won't be sent to this site">⚠ No email</span>}
                     </td>
@@ -271,8 +275,8 @@ export function SitesTab() {
                         ? <input value={editShipTo} onChange={(e) => setEditShipTo(e.target.value)}
                             placeholder="e.g. 0001272226"
                             style={{ ...fieldStyle, fontFamily: "monospace" }} />
-                        : site.ship_to_code
-                          ? <code style={{ background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius-sm)", padding: "2px 7px", fontSize: 12 }}>{site.ship_to_code}</code>
+                        : site.shipToCode
+                          ? <code style={{ background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius-sm)", padding: "2px 7px", fontSize: 12 }}>{site.shipToCode}</code>
                           : <span style={{ color: "#aaa" }}>—</span>}
                     </td>
                     <td>
@@ -283,15 +287,15 @@ export function SitesTab() {
                           </label>
                         : <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: "var(--radius-pill)",
                             background: "var(--bg-surface-elevated)",
-                            color: site.is_dc ? "var(--blue)" : "var(--muted)" }}>
-                            {site.is_dc ? "DC" : "Dest."}
+                            color: site.isDc ? "var(--blue)" : "var(--muted)" }}>
+                            {site.isDc ? "DC" : "Dest."}
                           </span>}
                     </td>
                     <td>
                       <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: "var(--radius-pill)",
                         background: "var(--bg-surface-elevated)",
-                        color: site.is_active ? "var(--link)" : "var(--muted)" }}>
-                        {site.is_active ? "Active" : "Inactive"}
+                        color: site.isActive ? "var(--link)" : "var(--muted)" }}>
+                        {site.isActive ? "Active" : "Inactive"}
                       </span>
                     </td>
                     <td>
@@ -315,8 +319,8 @@ export function SitesTab() {
                             </button>
                             <button type="button" onClick={() => void toggleActive(site)}
                               style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                                color: site.is_active ? "var(--negative)" : "var(--link)" }}>
-                              {site.is_active ? "Disable" : "Enable"}
+                                color: site.isActive ? "var(--negative)" : "var(--link)" }}>
+                              {site.isActive ? "Disable" : "Enable"}
                             </button>
                           </>
                         )}
@@ -332,7 +336,6 @@ export function SitesTab() {
     </div>
   );
 }
-
 
 
 

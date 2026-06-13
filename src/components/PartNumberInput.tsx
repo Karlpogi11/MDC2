@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { api } from "@/lib/api";
 import { toCapitalized } from "@/lib/format";
 
-type Part = { id: string; part_number: string; part_name: string; category: string | null };
+type Part = { id: string; partNumber: string; partName: string; category: string | null };
 
 type Props = {
   value: string;
@@ -38,9 +38,9 @@ function PartNumberInput({ value, onChange, placeholder = "e.g. 923-03861", styl
       // Sort: exact prefix on part_number first, then contains
       const q = query.toLowerCase();
       const sorted = (data ?? []).sort((a, b) => {
-        const aPrefix = a.part_number.toLowerCase().startsWith(q) ? 0 : 1;
-        const bPrefix = b.part_number.toLowerCase().startsWith(q) ? 0 : 1;
-        return aPrefix - bPrefix || a.part_number.localeCompare(b.part_number);
+        const aPrefix = a.partNumber.toLowerCase().startsWith(q) ? 0 : 1;
+        const bPrefix = b.partNumber.toLowerCase().startsWith(q) ? 0 : 1;
+        return aPrefix - bPrefix || a.partNumber.localeCompare(b.partNumber);
       }).slice(0, 10);
       setSuggestions(sorted);
       if (sorted.length > 0) {
@@ -57,10 +57,10 @@ function PartNumberInput({ value, onChange, placeholder = "e.g. 923-03861", styl
 
   function select(part: Part) {
     justSelected.current = true;
-    setQuery(part.part_number);
+    setQuery(part.partNumber);
     setSuggestions([]);
     setOpen(false);
-    onChange(part.part_number, part);
+    onChange(part.partNumber, part);
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
@@ -113,10 +113,10 @@ function PartNumberInput({ value, onChange, placeholder = "e.g. 923-03861", styl
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <code style={{ fontWeight: 600, color: "var(--blue)", flexShrink: 0 }}>{part.part_number}</code>
+            <code style={{ fontWeight: 600, color: "var(--blue)", flexShrink: 0 }}>{part.partNumber}</code>
             {part.category && <span style={{ marginLeft: "auto", color: "var(--muted)", fontSize: 11, flexShrink: 0 }}>{toCapitalized(part.category)}</span>}
           </div>
-          <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 1 }}>{part.part_name}</div>
+          <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 1 }}>{part.partName}</div>
         </div>
       ))}
     </div>,

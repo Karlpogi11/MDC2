@@ -184,7 +184,7 @@ function InventoryTab() {
     setSelectedIds((prev) => prev.includes(partId) ? prev.filter((id) => id !== partId) : [...prev, partId]);
 
   const runTransfer = (partIds: string[]) => {
-    const parts = sortedRows.filter((r) => partIds.includes(r.partId)).map((r) => ({ part_number: r.partNumber, part_name: r.partName }));
+    const parts = sortedRows.filter((r) => partIds.includes(r.partId)).map((r) => ({ partId: r.partId, partNumber: r.partNumber, partName: r.partName }));
     navigate("/transfers/new", { state: { prefill: parts } });
   };
 
@@ -478,7 +478,7 @@ function SerialLookupDrawer({ serialNumber, onClose }: { serialNumber: string; o
   const transfers = data ? (data.transfer_items ?? []).map((ti: any) => {
     const t = Array.isArray(ti.transfers) ? ti.transfers[0] : ti.transfers;
     const dest = t ? (Array.isArray(t.sites) ? t.sites[0] : t.sites) : null;
-    return { ...t, dest_name: dest?.site_name ?? "—" };
+    return { ...t, dest_name: dest?.siteName ?? "—" };
   }) : [];
 
   const STATUS_COLOR: Record<string, string> = {
@@ -507,9 +507,9 @@ function SerialLookupDrawer({ serialNumber, onClose }: { serialNumber: string; o
             <div>
               <DrawerRow label="Serial" value={serialNumber} mono />
               <DrawerRow label="Status" value={data.status?.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())} />
-              {part && <DrawerRow label="Part Name" value={part.part_name} />}
-              {part && <DrawerRow label="Part #" value={part.part_number} mono />}
-              <DrawerRow label="Location" value={site ? `${site.site_name}${site.site_code ? ` (${site.site_code})` : ""}` : "DC"} />
+              {part && <DrawerRow label="Part Name" value={part.partName} />}
+              {part && <DrawerRow label="Part #" value={part.partNumber} mono />}
+              <DrawerRow label="Location" value={site ? `${site.siteName}${site.siteCode ? ` (${site.siteCode})` : ""}` : "DC"} />
               <DrawerRow label="Stocked In" value={data.stock_in_at ? new Date(data.stock_in_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "2-digit" }) : "—"} />
             </div>
           )}
@@ -564,7 +564,7 @@ type SiteRow = {
 };
 
 function SiteInventoryTab() {
-  const [sites, setSites] = useState<{ id: string; site_name: string; site_code: string }[]>([]);
+  const [sites, setSites] = useState<{ id: string; siteName: string; siteCode: string }[]>([]);
   const [selectedSite, setSelectedSite] = useState<string>("all");
   const [rows, setRows] = useState<SiteRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -596,9 +596,9 @@ function SiteInventoryTab() {
         const site = Array.isArray(r.sites) ? r.sites[0] : r.sites;
         const part = Array.isArray(r.parts) ? r.parts[0] : r.parts;
         if (!site || !part) continue;
-        const key = `${r.current_site_id}::${part.part_number}`;
+        const key = `${r.current_site_id}::${part.partNumber}`;
         if (!map.has(key)) {
-          map.set(key, { site_id: r.current_site_id, site_name: site.site_name, site_code: site.site_code, part_name: part.part_name, part_number: part.part_number, qty: 0 });
+          map.set(key, { site_id: r.current_site_id, site_name: site.siteName, site_code: site.siteCode, part_name: part.partName, part_number: part.partNumber, qty: 0 });
         }
         map.get(key)!.qty++;
       }
@@ -622,7 +622,7 @@ function SiteInventoryTab() {
           >
             <option value="all">All Sites</option>
             {sites.map((s) => (
-              <option key={s.id} value={s.id}>{s.site_name} ({s.site_code})</option>
+              <option key={s.id} value={s.id}>{s.siteName} ({s.siteCode})</option>
             ))}
           </select>
           <span style={{ fontSize: 13, color: "var(--muted)" }}>{rows.length} part types</span>
