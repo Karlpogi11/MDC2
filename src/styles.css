@@ -475,8 +475,7 @@ html:not(.dark-theme) .global-nav {
 .segment-tabs {
   display: inline-flex;
   border: 1px solid var(--line);
-  border-radius: var(--radius);
-  overflow: hidden;
+  border-radius: 0;
 }
 
 .segment {

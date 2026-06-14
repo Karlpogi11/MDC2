@@ -79,7 +79,7 @@ async function seed() {
     siteCode: string; siteName: string; invoicePrefix: string; address: string;
     contactEmails: string; shipToCode: string | null;
   }> = [
-    { siteCode: "DC-MNL", siteName: "Makati Distribution Center", invoicePrefix: "DC", address: "Makati City", contactEmails: '[]', shipToCode: null },
+    { siteCode: "DC-MNL", siteName: "Makati Distribution Center", invoicePrefix: "DCMSPI#", address: "Makati City", contactEmails: '[]', shipToCode: null },
     { siteCode: "APP VN", siteName: "VERTIS NORTH", invoicePrefix: "VNSSR#", address: "Mobile Care Services Philippines, Inc. By Power Mac Center Vertis North, Apple Authorized Service Provider 3/F Unit R1-L3-006 Ayala Malls Vertis North, Bagong Pag-Asa Quezon City, Philippines 1100", contactEmails: '["cedricmatthew.carreon@mobilecareph.com","kurtjyronn.llobrera@mobilecareph.com"]', shipToCode: "1506282" },
     { siteCode: "ASP MK", siteName: "SM MARIKINA", invoicePrefix: "MRKSSR#", address: "Marcos Highway, Barangay Calumpang, Marikina City, Metro Manila, Philippines", contactEmails: '["giandanzel.samar@mobilecareph.com"]', shipToCode: "1240088" },
     { siteCode: "ASP NES", siteName: "NORTH EAST SQUARE", invoicePrefix: "NESSRR#", address: "2/L Northeast Square, #47 Connecticut, St. Northeast Greenhills San Juan City, Metro Manila", contactEmails: '["janajane.teneza@mobilecareph.com"]', shipToCode: "1102538" },

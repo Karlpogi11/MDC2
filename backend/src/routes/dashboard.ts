@@ -39,14 +39,30 @@ dashboardRouter.get("/", authMiddleware, async (req, res) => {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 19).replace("T", " ");
 
   const rawResults = await Promise.all([
-    db.execute(sql`SELECT COUNT(*) as count FROM serial_numbers WHERE status = 'in_stock'`),
+    db.execute(sql`
+      SELECT COUNT(*) as count FROM serial_numbers sn
+      WHERE sn.status = 'in_stock'
+        AND sn.id NOT IN (
+          SELECT ti.serial_id FROM transfer_items ti
+          JOIN transfers t ON t.id = ti.transfer_id
+          WHERE t.status = 'in_transit' AND ti.serial_id IS NOT NULL
+        )
+    `),
     db.execute(sql`SELECT t.id, t.transfer_no, t.status, t.packed_at, t.created_at, s.site_name as dest_site_name
       FROM transfers t LEFT JOIN sites s ON s.id = t.destination_site_id
       WHERE t.status IN ('draft', 'packed', 'in_transit')
       ORDER BY t.created_at DESC LIMIT 200`),
     db.execute(sql`SELECT * FROM stock_in_batches ORDER BY imported_at DESC LIMIT 5`),
     db.execute(sql`SELECT * FROM serial_corrections ORDER BY corrected_at DESC LIMIT 5`),
-    db.execute(sql`SELECT COUNT(*) as count FROM serial_numbers WHERE status = 'in_stock' AND stock_in_at >= ${sevenDaysAgo}`),
+    db.execute(sql`
+      SELECT COUNT(*) as count FROM serial_numbers sn
+      WHERE sn.status = 'in_stock' AND sn.stock_in_at >= ${sevenDaysAgo}
+        AND sn.id NOT IN (
+          SELECT ti.serial_id FROM transfer_items ti
+          JOIN transfers t ON t.id = ti.transfer_id
+          WHERE t.status = 'in_transit' AND ti.serial_id IS NOT NULL
+        )
+    `),
   ]);
 
   const inStockRows = (rawResults[0] as any[])[0] as any[];

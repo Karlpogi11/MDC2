@@ -23,6 +23,7 @@ import { physicalCountsRouter } from "./routes/physicalCounts";
 import { correctionsRouter } from "./routes/corrections";
 import { notificationsRouter } from "./routes/notifications";
 import { receiveRouter } from "./routes/receive";
+import { runMigrations } from "./migrations/runner";
 
 const app = express();
 const PORT = parseInt(process.env.PORT ?? "3001", 10);
@@ -90,6 +91,7 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
   res.status(500).json({ error: "Internal server error", detail: String(err?.sql ?? err?.message ?? err) });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
+  try { await runMigrations(); } catch (e) { console.error("Migration runner failed:", e); }
   console.log(`MDC backend running on http://localhost:${PORT}`);
 });

@@ -1,5 +1,5 @@
 /**
- * Translates raw Supabase/network error messages into user-friendly strings.
+ * Translates raw API/network error messages into user-friendly strings.
  */
 export function friendlyError(raw: unknown, fallback = "Something went wrong. Please try again."): string {
   const msg = raw instanceof Error ? raw.message
@@ -65,7 +65,7 @@ export function friendlyError(raw: unknown, fallback = "Something went wrong. Pl
 
   // RPC application errors — raised via RAISE EXCEPTION in PL/pgSQL.
   // These are intentional, user-facing messages — pass them through as-is.
-  // Supabase wraps them as: { message: "...", code: "P0001" }
+  // The API wraps them as: { message: "...", code: "P0001" }
   if (msg.length > 0 && msg.length < 300 && !m.includes("syntax") && !m.includes("pg_") && !m.includes("internal"))
     return msg;
 

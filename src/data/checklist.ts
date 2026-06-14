@@ -17,7 +17,7 @@ export const checklistGates: ChecklistGate[] = [
     title: "Gate 0 - Scope and Org Isolation",
     p0: true,
     items: [
-      { id: "g0_infra_isolated", label: "MDC-only Supabase and Vercel are isolated", p0: true },
+      { id: "g0_infra_isolated", label: "MDC-only infrastructure is isolated", p0: true },
       { id: "g0_tenant_boundary", label: "No IDS cross-tenant path exists", p0: true },
       { id: "g0_data_classification", label: "Data classification is documented" },
       { id: "g0_secrets_public_only", label: "No private secrets exposed in VITE env", p0: true },

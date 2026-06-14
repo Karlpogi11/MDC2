@@ -44,7 +44,11 @@ export function TransferNewPage() {
       : [{ serial_number: "", part_number: "", part_name: "", qty: 1, resolving: false }]
   );
   const [invoicePrefix, setInvoicePrefix] = useState("");
-  const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const now = new Date();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  const yy = String(now.getFullYear()).slice(2);
+  const datePart = mm + dd + yy;
   const [invoiceSuffix, setInvoiceSuffix] = useState("");
   const invoiceRef = invoicePrefix + datePart + "-" + invoiceSuffix;
   useEffect(() => {
@@ -77,8 +81,8 @@ export function TransferNewPage() {
   useEffect(() => {
     if (!invoiceSuffix.trim() || !invoicePrefix) { setInvoiceDupError(null); return; }
     const t = setTimeout(async () => {
-      const monthStart = `${invoicePrefix}${datePart.slice(0, 6)}`;
-      const monthEnd = `${invoicePrefix}${String(Number(datePart.slice(0, 6)) + 1).padStart(6, "0")}`;
+      const monthStart = `${invoicePrefix}${datePart.slice(0, 2)}`;
+      const monthEnd = `${invoicePrefix}${String(Number(datePart.slice(0, 2)) + 1).padStart(2, "0")}`;
       const dups = await api.get(`/transfers?invoice_ref_gte=${monthStart}&invoice_ref_lt=${monthEnd}&limit=500`);
       const list = Array.isArray(dups) ? dups : dups?.data ?? [];
       const found = list.some((r: any) => r.invoiceRef?.endsWith(`-${invoiceSuffix.trim()}`));
@@ -143,8 +147,8 @@ export function TransferNewPage() {
     if (hasError) return;
     setError(null);
     // Check for duplicate suffix in current month
-    const monthStart = `${invoicePrefix}${datePart.slice(0, 6)}`;
-    const monthEnd = `${invoicePrefix}${String(Number(datePart.slice(0, 6)) + 1).padStart(6, "0")}`;
+    const monthStart = `${invoicePrefix}${datePart.slice(0, 2)}`;
+    const monthEnd = `${invoicePrefix}${String(Number(datePart.slice(0, 2)) + 1).padStart(2, "0")}`;
     const dups = await api.get(`/transfers?invoice_ref_gte=${monthStart}&invoice_ref_lt=${monthEnd}&limit=500`);
     const list = Array.isArray(dups) ? dups : dups?.data ?? [];
     const found = list.some((r: any) => r.invoiceRef?.endsWith(`-${invoiceSuffix.trim()}`));

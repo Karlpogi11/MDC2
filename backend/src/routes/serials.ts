@@ -4,6 +4,7 @@ import { serialNumbers, parts, sites, stockInBatches } from "../db/schema";
 import { eq, and, like, inArray, desc, sql } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 import { queryNumber, queryString } from "../utils/query";
+import { writeAuditLog } from "../utils/audit";
 
 export const serialsRouter = Router();
 
@@ -16,7 +17,13 @@ serialsRouter.get("/", authMiddleware, async (req, res) => {
   const limit = Math.min(queryNumber(req.query.limit, 5000), 10000);
 
   const clauses: any[] = [];
-  if (status) clauses.push(sql`sn.status = ${status}`);
+  if (status === "in_stock") {
+    clauses.push(sql`(sn.status = 'in_stock' OR sn.id IN (SELECT ti.serial_id FROM transfer_items ti JOIN transfers t ON t.id = ti.transfer_id WHERE t.status = 'in_transit' AND ti.serial_id IS NOT NULL))`);
+  } else if (status === "transferred" || status === "stocked_out") {
+    clauses.push(sql`sn.id IN (SELECT ti.serial_id FROM transfer_items ti JOIN transfers t ON t.id = ti.transfer_id WHERE t.status IN ('in_transit', 'received') AND ti.serial_id IS NOT NULL)`);
+  } else if (status) {
+    clauses.push(sql`sn.status = ${status}`);
+  }
   if (q) clauses.push(sql`sn.serial_number LIKE ${`%${q}%`}`);
   if (partId) clauses.push(sql`sn.part_id = ${partId}`);
   const whereClause = clauses.length ? sql`WHERE ${sql.join(clauses, sql` AND `)}` : sql``;
@@ -28,7 +35,9 @@ serialsRouter.get("/", authMiddleware, async (req, res) => {
       sn.stock_in_at AS stockInAt, sn.created_at AS createdAt, sn.updated_at AS updatedAt,
       p.part_number AS partNumber, p.part_name AS partName, p.category,
       s.site_name AS siteName, s.site_code AS siteCode,
-      b.source_type AS sourceType, b.imported_at AS importedAt
+      b.source_type AS sourceType, b.imported_at AS importedAt,
+      EXISTS(SELECT 1 FROM transfer_items ti JOIN transfers t ON t.id = ti.transfer_id WHERE ti.serial_id = sn.id AND t.status = 'in_transit') AS inTransit,
+      EXISTS(SELECT 1 FROM transfer_items ti JOIN transfers t ON t.id = ti.transfer_id WHERE ti.serial_id = sn.id AND t.status IN ('in_transit', 'received')) AS dispatched
     FROM serial_numbers sn
     LEFT JOIN parts p ON p.id = sn.part_id
     LEFT JOIN sites s ON s.id = sn.current_site_id
@@ -37,13 +46,14 @@ serialsRouter.get("/", authMiddleware, async (req, res) => {
     ORDER BY sn.stock_in_at DESC
     LIMIT ${limit} OFFSET ${page * limit}
   `);
-  const rawRows = (result as any[])[0] ?? [];
+  const rawRows = (result as unknown as any[])[0] ?? [];
   const rows = rawRows.map((r: any) => ({
     id: r.id,
     serialNumber: r.serialNumber,
     partId: r.partId,
     currentSiteId: r.currentSiteId,
-    status: r.status,
+    status: r.inTransit ? "transferred" : r.status,
+    dispatched: !!r.dispatched,
     stockInBatchId: r.stockInBatchId,
     stockInAt: r.stockInAt,
     createdAt: r.createdAt,
@@ -93,27 +103,35 @@ serialsRouter.get("/:id/transfer-history", authMiddleware, async (req, res) => {
   const serialResult = await db.execute(sql`
     SELECT id FROM serial_numbers WHERE id = ${serialId} LIMIT 1
   `);
-  const serialRows = (serialResult as any[])[0] ?? [];
+  const serialRows = (serialResult as unknown as any[])[0] ?? [];
   if (!serialRows.length) { res.json([]); return; }
 
   const itemResult = await db.execute(sql`
     SELECT
-      t.transfer_no AS transferNo, t.status, t.created_at AS createdAt,
-      s.site_name AS destSiteName
+      t.id, t.transfer_no AS transferNo, t.status, t.created_at AS createdAt,
+      t.packed_at AS packedAt,
+      ss.site_name AS srcSiteName, ss.id AS srcSiteId,
+      ds.site_name AS destSiteName, ds.id AS destSiteId
     FROM transfer_items ti
     JOIN transfers t ON t.id = ti.transfer_id
-    LEFT JOIN sites s ON s.id = t.destination_site_id
+    LEFT JOIN sites ss ON ss.id = t.source_site_id
+    LEFT JOIN sites ds ON ds.id = t.destination_site_id
     WHERE ti.serial_id = ${serialId}
     ORDER BY t.created_at DESC
     LIMIT 20
   `);
-  const items = (itemResult as any[])[0] ?? [];
+  const items = (itemResult as unknown as any[])[0] ?? [];
 
   res.json(items.map((i: any) => ({
-    transferNo: i.transferNo,
-    status: i.status,
-    createdAt: i.createdAt,
-    destName: i.destSiteName,
+    transfer: {
+      id: i.id,
+      transferNo: i.transferNo,
+      status: i.status,
+      createdAt: i.createdAt,
+      packedAt: i.packedAt,
+      sourceSite: i.srcSiteName ? { siteName: i.srcSiteName } : null,
+      destinationSite: i.destSiteName ? { siteName: i.destSiteName } : null,
+    },
   })));
 });
 
@@ -127,15 +145,33 @@ serialsRouter.put("/batch-site-update", authMiddleware, async (req, res) => {
   await db.update(serialNumbers)
     .set({ currentSiteId })
     .where(inArray(serialNumbers.serialNumber, serials));
+  await writeAuditLog({
+    actorId: req.user!.id,
+    action: "update",
+    entityType: "serial_number",
+    entityId: null,
+    newValue: { serialsCount: serials.length, currentSiteId },
+    note: `Batch site update: ${serials.length} serials moved to site ${currentSiteId}`,
+  });
   res.json({ ok: true });
 });
 
 serialsRouter.put("/:id/status", authMiddleware, async (req, res) => {
   const db = await getDb();
   const id = queryString(req.params.id) ?? "";
+  const [prevRows] = await db.execute(sql`SELECT status FROM serial_numbers WHERE id = ${id} LIMIT 1`);
+  const prev = (prevRows as unknown as any[])[0] as any;
   await db.update(serialNumbers)
     .set({ status: req.body.status })
     .where(eq(serialNumbers.id, id));
+  await writeAuditLog({
+    actorId: req.user!.id,
+    action: "update",
+    entityType: "serial_number",
+    entityId: id,
+    oldValue: prev ? { status: prev.status } : null,
+    newValue: { status: req.body.status },
+  });
   res.json({ ok: true });
 });
 
@@ -154,7 +190,7 @@ serialsRouter.get("/:id/audit-logs", authMiddleware, async (req, res) => {
     ORDER BY al.created_at DESC
     LIMIT 100
   `);
-  const rows = (result as any[]) ?? [];
+  const rows = (result as unknown as any[]) ?? [];
   res.json(rows.map((r: any) => ({
     id: r.id, actorId: r.actorId, action: r.action,
     entityType: r.entityType, entityId: r.entityId,
@@ -176,5 +212,5 @@ serialsRouter.get("/:id/corrections", authMiddleware, async (req, res) => {
     ORDER BY corrected_at DESC
     LIMIT 50
   `);
-  res.json((result as any[]) ?? []);
+  res.json((result as unknown as any[]) ?? []);
 });

@@ -401,8 +401,7 @@ html[data-theme="dark"] .global-nav {
 
 .segment-tabs {
   border: 1px solid var(--line);
-  border-radius: var(--radius);
-  overflow: hidden;
+  border-radius: 0;
 }
 
 html.dark-theme .segment-tabs { border-color: var(--line); }

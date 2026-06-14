@@ -366,7 +366,7 @@ export function TransferDetailPage() {
       const pdfBase64 = await generateAndUploadPDF(fixablySeries?.trim());
       try {
         const cfg = await api.get(`/transfers/${transfer.id}/email-config`);
-        const emailEnabled = (cfg as any)?.value !== "false";
+        const emailEnabled = (cfg as any)?.sendEmail !== false;
         if (emailEnabled) {
           setSendingEmail(true);
           const result = await invokeTransferEmail(transfer.id, { attempts: 1, includeAttachment: true, pdfBase64 });

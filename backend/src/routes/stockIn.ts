@@ -9,6 +9,7 @@ import { parts, serialNumbers, sites, stockInBatches, stockInItems } from "../db
 import { ensurePartsByNumbers } from "../utils/parts";
 import { bodyString } from "../utils/body";
 import { queryString } from "../utils/query";
+import { writeAuditLog } from "../utils/audit";
 
 export const stockInRouter = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -91,7 +92,7 @@ function parseUploadFile(file: Express.Multer.File): Record<string, string>[] {
 
 function extractStockInRows(rows: Record<string, string>[]): StockInInputRow[] {
   return rows.map((row, index) => {
-    const serial = (row.serial_number || row.serial || row.serial_no || row.serialnumber || row.sn || "").trim();
+    const serial = (row.serial_number || row.serial || row.serial_no || row.serialnumber || row.sn || "").trim().toUpperCase();
     const partNumber = (row.part_number || row.part_no || row.partno || row.part || row.partnumber || "").trim();
     const notes = (row.notes || row.note || row.remark || "").trim() || null;
     return { row: index + 2, serial, partNumber, notes };
@@ -210,12 +211,24 @@ stockInRouter.post("/batch", authMiddleware, async (req, res) => {
 
   const rows: StockInInputRow[] = serials.map((item: any, index: number) => ({
     row: index + 1,
-    serial: bodyString(item?.serial, item?.serial_number)?.trim() ?? "",
+    serial: (bodyString(item?.serial, item?.serial_number)?.trim() ?? "").toUpperCase(),
     partNumber: bodyString(item?.partNumber, item?.part_number)?.trim() ?? "",
     notes: bodyString(item?.notes)?.trim() || null,
   }));
 
   const result = await processStockInRows(db, rows, actorId, "manual", null, requestedSiteId);
+
+  if (result.batchId && result.successRows > 0) {
+    await writeAuditLog({
+      actorId,
+      action: "insert",
+      entityType: "stock_in_batch",
+      entityId: result.batchId,
+      newValue: { totalRows: result.totalRows, successRows: result.successRows },
+      note: `Stock-in batch: ${result.successRows} serials added`,
+    });
+  }
+
   res.json(result);
 });
 
@@ -235,6 +248,18 @@ stockInRouter.post("/upload", authMiddleware, upload.single("file"), async (req,
     res.status(400).json({ error: "Upload failed", ...result });
     return;
   }
+
+  if (result.successRows > 0) {
+    await writeAuditLog({
+      actorId,
+      action: "insert",
+      entityType: "stock_in_batch",
+      entityId: result.batchId,
+      newValue: { totalRows: result.totalRows, successRows: result.successRows, fileName: req.file.originalname },
+      note: `Stock-in file upload: ${result.successRows} serials added from ${req.file.originalname}`,
+    });
+  }
+
   res.json(result);
 });
 

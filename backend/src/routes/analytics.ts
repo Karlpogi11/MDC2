@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { getDb } from "../db/connection";
+import { analyticsUploads, analyticsRows } from "../db/schema";
 import { authMiddleware } from "../middleware/auth";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { queryString } from "../utils/query";
 
 export const analyticsRouter = Router();
 
@@ -58,4 +60,12 @@ analyticsRouter.get("/abc", authMiddleware, async (req, res) => {
 
 analyticsRouter.get("/velocity", authMiddleware, async (req, res) => {
   res.json({ donut: [], rows: [] });
+});
+
+analyticsRouter.delete("/uploads/:id", authMiddleware, async (req, res) => {
+  const db = await getDb();
+  const id = queryString(req.params.id) ?? "";
+  await db.delete(analyticsRows).where(eq(analyticsRows.uploadId, id));
+  await db.delete(analyticsUploads).where(eq(analyticsUploads.id, id));
+  res.json({ ok: true });
 });

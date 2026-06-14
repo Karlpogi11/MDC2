@@ -4,6 +4,7 @@ import { transfers, serialNumbers } from "../db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { queryString } from "../utils/query";
+import { writeAuditLog } from "../utils/audit";
 
 export const receiveRouter = Router();
 
@@ -110,10 +111,35 @@ receiveRouter.post("/transfer/:id/confirm", async (req, res) => {
     .map((r: any) => r.serialNumber);
 
   if (serialNumbersList.length > 0 && t.destinationSiteId) {
+    const [serialRows] = await db.execute(sql`
+      SELECT id FROM serial_numbers WHERE serial_number IN (${sql.join(serialNumbersList.map((s: string) => sql`${s}`), sql`, `)})
+    `);
+    const serialIds = (serialRows as unknown as any[]) ?? [];
+
     await db.update(serialNumbers)
-      .set({ currentSiteId: t.destinationSiteId })
+      .set({ currentSiteId: t.destinationSiteId, status: "in_stock" })
       .where(inArray(serialNumbers.serialNumber, serialNumbersList));
+
+    for (const s of serialIds) {
+      await writeAuditLog({
+        actorId: null,
+        action: "update",
+        entityType: "serial_number",
+        entityId: s.id,
+        newValue: { status: "in_stock", currentSiteId: t.destinationSiteId },
+        note: `Received at destination site`,
+      });
+    }
   }
+
+  await writeAuditLog({
+    actorId: null,
+    action: "update",
+    entityType: "transfer",
+    entityId: req.params.id,
+    newValue: { status: "received" },
+    note: `Transfer received (${serialNumbersList.length} serials updated)`,
+  });
 
   res.json({ ok: true });
 });

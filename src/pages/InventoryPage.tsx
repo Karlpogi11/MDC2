@@ -413,7 +413,7 @@ function InventoryTab() {
       </section>
 
       {state.source === "demo" && (
-        <p className="footer-note">Real values require Supabase data in `parts`, `serial_numbers`, `transfers`, and `transfer_items`.</p>
+        <p className="footer-note">Add data to `parts`, `serial_numbers`, `transfers`, and `transfer_items` in MySQL to see real values.</p>
       )}
 
       {/* Pagination controls */}

@@ -5,6 +5,7 @@ import { eq, and, inArray, ne, sql } from "drizzle-orm";
 import { authMiddleware, requireRole } from "../middleware/auth";
 import { randomUUID as uuid } from "node:crypto";
 import { queryString } from "../utils/query";
+import { writeAuditLog } from "../utils/audit";
 
 export const physicalCountsRouter = Router();
 
@@ -68,6 +69,14 @@ physicalCountsRouter.post("/", authMiddleware, async (req, res) => {
     );
   }
 
+  await writeAuditLog({
+    actorId: createdBy ?? req.user!.id,
+    action: "insert",
+    entityType: "physical_count",
+    entityId: id,
+    newValue: { status: "submitted", itemsCount: items?.length ?? 0 },
+  });
+
   res.json({ id });
 });
 
@@ -105,6 +114,16 @@ physicalCountsRouter.put("/:id/approve", authMiddleware, requireRole("dc_admin")
   await db.update(physicalCounts)
     .set({ status: "approved", reviewedBy: actorId ?? req.user!.id, reviewedAt: new Date() })
     .where(eq(physicalCounts.id, id));
+
+  await writeAuditLog({
+    actorId: actorId ?? req.user!.id,
+    action: "update",
+    entityType: "physical_count",
+    entityId: id,
+    oldValue: { status: "submitted" },
+    newValue: { status: "approved" },
+    note: `${items.length} discrepancy items resolved`,
+  });
 
   res.json({ ok: true });
 });

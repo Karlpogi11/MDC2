@@ -5,6 +5,7 @@ import { eq, desc, sql } from "drizzle-orm";
 import { authMiddleware, requireRole } from "../middleware/auth";
 import { randomUUID as uuid } from "node:crypto";
 import { queryString } from "../utils/query";
+import { writeAuditLog } from "../utils/audit";
 
 export const correctionsRouter = Router();
 
@@ -16,6 +17,14 @@ correctionsRouter.post("/workflow-requests", authMiddleware, async (req, res) =>
     id,
     requestedBy: req.user!.id,
     payload: req.body.payload ?? {},
+  });
+  await writeAuditLog({
+    actorId: req.user!.id,
+    action: "insert",
+    entityType: "workflow_request",
+    entityId: id,
+    newValue: { type: req.body.type, entityType: req.body.entityType, entityId: req.body.entityId },
+    note: `Workflow request created: ${req.body.type}`,
   });
   res.json({ id });
 });
@@ -61,6 +70,14 @@ correctionsRouter.put("/workflow-requests/:id/approve", authMiddleware, requireR
   await db.update(workflowRequests)
     .set({ status: "approved", reviewedBy: req.user!.id, reviewedAt: new Date() })
     .where(eq(workflowRequests.id, id));
+  await writeAuditLog({
+    actorId: req.user!.id,
+    action: "update",
+    entityType: "workflow_request",
+    entityId: id,
+    newValue: { status: "approved" },
+    note: "Workflow request approved",
+  });
   res.json({ ok: true });
 });
 
@@ -70,6 +87,14 @@ correctionsRouter.put("/workflow-requests/:id/reject", authMiddleware, requireRo
   await db.update(workflowRequests)
     .set({ status: "rejected", reviewedBy: req.user!.id, reviewedAt: new Date() })
     .where(eq(workflowRequests.id, id));
+  await writeAuditLog({
+    actorId: req.user!.id,
+    action: "update",
+    entityType: "workflow_request",
+    entityId: id,
+    newValue: { status: "rejected" },
+    note: "Workflow request rejected",
+  });
   res.json({ ok: true });
 });
 

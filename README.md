@@ -1,86 +1,56 @@
----
-title: MDC Inventory System
-tags:
-  - readme
-  - overview
-  - project
-aliases:
-  - README
-  - Home
----
+# MDC Inventory System
 
-# MDC Inventory System (Standalone)
+Warehouse inventory management system for MobileCare Services Phils. Inc. — tracks serialized parts across DC and branch sites.
 
-## Recommendation (Direct)
-Do **not** fork the whole IDS monolith as-is.
-Build a **standalone DC inventory product** in this repo, and only reuse selected inventory logic/components from IDS.
+## Stack
 
-Reason:
-- clean ownership transfer to client company
-- strict DC-only access boundary
-- avoids SaaS tenant/billing logic leakage
-- lower long-term security and maintenance risk
+- **Frontend:** React + Vite + TypeScript
+- **Backend:** Express + Drizzle ORM + MySQL2
+- **Database:** MySQL (Hostinger)
+- **Auth:** JWT-based (email/password)
 
-## What You Asked For (Locked Scope)
-- DC-only system access
-- Stock-in import: serial / part number / bulk
-- Transfer to other sites with packing list + email
-- Manual correction for wrong transferred serial with audit trail
-- Export: stocked-in serials/parts from DC
-- Export: transferred serials/parts to other sites
-- Upload Fixably + GSX exports, analyze trend by date range/site/part
-- Inventory-first UI similar to Katana-style operational grid
+## Features
 
-## Build Strategy
-1. `MDC` = separate app + separate Supabase project + separate Hostinger site
-2. Reuse inventory domain logic from IDS only (not billing/subscription/system-admin modules)
-3. Implement strict RBAC (`dc_admin`, `dc_operator`, `dc_viewer`)
-4. Migration-first DB workflow (`supabase migration new ...`), never DB push-all
-5. UAT with DC team before go-live
+- **Stock In** — Upload CSV/XLSX or manually add serialized parts to inventory
+- **Transfers** — Create, pack, dispatch, and receive transfers between DC and branch sites
+- **Serial Tracking** — Full lifecycle per serial: stock-in → dispatch → receive → audit log
+- **Inventory Dashboard** — Real-time counts by part: In Stock, Reserved, Stocked Out, Available
+- **Packing Lists** — Generate PDF packing lists per transfer
+- **Email Dispatch** — SMTP-based dispatch notifications with packing list attachment
+- **Sites & Parts** — Manage DC/branch sites, parts catalog, categories
+- **Audit Logs** — SHA-256 chained audit trail for all mutations
+- **Reports** — Stock-in batches, analytics uploads, batch serials
+- **Roles** — System Admin, DC Admin, DC Viewer
 
-## Suggested Milestones
-1. Foundation: auth/RBAC/schema/import pipeline
-2. Core Ops: stock-in + transfers + packing list/email + corrections
-3. Reporting: stock-in/transferred exports + analytics uploader/parser
-4. UI hardening + audit + UAT + production handover
+## Getting Started
 
-## Security Priorities
-- P0: enforce RLS on every inventory table and audit every correction
-- P0: signed uploads only (Fixably/GSX), file type + size validation
-- P0: no service role or sender secrets in client bundle
-- P1: approval flow for high-risk corrections and transfer reversals
-- P1: rate-limit import and analytics endpoints
+### Backend
 
-See [[implementation-blueprint]] for full architecture and execution plan.
+```bash
+cd backend
+cp .env.example .env
+# edit .env with your DB credentials + SMTP settings
+npm install
+npm run dev
+```
 
-## Live Documentation System
-- [[development-live-checklist]]: single-file live checklist + compact playbook + inline templates
+### Frontend
 
-## Phase 1 Implemented (UI + Data Baseline)
-- React + TypeScript + Vite app shell
-- Real inventory UI (filters, metrics, loading/empty/error states, responsive table)
-- Live checklist UI with gate progress, P0 blockers, and auto-save (no markdown editing)
-- Settings baseline screen with key operational controls
-- Supabase client wiring via env vars (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`)
-- Phase 1 DB hardening migration for indexes, constraints, `updated_at` triggers, and `inventory_snapshot` view
+```bash
+cp .env.example .env.local
+# edit VITE_API_URL if needed (default: http://localhost:3001/api)
+npm install
+npm run dev
+```
 
-## Run Locally
-1. Copy `.env.example` to `.env.local` and set Supabase values.
-2. Install deps: `npm install`
-3. Start app: `npm run dev`
-4. Typecheck: `npm run typecheck`
-5. Test: `npm test`
-6. Build: `npm run build`
+## Migration Workflow
 
-## Hostinger Deployment Notes
-- Build the static app with `npm run build` and deploy the `dist/` folder to Hostinger.
-- Set Supabase Edge Function secrets before go-live:
-  - `APP_URL=https://your-hostinger-domain.com`
-  - `CORS_ALLOWED_ORIGINS=https://your-hostinger-domain.com`
-  - `GMAIL_USER=your-gmail@gmail.com`
-  - `GMAIL_APP_PASSWORD=your-16-char-app-password`
-- `jspdf` and `jspdf-autotable` remain frontend dependencies because transfer packing lists are generated in-browser before download/upload. `pdf-lib` is used only by Supabase Edge Functions via URL imports, so it is not part of the frontend package.
+See `docs/migration-workflow.md`.
 
----
+## DB Sync (offline work)
 
-**Related:** [[implementation-blueprint]], [[development-live-checklist]], [[system-design]], [[prd]], [[pilot-and-deployment-checklist]]
+See `docs/sync-db.md`.
+
+## Environment Variables
+
+See `backend/.env.example` and `.env.example` for all required variables.

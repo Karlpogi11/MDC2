@@ -2,7 +2,7 @@ import { Router } from "express";
 import { getDb } from "../db/connection";
 import { sql } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
-import { queryNumber } from "../utils/query";
+import { queryNumber, queryString } from "../utils/query";
 
 export const reportsRouter = Router();
 
@@ -71,18 +71,12 @@ reportsRouter.get("/stock-in-this-week", authMiddleware, async (req, res) => {
     ORDER BY sb.imported_at DESC
     LIMIT 100
   `);
-  const rawRows = (result as any[])[0] ?? [];
+  const rawRows = (result as unknown as any[])[0] ?? [];
   const rows = rawRows.map((r: any) => ({
     id: r.id,
-    sourceType: r.sourceType,
-    sourceFileName: r.sourceFileName,
-    fileHash: r.fileHash,
-    importedBy: r.importedBy,
-    importedAt: r.importedAt,
-    totalRows: r.totalRows,
-    successRows: r.successRows,
-    failedRows: r.failedRows,
-    operator: { fullName: r.operatorFullName, username: r.operatorUsername },
+    batch_date: r.importedAt,
+    operator: r.operatorFullName ?? r.operatorUsername ?? "—",
+    row_count: r.successRows,
   }));
   res.json(rows);
 });
@@ -116,4 +110,17 @@ reportsRouter.get("/top-moved-parts", authMiddleware, async (req, res) => {
   }
 
   res.json(Array.from(byPart.values()).sort((a, b) => b.transferredQty - a.transferredQty).slice(0, 50));
+});
+
+reportsRouter.get("/batch-serials/:id", authMiddleware, async (req, res) => {
+  const db = await getDb();
+  const id = queryString(req.params.id) ?? "";
+  const result = await db.execute(sql`
+    SELECT sn.serial_number AS serial_number, p.part_number AS part_number
+    FROM serial_numbers sn
+    LEFT JOIN parts p ON p.id = sn.part_id
+    WHERE sn.stock_in_batch_id = ${id}
+    LIMIT 500
+  `);
+  res.json((result as unknown as any[])[0] ?? []);
 });

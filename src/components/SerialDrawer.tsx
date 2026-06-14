@@ -8,6 +8,7 @@ type Serial = {
   status: string;
   stockInAt: string;
   site: { siteName: string; siteCode: string } | null;
+  dispatched?: boolean;
 };
 
 type TimelineEvent = {
@@ -268,7 +269,13 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
   }, [initialStatusFilter, partId]);
 
   const filtered = serials.filter((s) => {
-    if (statusFilter !== "all" && s.status !== statusFilter) return false;
+    if (statusFilter !== "all") {
+      if (statusFilter === "transferred" || statusFilter === "stocked_out") {
+        if (!s.dispatched) return false;
+      } else if (s.status !== statusFilter) {
+        return false;
+      }
+    }
     if (search && !s.serialNumber.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
@@ -288,14 +295,18 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
               <h2 style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 700, color: "var(--text)" }}>{partName}</h2>
-              <span style={{ fontSize: 12, fontFamily: "monospace", color: "var(--blue)", background: "var(--bg-surface-elevated)", padding: "1px 6px", borderRadius: "var(--radius-sm)", display: "inline-block" }}>{partNumber}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 12, fontFamily: "monospace", color: "var(--blue)", background: "var(--bg-surface-elevated)", padding: "1px 6px", borderRadius: "var(--radius-sm)", display: "inline-block" }}>{partNumber}</span>
+                {initialStatusFilter === "in_stock" && <span style={{ fontSize: 11, fontWeight: 600, color: "var(--link)", background: "var(--bg-surface-elevated)", padding: "1px 8px", borderRadius: "var(--radius-pill)", display: "inline-block" }}>In Stock</span>}
+                {initialStatusFilter === "transferred" && <span style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", background: "var(--bg-surface-elevated)", padding: "1px 8px", borderRadius: "var(--radius-pill)", display: "inline-block" }}>Stocked Out</span>}
+              </div>
             </div>
             <button type="button" onClick={onClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--muted)", padding: 4 }}>
               <X size={20} />
             </button>
           </div>
 
-          {!loading && activeTab === "serials" && (
+          {!loading && activeTab === "serials" && !initialStatusFilter && (
             <div style={{ display: "flex", gap: 6, marginTop: 12, flexWrap: "wrap" }}>
               <button type="button" onClick={() => setStatusFilter("all")}
                 style={{ border: `1px solid ${statusFilter === "all" ? "var(--blue)" : "var(--line)"}`, borderRadius: "var(--radius-pill)", padding: "3px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", background: statusFilter === "all" ? "var(--blue)" : "transparent", color: statusFilter === "all" ? "#fff" : "var(--muted)" }}>
@@ -315,15 +326,17 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
           )}
         </div>
 
-        {/* Tabs */}
-        <div style={{ display: "flex", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
-          {([["serials", "Serials"], ["history", "Timeline"]] as const).map(([tab, label]) => (
-            <button key={tab} type="button" onClick={() => { setActiveTab(tab); if (tab === "serials") setSelectedSerial(null); }}
-              style={{ flex: 1, padding: "5px 0", fontSize: 13, fontWeight: activeTab === tab ? 700 : 400, color: activeTab === tab ? "var(--blue)" : "var(--muted)", background: "transparent", border: "none", borderBottom: `2px solid ${activeTab === tab ? "var(--blue)" : "transparent"}`, cursor: "pointer", marginBottom: -1 }}>
-              {label}
-            </button>
-          ))}
-        </div>
+        {/* Tabs — hide when opened from a specific column */}
+        {!initialStatusFilter && (
+          <div style={{ display: "flex", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
+            {([["serials", "Serials"], ["history", "Timeline"]] as const).map(([tab, label]) => (
+              <button key={tab} type="button" onClick={() => { setActiveTab(tab); if (tab === "serials") setSelectedSerial(null); }}
+                style={{ flex: 1, padding: "5px 0", fontSize: 13, fontWeight: activeTab === tab ? 700 : 400, color: activeTab === tab ? "var(--blue)" : "var(--muted)", background: "transparent", border: "none", borderBottom: `2px solid ${activeTab === tab ? "var(--blue)" : "transparent"}`, borderRadius: 0, cursor: "pointer", marginBottom: -1 }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {activeTab === "serials" && (
           <>
@@ -340,7 +353,8 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
               {loading && <div style={{ padding: 32, textAlign: "center", color: "var(--muted)", fontSize: 13 }}>Loading serials...</div>}
               {!loading && filtered.length === 0 && <div style={{ padding: 32, textAlign: "center", color: "var(--muted)", fontSize: 13 }}>{search ? `No serials matching "${search}"` : "No serials found."}</div>}
               {!loading && filtered.map((serial, i) => {
-                const sm = STATUS_STYLE[serial.status] ?? { bg: "#f3f4f6", color: "var(--muted)", label: serial.status };
+                const contextStyle = initialStatusFilter === "in_stock" ? { bg: "var(--bg-surface-elevated)", color: "var(--link)", label: "In Stock" } : initialStatusFilter === "transferred" ? { bg: "var(--bg-surface-elevated)", color: "var(--muted)", label: "Stocked Out" } : null;
+                const sm = contextStyle ?? STATUS_STYLE[serial.status] ?? { bg: "#f3f4f6", color: "var(--muted)", label: serial.status };
                 return (
                   <div key={serial.id} style={{ display: "grid", gridTemplateColumns: "1fr auto", alignItems: "center", gap: 12, padding: "5px 12px", borderBottom: "1px solid var(--line-soft)", background: "transparent" }}>
                     <div>
@@ -365,7 +379,7 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
           </>
         )}
 
-        {activeTab === "history" && (
+        {!initialStatusFilter && activeTab === "history" && (
           <>
             <div style={{ padding: "5px 12px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
               <input value={timelineSearch} onChange={(e) => setTimelineSearch(e.target.value)}
