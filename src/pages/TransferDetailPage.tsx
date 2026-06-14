@@ -108,7 +108,7 @@ export function TransferDetailPage() {
   const [serialErrors, setSerialErrors] = useState<Record<string, string>>({});
 
   async function assignSerial(itemId: string, partId: string, value: string) {
-    const sn = value.trim();
+    const sn = value.trim().toUpperCase();
     if (!sn) return;
     setSerialSaving(p => ({ ...p, [itemId]: true }));
     setSerialErrors(p => ({ ...p, [itemId]: "" }));
@@ -125,6 +125,14 @@ export function TransferDetailPage() {
       const serial = await api.get(`/serials/${encodeURIComponent(sn)}`);
       if (!serial) {
         setSerialErrors(p => ({ ...p, [itemId]: "Serial not found" }));
+        setSerialSaving(p => ({ ...p, [itemId]: false }));
+        return;
+      }
+      // Check if serial is already reserved in an active transfer (draft/packed/in_transit)
+      if (serial.reservedInActiveTransfer) {
+        const statusLabel = serial.activeTransferStatus === "draft" ? "Draft" : 
+                           serial.activeTransferStatus === "packed" ? "Packed" : "In Transit";
+        setSerialErrors(p => ({ ...p, [itemId]: `Serial already reserved in Transfer ${serial.activeTransferNo} (${statusLabel})` }));
         setSerialSaving(p => ({ ...p, [itemId]: false }));
         return;
       }
@@ -669,11 +677,12 @@ export function TransferDetailPage() {
                                 <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
                                   <input
                                     value={serialInputs[item.id] ?? ""}
-                                    onChange={e => setSerialInputs(p => ({ ...p, [item.id]: e.target.value }))}
+                                    onChange={e => setSerialInputs(p => ({ ...p, [item.id]: e.target.value.toUpperCase() }))}
                                     onKeyDown={e => { if (e.key === "Enter") void assignSerial(item.id, item.part!.id, serialInputs[item.id] ?? ""); }}
                                     onBlur={e => { if (e.target.value.trim()) void assignSerial(item.id, item.part!.id, e.target.value); }}
                                     placeholder="Enter serial number"
                                     disabled={serialSaving[item.id]}
+                                    spellCheck={false}
                                     style={{ width: 140, border: `1px solid ${serialErrors[item.id] ? "#fca5a5" : "#d1d5db"}`, borderRadius: "var(--radius-sm)", padding: "3px 6px", fontSize: 12, fontFamily: "monospace", outline: "none", background: serialSaving[item.id] ? "#f9fafb" : "#fff" }}
                                   />
                                   {serialSaving[item.id] && <span style={{ fontSize: 11, color: "var(--muted)" }}>…</span>}

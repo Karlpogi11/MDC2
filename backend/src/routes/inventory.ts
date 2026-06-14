@@ -37,10 +37,10 @@ inventoryRouter.get("/", authMiddleware, async (req, res) => {
       LIMIT 10000
     `),
     db.execute(sql`
-      SELECT ti.transfer_id, ti.part_id, ti.serial_id
+      SELECT ti.transfer_id, ti.part_id, ti.serial_id, t.status AS transferStatus
       FROM transfer_items ti
       JOIN transfers t ON t.id = ti.transfer_id
-      WHERE t.status IN ('draft', 'packed')
+      WHERE t.status IN ('draft', 'packed', 'in_transit')
       LIMIT 10000
     `),
     db.execute(sql`
@@ -78,7 +78,7 @@ inventoryRouter.get("/", authMiddleware, async (req, res) => {
   const byPart = new Map<string, {
     partId: string; partName: string; partNumber: string; category: string;
     partType: string; inStock: number; stockedOut: number;
-    reserved: number; available: number;
+    reserved: number; reservedForAvailable: number; available: number;
     lastStockInAt: string | null; lastStockOutAt: string | null;
   }>();
 
@@ -89,7 +89,7 @@ inventoryRouter.get("/", authMiddleware, async (req, res) => {
       partNumber: p.partNumber,
       category: p.category ?? "Uncategorized",
       partType: p.partType === "product" || p.partType === "material" ? p.partType : "unknown",
-      inStock: 0, stockedOut: 0, reserved: 0, available: 0,
+      inStock: 0, stockedOut: 0, reserved: 0, reservedForAvailable: 0, available: 0,
       lastStockInAt: null, lastStockOutAt: null,
     });
   }
@@ -131,6 +131,7 @@ inventoryRouter.get("/", authMiddleware, async (req, res) => {
   }
 
   const reservedSerialKeys = new Set<string>();
+  const draftPackedReservedKeys = new Set<string>();
   for (const item of reservedItemsRows) {
     if (!item.part_id || !item.serial_id) continue;
     const key = `${item.part_id}:${item.serial_id}`;
@@ -138,10 +139,18 @@ inventoryRouter.get("/", authMiddleware, async (req, res) => {
     reservedSerialKeys.add(key);
     const entry = byPart.get(item.part_id);
     if (entry) entry.reserved++;
+    // Track draft/packed separately for available calculation
+    if (item.transferStatus === 'draft' || item.transferStatus === 'packed') {
+      if (!draftPackedReservedKeys.has(key)) {
+        draftPackedReservedKeys.add(key);
+        if (entry) entry.reservedForAvailable = (entry.reservedForAvailable ?? 0) + 1;
+      }
+    }
   }
 
   for (const entry of byPart.values()) {
-    entry.available = Math.max(entry.inStock - entry.reserved, 0);
+    const draftPackedReserved = entry.reservedForAvailable ?? 0;
+    entry.available = Math.max(entry.inStock - draftPackedReserved, 0);
   }
 
   let rows = Array.from(byPart.values())

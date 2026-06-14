@@ -91,7 +91,7 @@ function CorrectionModal({ serial, onClose, onDone, actorId }: {
 
   // Serial conflict check
   const trimmed = newSerial.trim();
-  const serialChanged = !!(trimmed && trimmed !== serial.serial_number);
+  const serialChanged = !!(trimmed && trimmed !== serial.serial_number.toUpperCase());
   useEffect(() => {
     if (!trimmed || trimmed === serial.serial_number) {
       setConflict(null); setConflictChecked(false); setChecking(false); return;
@@ -194,7 +194,7 @@ function CorrectionModal({ serial, onClose, onDone, actorId }: {
                 </div>
                 <div style={{ padding: "12px 14px", background: isBlocked ? "var(--bg-surface-elevated)" : conflictChecked && !conflict ? "var(--bg-surface-elevated)" : FAINT, borderRadius: "0 var(--radius) var(--radius) 0", border: `1px solid ${isBlocked ? "var(--line)" : conflictChecked && !conflict ? "var(--line)" : BORDER}`, transition: "all .15s" }}>
                   <div style={{ fontSize: 10, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 5 }}>Correct serial</div>
-                  <input ref={inputRef} value={newSerial} onChange={(e) => setNewSerial(e.target.value)} placeholder="Type correct serial…"
+                  <input ref={inputRef} value={newSerial} onChange={(e) => setNewSerial(e.target.value.toUpperCase())} placeholder="Type correct serial…" spellCheck={false} autoComplete="off"
                     style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 700, color: isBlocked ? RED : conflictChecked && !conflict ? GREEN : serialChanged ? INK : MUTED, background: "transparent", border: "none", outline: "none", width: "100%", padding: 0 }} />
                 </div>
               </div>
@@ -369,13 +369,15 @@ export function CorrectionsPage() {
           <Search size={14} color="var(--muted)" style={{ flexShrink: 0 }} />
           <input
             value={query}
-            onChange={(e) => { setQuery(e.target.value); setResult(null); setNotFound(false); }}
+            onChange={(e) => { setQuery(e.target.value.toUpperCase()); setResult(null); setNotFound(false); }}
             onKeyDown={(e) => { if (e.key === "Enter" && query.trim()) void handleSearch(e as any); }}
             onPaste={(e) => {
-              const val = e.clipboardData.getData("text").trim();
+              const val = e.clipboardData.getData("text").trim().toUpperCase();
               if (val) { setQuery(val); setResult(null); setNotFound(false); setTimeout(() => void handleSearch(undefined, val), 50); }
             }}
             placeholder="Scan or type serial number…"
+            spellCheck={false}
+            autoComplete="off"
             data-plain
             style={{ flex: 1, border: "none", outline: "none", padding: "7px 8px", fontSize: 12, fontFamily: "monospace", color: "var(--text)", background: "transparent", boxShadow: "none" }}
           />

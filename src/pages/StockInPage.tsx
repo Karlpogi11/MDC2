@@ -138,7 +138,7 @@ export function StockInPage() {
 
     const rows = dataLines.slice(0, 10).map((line, i) => {
       const cols = line.split(",").map((c) => c.trim().replace(/"/g, ""));
-      const serial = snIdx >= 0 ? cols[snIdx] ?? "" : "";
+      const serial = (snIdx >= 0 ? cols[snIdx] ?? "" : "").toUpperCase();
       const part = pnIdx >= 0 ? cols[pnIdx] ?? "" : "";
       const notes = notesIdx >= 0 ? cols[notesIdx] : undefined;
       const errors: string[] = [];
@@ -184,7 +184,7 @@ export function StockInPage() {
     }
     if (e.key !== "Enter" && e.key !== "Tab") return;
     e.preventDefault();
-    const sn = draftSerial.replace(/\s/g, "");
+    const sn = draftSerial.replace(/\s/g, "").toUpperCase();
     if (!sn) return;
     if (!draftPartNumber.trim()) { setDraftError("Set a part number first."); return; }
     if (!draftPartConfirmed) { setDraftError("Select a part number from the suggestions."); return; }
@@ -277,7 +277,7 @@ export function StockInPage() {
       {cameraOpen && (
         <BarcodeScanner
           onScan={(val) => {
-            setDraftSerial(val);
+            setDraftSerial(val.toUpperCase());
             setCameraOpen(false);
             serialInputRef.current?.focus();
           }}
@@ -591,13 +591,14 @@ export function StockInPage() {
                   ref={serialInputRef}
                   type="text"
                   value={draftSerial}
-                  onChange={(e) => setDraftSerial(e.target.value)}
+                  onChange={(e) => setDraftSerial(e.target.value.toUpperCase())}
                   onKeyDown={handleSerialEnter}
                   onFocus={() => setSerialFocused(true)}
                   onBlur={() => setSerialFocused(false)}
                   placeholder={draftPartConfirmed ? "Ready to scan…" : "Set part number first"}
                   autoFocus
                   autoComplete="off"
+                  spellCheck={false}
                   style={{
                     width: "100%",
                     border: `2px solid ${serialFocused && draftPartConfirmed ? "#15803d" : "#d1d5db"}`,

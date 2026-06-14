@@ -72,10 +72,11 @@ export function TransferNewPage() {
   }
 
   function onSerialChange(i: number, value: string) {
-    updateLine(i, "serial_number", value);
+    const upper = value.toUpperCase();
+    updateLine(i, "serial_number", upper);
     if (serialTimers.current[i]) clearTimeout(serialTimers.current[i]);
-    if (!value.trim()) { updateLine(i, "part_number", ""); updateLine(i, "part_name", ""); updateLine(i, "error", ""); return; }
-    serialTimers.current[i] = setTimeout(() => void resolveSerial(i, value), 350);
+    if (!upper.trim()) { updateLine(i, "part_number", ""); updateLine(i, "part_name", ""); updateLine(i, "error", ""); return; }
+    serialTimers.current[i] = setTimeout(() => void resolveSerial(i, upper), 350);
   }
   const [invoiceDupError, setInvoiceDupError] = useState<string | null>(null);
   useEffect(() => {
@@ -109,6 +110,17 @@ export function TransferNewPage() {
       const data = await api.get(`/serials/${encodeURIComponent(sn.trim())}`);
       if (!data) {
         setLines((prev) => prev.map((l, idx) => idx === i ? { ...l, resolving: false, error: "Serial not found in inventory." } : l));
+        return;
+      }
+      // Check if serial is already reserved in an active transfer (draft/packed/in_transit)
+      if (data.reservedInActiveTransfer) {
+        const statusLabel = data.activeTransferStatus === "draft" ? "Draft" : 
+                           data.activeTransferStatus === "packed" ? "Packed" : "In Transit";
+        setLines((prev) => prev.map((l, idx) => idx === i ? {
+          ...l,
+          resolving: false,
+          error: `Serial already reserved in Transfer ${data.activeTransferNo} (${statusLabel})`,
+        } : l));
         return;
       }
       const part = data.part as { partNumber: string; partName: string } | null;
@@ -273,6 +285,8 @@ export function TransferNewPage() {
                       placeholder="Scan or type serial"
                       value={line.serial_number}
                       onChange={(e) => onSerialChange(i, e.target.value)}
+                      spellCheck={false}
+                      autoComplete="off"
                       style={{ border: `1px solid ${line.error ? "#fca5a5" : "#d1d5db"}`, borderRadius: "var(--radius)", padding: "7px 8px", fontSize: 12, fontFamily: "monospace", outline: "none", width: "100%", boxSizing: "border-box" as const }}
                     />
                     {hasSerial && line.part_number ? (

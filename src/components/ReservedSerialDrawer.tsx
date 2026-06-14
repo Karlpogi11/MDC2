@@ -140,13 +140,15 @@ export function ReservedSerialDrawer({ partId, partName, partNumber, reservedCou
 
         <div style={{ padding: "5px 12px", borderBottom: "1px solid #f0f0f0", flexShrink: 0 }}>
           <div style={{ position: "relative" }}>
-            <Search size={14} color="#9ca3af" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
+            <Search size={14} color="#9ca3af" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
             <input
               ref={searchRef}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search serial, transfer no., destination..."
-              style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 10px 7px 30px", fontSize: 12, outline: "none", boxSizing: "border-box" }}
+              className="drawer-search"
+              data-plain
+              style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 10px 7px 34px", fontSize: 12, outline: "none", boxSizing: "border-box", background: "var(--bg-surface-elevated)", color: "var(--text)" }}
             />
           </div>
         </div>

@@ -73,7 +73,29 @@ serialsRouter.get("/:serialNumber", authMiddleware, async (req, res) => {
       sn.current_site_id AS currentSiteId, sn.status, sn.stock_in_batch_id AS stockInBatchId,
       sn.stock_in_at AS stockInAt, sn.created_at AS createdAt, sn.updated_at AS updatedAt,
       p.part_number AS partNumber, p.part_name AS partName, p.category,
-      s.site_name AS siteName, s.site_code AS siteCode
+      s.site_name AS siteName, s.site_code AS siteCode,
+      EXISTS(
+        SELECT 1 FROM transfer_items ti
+        JOIN transfers t ON t.id = ti.transfer_id
+        WHERE ti.serial_id = sn.id
+          AND t.status IN ('draft', 'packed', 'in_transit')
+      ) AS reservedInActiveTransfer,
+      (
+        SELECT t.transfer_no FROM transfer_items ti
+        JOIN transfers t ON t.id = ti.transfer_id
+        WHERE ti.serial_id = sn.id
+          AND t.status IN ('draft', 'packed', 'in_transit')
+        ORDER BY t.created_at DESC
+        LIMIT 1
+      ) AS activeTransferNo,
+      (
+        SELECT t.status FROM transfer_items ti
+        JOIN transfers t ON t.id = ti.transfer_id
+        WHERE ti.serial_id = sn.id
+          AND t.status IN ('draft', 'packed', 'in_transit')
+        ORDER BY t.created_at DESC
+        LIMIT 1
+      ) AS activeTransferStatus
     FROM serial_numbers sn
     LEFT JOIN parts p ON p.id = sn.part_id
     LEFT JOIN sites s ON s.id = sn.current_site_id
@@ -93,6 +115,9 @@ serialsRouter.get("/:serialNumber", authMiddleware, async (req, res) => {
     updatedAt: rawRows[0].updatedAt,
     part: { partNumber: rawRows[0].partNumber, partName: rawRows[0].partName, category: rawRows[0].category },
     site: { siteName: rawRows[0].siteName, siteCode: rawRows[0].siteCode },
+    reservedInActiveTransfer: !!rawRows[0].reservedInActiveTransfer,
+    activeTransferNo: rawRows[0].activeTransferNo ?? null,
+    activeTransferStatus: rawRows[0].activeTransferStatus ?? null,
   } : null;
   res.json(serial ?? null);
 });
