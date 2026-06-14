@@ -19,6 +19,9 @@ inventoryRouter.get("/", authMiddleware, async (req, res) => {
     limit: 10000,
   });
 
+  // ── Fetch all serial numbers and their actual statuses ──
+  // stockedOut is now derived from the serial's actual status, NOT from transfer_items,
+  // to avoid double-counting serials that were received (status returned to in_stock).
   const [activeTransfersRes, transferItemsRes, reservedItemsRes, inTransitSerialsRes, serialsRes] = await Promise.all([
     db.execute(sql`
       SELECT t.id, t.created_at, t.packed_at, t.status
@@ -52,7 +55,7 @@ inventoryRouter.get("/", authMiddleware, async (req, res) => {
       SELECT sn.id, sn.part_id AS partId, sn.status, sn.stock_in_at AS stockInAt
       FROM serial_numbers sn
       ORDER BY sn.stock_in_at DESC
-      LIMIT 5000
+      LIMIT 50000
     `),
   ]);
 
@@ -91,31 +94,29 @@ inventoryRouter.get("/", authMiddleware, async (req, res) => {
     });
   }
 
-  const serialPartKeys = new Set<string>();
+  // ── Count inStock and stockedOut from ACTUAL serial status ──
+  // This is the single source of truth — the serial_numbers.status column.
   for (const s of serialsRows) {
     const entry = byPart.get(s.partId);
     if (!entry) continue;
-    if (s.status === "in_stock" && !inTransitSerialIds.has(s.id)) entry.inStock++;
+
+    if (s.status === "in_stock" && !inTransitSerialIds.has(s.id)) {
+      entry.inStock++;
+    } else if (["transferred", "consumed", "void"].includes(s.status)) {
+      // Truly stocked out — the serial is no longer available
+      entry.stockedOut++;
+    } else if (s.status === "in_stock" && inTransitSerialIds.has(s.id)) {
+      // in_stock but currently in an in_transit transfer — count as stocked out (in transit)
+      entry.stockedOut++;
+    }
+
     const stockInAt = s.stockInAt ? new Date(s.stockInAt).toISOString() : null;
     if (stockInAt && (!entry.lastStockInAt || stockInAt > entry.lastStockInAt)) {
       entry.lastStockInAt = stockInAt;
     }
   }
 
-  const stockedOutKeys = new Set<string>();
-  for (const item of transferItemsRows) {
-    const entry = byPart.get(item.part_id);
-    if (!entry) continue;
-    if (item.serial_id) {
-      const key = `${item.transfer_id}:${item.serial_id}`;
-      if (stockedOutKeys.has(key)) continue;
-      stockedOutKeys.add(key);
-      entry.stockedOut++;
-    } else {
-      entry.stockedOut += item.qty ?? 1;
-    }
-  }
-
+  // ── Derive lastStockOutAt from transfer dates (for display only) ──
   for (const t of activeTransfersRows) {
     const stkOutAt = t.packed_at ?? t.created_at;
     const items = itemsByTransfer.get(t.id) ?? [];
@@ -238,3 +239,86 @@ inventoryRouter.get("/site/:siteId", authMiddleware, async (req, res) => {
 
   res.json(Array.from(grouped.values()));
 });
+
+// ── Discrepancy Check ─────────────────────────────────────────────
+// Finds serials with conflicting states: e.g. serial is in_stock but
+// also appears on an active transfer, or serial is transferred but no
+// matching transfer exists.
+inventoryRouter.get("/discrepancies", authMiddleware, async (req, res) => {
+  const db = await getDb();
+
+  // 1. Serials that are in_stock but appear on an in_transit/received transfer
+  const [inStockOnTransferRes] = await db.execute(sql`
+    SELECT
+      sn.serial_number AS serialNumber,
+      sn.status AS serialStatus,
+      p.part_number AS partNumber,
+      p.part_name AS partName,
+      t.transfer_no AS transferNo,
+      t.status AS transferStatus,
+      s.site_name AS currentSite
+    FROM serial_numbers sn
+    JOIN transfer_items ti ON ti.serial_id = sn.id
+    JOIN transfers t ON t.id = ti.transfer_id
+    JOIN parts p ON p.id = sn.part_id
+    LEFT JOIN sites s ON s.id = sn.current_site_id
+    WHERE sn.status = 'in_stock'
+      AND t.status IN ('in_transit', 'received')
+    ORDER BY sn.serial_number
+    LIMIT 500
+  `);
+
+  // 2. Serials that appear on multiple active transfers (draft/packed/in_transit)
+  const [duplicateTransferRes] = await db.execute(sql`
+    SELECT
+      sn.serial_number AS serialNumber,
+      sn.status AS serialStatus,
+      p.part_number AS partNumber,
+      p.part_name AS partName,
+      GROUP_CONCAT(DISTINCT t.transfer_no ORDER BY t.created_at SEPARATOR ', ') AS transferNos,
+      COUNT(DISTINCT t.id) AS transferCount
+    FROM serial_numbers sn
+    JOIN transfer_items ti ON ti.serial_id = sn.id
+    JOIN transfers t ON t.id = ti.transfer_id
+    JOIN parts p ON p.id = sn.part_id
+    WHERE t.status IN ('draft', 'packed', 'in_transit')
+    GROUP BY sn.id, sn.serial_number, sn.status, p.part_number, p.part_name
+    HAVING COUNT(DISTINCT t.id) > 1
+    ORDER BY sn.serial_number
+    LIMIT 500
+  `);
+
+  const inStockOnTransfer = (inStockOnTransferRes as unknown as any[]) ?? [];
+  const duplicateTransfers = (duplicateTransferRes as unknown as any[]) ?? [];
+
+  const discrepancies: Array<{
+    serialNumber: string;
+    partNumber: string;
+    partName: string;
+    issue: string;
+    detail: string;
+  }> = [];
+
+  for (const r of inStockOnTransfer) {
+    discrepancies.push({
+      serialNumber: r.serialNumber,
+      partNumber: r.partNumber,
+      partName: r.partName,
+      issue: "in_stock_on_active_transfer",
+      detail: `Serial is "${r.serialStatus}" at ${r.currentSite} but appears on transfer ${r.transferNo} (${r.transferStatus})`,
+    });
+  }
+
+  for (const r of duplicateTransfers) {
+    discrepancies.push({
+      serialNumber: r.serialNumber,
+      partNumber: r.partNumber,
+      partName: r.partName,
+      issue: "duplicate_across_transfers",
+      detail: `Serial appears on ${r.transferCount} active transfers: ${r.transferNos}`,
+    });
+  }
+
+  res.json({ discrepancies, total: discrepancies.length });
+});
+

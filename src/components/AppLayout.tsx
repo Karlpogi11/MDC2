@@ -166,8 +166,6 @@ export function AppLayout({ children, activeModule }: Props) {
             type="button"
             className="brand-word brand-trigger"
             onPointerEnter={() => warmRoute("/dashboard")}
-            onPointerDown={() => warmRoute("/dashboard")}
-            onFocus={() => warmRoute("/dashboard")}
             onClick={() => goToRoute("/dashboard")}
           >
             {headerBrandName}
@@ -182,8 +180,6 @@ export function AppLayout({ children, activeModule }: Props) {
                   className={isActive ? "module active" : "module"}
                   type="button"
                   onPointerEnter={() => warmRoute(item.path)}
-                  onPointerDown={() => warmRoute(item.path)}
-                  onFocus={() => warmRoute(item.path)}
                   onClick={() => goToRoute(item.path)}
                 >
                   <Icon className="module-icon-svg" aria-hidden="true" />

@@ -231,6 +231,39 @@ transfersRouter.post("/", authMiddleware, async (req, res) => {
   });
 
   if (transferItemsData?.length) {
+    const serialIds = transferItemsData.map((item: any) => item.serialId ?? item.serial_id).filter(Boolean);
+    if (serialIds.length) {
+      const hasDup = serialIds.some((val: string, index: number) => serialIds.indexOf(val) !== index);
+      if (hasDup) {
+        res.status(400).json({ error: "Duplicate serial numbers in transfer request" });
+        return;
+      }
+
+      for (const sId of serialIds) {
+        const [activeTfrRows] = await db.execute(sql`
+          SELECT t.transfer_no AS transferNo, t.status
+          FROM transfer_items ti
+          JOIN transfers t ON t.id = ti.transfer_id
+          WHERE ti.serial_id = ${sId}
+            AND t.status IN ('draft', 'packed', 'in_transit')
+        `);
+        const activeTfr = (activeTfrRows as unknown as any[])?.[0];
+        if (activeTfr) {
+          res.status(400).json({ error: `Serial is already reserved on active Transfer ${activeTfr.transferNo} (${activeTfr.status})` });
+          return;
+        }
+
+        const [serialRows] = await db.execute(sql`
+          SELECT status FROM serial_numbers WHERE id = ${sId} LIMIT 1
+        `);
+        const s = (serialRows as unknown as any[])?.[0];
+        if (!s || s.status !== "in_stock") {
+          res.status(400).json({ error: "One or more serials are not available in stock" });
+          return;
+        }
+      }
+    }
+
     const items = transferItemsData.map((item: any) => ({
       id: uuid(),
       transferId: id,
@@ -363,6 +396,43 @@ transfersRouter.put("/:id/status", authMiddleware, async (req, res) => {
 transfersRouter.put("/:id/assign-serial", authMiddleware, async (req, res) => {
   const db = await getDb();
   const { itemId, serialId } = req.body;
+
+  const [itemRows] = await db.execute(sql`SELECT part_id AS partId, transfer_id AS transferId FROM transfer_items WHERE id = ${itemId} LIMIT 1`);
+  const item = (itemRows as unknown as any[])?.[0];
+  if (!item) {
+    res.status(400).json({ error: "Transfer item not found" });
+    return;
+  }
+
+  const [serialRows] = await db.execute(sql`SELECT status, part_id AS partId FROM serial_numbers WHERE id = ${serialId} LIMIT 1`);
+  const serial = (serialRows as unknown as any[])?.[0];
+  if (!serial) {
+    res.status(400).json({ error: "Serial not found" });
+    return;
+  }
+  if (serial.status !== "in_stock") {
+    res.status(400).json({ error: `Serial is not available (status: ${serial.status})` });
+    return;
+  }
+  if (serial.partId !== item.partId) {
+    res.status(400).json({ error: "Serial belongs to a different part" });
+    return;
+  }
+
+  const [activeTfrRows] = await db.execute(sql`
+    SELECT t.transfer_no AS transferNo, t.status
+    FROM transfer_items ti
+    JOIN transfers t ON t.id = ti.transfer_id
+    WHERE ti.serial_id = ${serialId}
+      AND ti.id != ${itemId}
+      AND t.status IN ('draft', 'packed', 'in_transit')
+  `);
+  const activeTfr = (activeTfrRows as unknown as any[])?.[0];
+  if (activeTfr) {
+    res.status(400).json({ error: `Serial is already reserved on active Transfer ${activeTfr.transferNo} (${activeTfr.status})` });
+    return;
+  }
+
   const [prevRows] = await db.execute(sql`SELECT serial_id AS serialId FROM transfer_items WHERE id = ${itemId} LIMIT 1`);
   const prev = (prevRows as unknown as any[])[0] as any;
   await db.update(transferItems)

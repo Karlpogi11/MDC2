@@ -134,11 +134,12 @@ async function processStockInRows(
   const existingSerialRows = uniqueSerials.length
     ? await db.query.serialNumbers.findMany({ where: inArray(serialNumbers.serialNumber, uniqueSerials) })
     : [];
-  const existingSerials = new Set(existingSerialRows.map((row) => row.serialNumber));
   const seenSerials = new Set<string>();
 
   const failedRows: Array<{ row: number; serial: string; reason: string }> = [];
   const successRows: Array<{ id: string; serialNumber: string; partId: string }> = [];
+  const updateRows: Array<{ id: string; serialNumber: string; partId: string; prevStatus: string }> = [];
+  const warnings: Array<{ row: number; serial: string; warning: string }> = [];
 
   for (const row of inputRows) {
     if (!row.serial || !row.partNumber) {
@@ -149,19 +150,31 @@ async function processStockInRows(
       failedRows.push({ row: row.row, serial: row.serial, reason: "Duplicate serial in file" });
       continue;
     }
-    if (existingSerials.has(row.serial)) {
-      failedRows.push({ row: row.row, serial: row.serial, reason: "Serial already exists" });
-      continue;
-    }
 
+    const existing = existingSerialRows.find((es) => es.serialNumber === row.serial);
     const part = partLookup.map.get(row.partNumber);
     if (!part) {
       failedRows.push({ row: row.row, serial: row.serial, reason: `Part ${row.partNumber} not found` });
       continue;
     }
 
-    seenSerials.add(row.serial);
-    successRows.push({ id: uuid(), serialNumber: row.serial, partId: part.id });
+    if (existing) {
+      if (["in_stock", "in_transit", "transit"].includes(existing.status)) {
+        failedRows.push({ row: row.row, serial: row.serial, reason: "Serial already exists in stock" });
+        continue;
+      }
+      // Previously stocked out (transferred, consumed, void) -> allow re-stocking with strict part check
+      if (existing.partId !== part.id) {
+        failedRows.push({ row: row.row, serial: row.serial, reason: "Serial previously registered under a different part" });
+        continue;
+      }
+      seenSerials.add(row.serial);
+      updateRows.push({ id: existing.id, serialNumber: existing.serialNumber, partId: part.id, prevStatus: existing.status });
+      warnings.push({ row: row.row, serial: row.serial, warning: `Re-stocking: Serial was previously ${existing.status.replace(/_/g, " ")}` });
+    } else {
+      seenSerials.add(row.serial);
+      successRows.push({ id: uuid(), serialNumber: row.serial, partId: part.id });
+    }
   }
 
   const batchId = uuid();
@@ -172,7 +185,7 @@ async function processStockInRows(
     fileHash: null,
     importedBy: actorId,
     totalRows: inputRows.length,
-    successRows: successRows.length,
+    successRows: successRows.length + updateRows.length,
     failedRows: failedRows.length,
   });
 
@@ -195,11 +208,43 @@ async function processStockInRows(
     })));
   }
 
+  if (updateRows.length > 0) {
+    for (const s of updateRows) {
+      await db.update(serialNumbers)
+        .set({
+          status: "in_stock",
+          currentSiteId: dcSite.id,
+          stockInBatchId: batchId,
+          stockInAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(serialNumbers.id, s.id));
+
+      await db.insert(stockInItems).values({
+        id: uuid(),
+        batchId,
+        partId: s.partId,
+        serialId: s.id,
+        quantity: 1,
+      });
+
+      await writeAuditLog({
+        actorId,
+        action: "update",
+        entityType: "serial_number",
+        entityId: s.id,
+        newValue: { status: "in_stock", currentSiteId: dcSite.id },
+        note: `Re-stocked serial number (previously ${s.prevStatus})`,
+      });
+    }
+  }
+
   return {
     batchId,
     totalRows: inputRows.length,
-    successRows: successRows.length,
+    successRows: successRows.length + updateRows.length,
     failedRows,
+    warnings,
   };
 }
 

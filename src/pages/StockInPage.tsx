@@ -17,6 +17,7 @@ type BatchResult = {
   totalRows: number;
   successRows: number;
   failedRows: { row: number; serial: string; reason: string }[];
+  warnings?: { row: number; serial: string; warning: string }[];
 };
 
 type PreviewRow = {
@@ -108,7 +109,7 @@ export function StockInPage() {
     const result = await api.post("/stock-in/batch", { serials, actor_id: actor, dc_site_id: (dcSite as any).id });
     const r = result as any;
     await api.post("/inventory/refresh-snapshot", {}).catch(() => {});
-    return { ok: r.successRows ?? 0, failed: r.failedRows ?? [] };
+    return { ok: r.successRows ?? 0, failed: r.failedRows ?? [], warnings: r.warnings ?? [] };
   }
 
   // --- Bulk upload state ---
@@ -168,7 +169,7 @@ export function StockInPage() {
   const [draftList, setDraftList] = useState<DraftRow[]>([]);
   const [draftError, setDraftError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [submitResult, setSubmitResult] = useState<{ ok: number; failed: { serial: string; reason: string }[] } | null>(null);
+  const [submitResult, setSubmitResult] = useState<{ ok: number; failed: { serial: string; reason: string }[]; warnings?: { serial: string; warning: string }[] } | null>(null);
   const [flashIdx, setFlashIdx] = useState<number | null>(null);
   const [serialFocused, setSerialFocused] = useState(false);
 
@@ -210,7 +211,11 @@ export function StockInPage() {
     setSubmitting(true);
     try {
       const result = await executeBatchInsert(valid, actorId);
-      setSubmitResult({ ok: result.ok, failed: result.failed.map((r: { serial: string }) => ({ serial: r.serial, reason: "duplicate or constraint" })) });
+      setSubmitResult({
+        ok: result.ok,
+        failed: result.failed.map((r: { serial: string; reason: string }) => ({ serial: r.serial, reason: r.reason || "duplicate or constraint" })),
+        warnings: result.warnings,
+      });
       setDraftList([]);
       setDraftPartNumber(""); setDraftPartName(""); setDraftPartConfirmed(false);
     } catch (err) {
@@ -479,7 +484,7 @@ export function StockInPage() {
 
               {/* Failed rows */}
               {state.result.failedRows.length > 0 && (
-                <div>
+                <div style={{ marginBottom: 20 }}>
                   <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: "var(--negative)" }}>
                     Failed rows — fix and re-upload:
                   </p>
@@ -498,6 +503,35 @@ export function StockInPage() {
                             <td style={{ padding: "5px 8px", color: "var(--text)" }}>{r.row}</td>
                             <td style={{ padding: "5px 8px", fontFamily: "monospace", color: "var(--text)" }}>{r.serial}</td>
                             <td style={{ padding: "5px 8px", color: "var(--negative)" }}>{r.reason}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Warnings */}
+              {state.result.warnings && state.result.warnings.length > 0 && (
+                <div style={{ marginBottom: 20 }}>
+                  <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
+                    Warnings:
+                  </p>
+                  <div style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", overflow: "hidden", overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                      <thead>
+                        <tr style={{ background: "var(--bg-surface-elevated)" }}>
+                          {["Row", "Serial", "Warning"].map((h) => (
+                            <th key={h} style={{ padding: "5px 8px", textAlign: "left", fontWeight: 600, color: "var(--text)" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {state.result.warnings.map((w, idx) => (
+                          <tr key={idx} style={{ borderTop: "1px solid var(--line)" }}>
+                            <td style={{ padding: "5px 8px", color: "var(--text)" }}>{w.row}</td>
+                            <td style={{ padding: "5px 8px", fontFamily: "monospace", color: "var(--text)" }}>{w.serial}</td>
+                            <td style={{ padding: "5px 8px", color: "var(--muted)" }}>{w.warning}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -623,15 +657,28 @@ export function StockInPage() {
             )}
 
             {submitResult && (
-              <div style={{ marginBottom: 14, padding: "10px 14px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", fontSize: 13, color: "var(--text)", display: "flex", alignItems: "center", gap: 12 }}>
-                <span><CheckCircle size={14} style={{ display: "inline", marginRight: 6 }} />
-                {submitResult.ok} serial{submitResult.ok !== 1 ? "s" : ""} stocked in.
-                {submitResult.failed.length > 0 && <span style={{ color: "var(--negative)", marginLeft: 8 }}>{submitResult.failed.length} failed.</span>}
-                </span>
-                <button type="button" onClick={() => navigate("/inventory")}
-                  style={{ marginLeft: "auto", background: "none", color: "var(--blue)", border: "none", padding: 0, fontSize: 13, fontWeight: 400, cursor: "pointer", whiteSpace: "nowrap" }}>
-                  View
-                </button>
+              <div style={{ marginBottom: 14, padding: "10px 14px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", fontSize: 13, color: "var(--text)", display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <span><CheckCircle size={14} style={{ display: "inline", marginRight: 6 }} />
+                  {submitResult.ok} serial{submitResult.ok !== 1 ? "s" : ""} stocked in.
+                  {submitResult.failed.length > 0 && <span style={{ color: "var(--negative)", marginLeft: 8 }}>{submitResult.failed.length} failed.</span>}
+                  </span>
+                  <button type="button" onClick={() => navigate("/inventory")}
+                    style={{ marginLeft: "auto", background: "none", color: "var(--blue)", border: "none", padding: 0, fontSize: 13, fontWeight: 400, cursor: "pointer", whiteSpace: "nowrap" }}>
+                    View
+                  </button>
+                </div>
+                {submitResult.warnings && submitResult.warnings.length > 0 && (
+                  <div style={{ borderTop: "1px solid var(--line)", paddingTop: 8 }}>
+                    <p style={{ margin: "0 0 6px", fontSize: 12, fontWeight: 600, color: "var(--text)" }}>Warnings:</p>
+                    {submitResult.warnings.map((w, idx) => (
+                      <div key={idx} style={{ fontSize: 12, color: "var(--muted)", display: "flex", gap: 6, alignItems: "center" }}>
+                        <span style={{ color: "#d97706" }}>⚠️</span>
+                        <span>Serial {w.serial}: {w.warning}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

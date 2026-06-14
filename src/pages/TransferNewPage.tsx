@@ -96,6 +96,14 @@ export function TransferNewPage() {
 
   async function resolveSerial(i: number, sn: string) {
     if (!sn.trim()) return;
+    
+    // Check for duplicate scan in the current transfer creation screen
+    const isDup = lines.some((l, idx) => idx !== i && l.serial_number.trim().toUpperCase() === sn.trim().toUpperCase());
+    if (isDup) {
+      setLines((prev) => prev.map((l, idx) => idx === i ? { ...l, resolving: false, error: "Duplicate serial in this transfer." } : l));
+      return;
+    }
+
     setLines((prev) => prev.map((l, idx) => idx === i ? { ...l, resolving: true, error: undefined } : l));
     try {
       const data = await api.get(`/serials/${encodeURIComponent(sn.trim())}`);

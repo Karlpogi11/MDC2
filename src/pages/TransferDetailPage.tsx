@@ -113,6 +113,14 @@ export function TransferDetailPage() {
     setSerialSaving(p => ({ ...p, [itemId]: true }));
     setSerialErrors(p => ({ ...p, [itemId]: "" }));
 
+    // Check for duplicate assignment locally in this transfer
+    const isDup = (transfer?.items ?? []).some((item: any) => item.id !== itemId && item.serial?.serialNumber?.trim().toUpperCase() === sn.toUpperCase());
+    if (isDup) {
+      setSerialErrors(p => ({ ...p, [itemId]: "Serial already assigned in this transfer" }));
+      setSerialSaving(p => ({ ...p, [itemId]: false }));
+      return;
+    }
+
     try {
       const serial = await api.get(`/serials/${encodeURIComponent(sn)}`);
       if (!serial) {

@@ -90,8 +90,8 @@ export function TransfersPage() {
     });
   }
 
-  const fetchPage = useCallback(async (p: number, status: string) => {
-    setLoading(true);
+  const fetchPage = useCallback(async (p: number, status: string, silent = false) => {
+    if (!silent) setLoading(true);
     setFetchError(null);
     try {
       const params = new URLSearchParams({ page: String(p), pageSize: String(PAGE_SIZE) });
@@ -102,7 +102,7 @@ export function TransfersPage() {
     } catch (err) {
       setFetchError(err instanceof Error ? friendlyError(err) : "Failed to load transfers.");
     }
-    setLoading(false);
+    if (!silent) setLoading(false);
   }, []);
 
   // Fetch on mount and when page/status changes
@@ -124,7 +124,7 @@ export function TransfersPage() {
 
   // Poll for updates every 15 seconds
   useEffect(() => {
-    const interval = setInterval(() => fetchPage(page, statusFilter), 15000);
+    const interval = setInterval(() => fetchPage(page, statusFilter, true), 15000);
     return () => clearInterval(interval);
   }, [page, statusFilter, fetchPage]);
 
