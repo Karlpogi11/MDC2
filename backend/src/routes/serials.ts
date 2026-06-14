@@ -135,6 +135,43 @@ serialsRouter.get("/:id/transfer-history", authMiddleware, async (req, res) => {
   })));
 });
 
+serialsRouter.post("/:id/return-to-dc", authMiddleware, async (req, res) => {
+  const db = await getDb();
+  const serialId = queryString(req.params.id) ?? "";
+  if (!serialId) { res.status(400).json({ error: "Serial ID required" }); return; }
+  const reason = (req.body?.reason as string)?.trim() || null;
+
+  const dcSite = await db.query.sites.findFirst({
+    where: and(eq(sites.isDc, true), eq(sites.isActive, true)),
+  });
+  if (!dcSite) { res.status(400).json({ error: "No DC site configured" }); return; }
+
+  const [serialRows] = await db.execute(sql`
+    SELECT id, serial_number AS serialNumber, current_site_id AS currentSiteId, status
+    FROM serial_numbers WHERE id = ${serialId} LIMIT 1
+  `);
+  const serial = ((serialRows as unknown as any[]) ?? [])[0] as any;
+  if (!serial) { res.status(404).json({ error: "Serial not found" }); return; }
+  if (serial.currentSiteId === dcSite.id && serial.status === "in_stock") {
+    res.status(400).json({ error: "Serial is already at DC" }); return;
+  }
+
+  await db.update(serialNumbers)
+    .set({ status: "in_stock", currentSiteId: dcSite.id })
+    .where(eq(serialNumbers.id, serialId));
+
+  await writeAuditLog({
+    actorId: req.user!.id,
+    action: "update",
+    entityType: "serial_number",
+    entityId: serialId,
+    newValue: { status: "in_stock", currentSiteId: dcSite.id },
+    note: reason ? `Returned to DC: ${reason}` : "Returned to DC",
+  });
+
+  res.json({ ok: true });
+});
+
 serialsRouter.put("/batch-site-update", authMiddleware, async (req, res) => {
   const db = await getDb();
   const { serialNumbers: serials, currentSiteId } = req.body;

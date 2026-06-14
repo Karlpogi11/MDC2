@@ -6,6 +6,7 @@ type Serial = {
   id: string;
   serialNumber: string;
   status: string;
+  currentSiteId: string | null;
   stockInAt: string;
   site: { siteName: string; siteCode: string } | null;
   dispatched?: boolean;
@@ -61,8 +62,7 @@ function actionLabel(action: string, newVal: any, oldVal: any): string {
   if (action === "update") {
     const ns = nv.status; const os = ov.status;
     if (ns && ns !== os) {
-      if (ns === "in_transit" || ns === "transit") return "Dispatched (In Transit)";
-      if (ns === "transferred") return "Received at Site";
+      if (ns === "in_transit" || ns === "transit" || ns === "transferred") return "Dispatched";
       if (ns === "void") return "Voided";
       if (ns === "consumed") return "Consumed";
       if (ns === "in_stock") return "Returned to Stock";
@@ -94,11 +94,10 @@ function SerialTimeline({ serialId, serialNumber, stockInAt }: { serialId: strin
         const ov = row.oldValue as any;
         const label = actionLabel(row.action, nv, ov);
 
-        // Skip audit events that duplicate transfer events (Packed / Received)
+        // Skip audit events that duplicate transfer events
         if (row.action === "update" && nv?.status && nv.status !== ov?.status) {
-          if (["in_transit", "transit", "transferred"].includes(nv.status)) {
-            continue;
-          }
+          if (["in_transit", "transit", "transferred"].includes(nv.status)) continue;
+          if (nv.status === "in_stock" && row.note?.includes("Received")) continue;
         }
 
         timeline.push({
@@ -148,19 +147,10 @@ function SerialTimeline({ serialId, serialNumber, stockInAt }: { serialId: strin
             timeline.push({
               id: `tr-packed-${t.id}`,
               at: t.packedAt,
-              action: `Packed - ${t.transferNo}`,
+              action: `Dispatched - ${t.transferNo}`,
               actor: null,
               site: src?.siteName ?? null,
               note: `→ ${dest?.siteName ?? "unknown"}`,
-              color: "var(--muted)",
-            });
-            timeline.push({
-              id: `tr-transferred-${t.id}`,
-              at: t.packedAt,
-              action: "Transferred out",
-              actor: null,
-              site: src?.siteName ?? null,
-              note: null,
               color: "var(--muted)",
             });
           }
@@ -246,6 +236,9 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
   const [statusFilter, setStatusFilter] = useState<string>(initialStatusFilter ?? "all");
   const [activeTab, setActiveTab] = useState<"serials" | "history">("serials");
   const [selectedSerial, setSelectedSerial] = useState<Serial | null>(null);
+  const [dcSiteId, setDcSiteId] = useState<string | null>(null);
+  const [returningSerial, setReturningSerial] = useState<string | null>(null);
+  const [returnReason, setReturnReason] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -253,10 +246,13 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
       .then((data) => {
         setSerials((data ?? []).map((s: any) => ({
           ...s,
+          currentSiteId: s.currentSiteId ?? null,
           site: Array.isArray(s.site) ? s.site[0] ?? null : s.site,
         })));
         setLoading(false);
       });
+
+    api.get("/sites/dc").then((site: any) => setDcSiteId(site?.id ?? null));
 
     setTimeout(() => searchRef.current?.focus(), 50);
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -379,16 +375,33 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
           </>
         )}
 
-        {!initialStatusFilter && activeTab === "history" && (
+        {activeTab === "history" && (
           <>
-            <div style={{ padding: "5px 12px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
+            <div style={{ padding: "5px 12px", borderBottom: "1px solid var(--line)", flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}>
+              {initialStatusFilter && selectedSerial && (
+                <button type="button" onClick={() => { setActiveTab("serials"); setSelectedSerial(null); setTimelineSearch(""); }}
+                  style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--link)", fontSize: 12, fontWeight: 600, padding: "4px 0", whiteSpace: "nowrap" }}>
+                  ← Back to {partName}
+                </button>
+              )}
               <input value={timelineSearch} onChange={(e) => setTimelineSearch(e.target.value)}
                 placeholder="Search serial number..."
                 style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 10px", fontSize: 13, outline: "none", boxSizing: "border-box", background: "var(--bg-surface-elevated)", color: "var(--text)" }} />
             </div>
             <div style={{ flex: 1, overflowY: "auto" }}>
               {selectedSerial && !timelineSearch.trim() ? (
-                <SerialTimeline serialId={selectedSerial.id} serialNumber={selectedSerial.serialNumber} stockInAt={selectedSerial.stockInAt} />
+                <>
+                  {dcSiteId && selectedSerial.currentSiteId && selectedSerial.currentSiteId !== dcSiteId && (
+                    <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--bg-surface-elevated)" }}>
+                      <span style={{ fontSize: 12, color: "var(--muted)" }}>At {selectedSerial.site?.siteName ?? "branch"}</span>
+                      <button type="button" onClick={() => { setReturningSerial(selectedSerial.id); setReturnReason(""); }}
+                        style={{ padding: "5px 12px", fontSize: 12, fontWeight: 700, border: "none", borderRadius: "var(--radius)", cursor: "pointer", background: "var(--blue)", color: "#fff" }}>
+                        Return to DC
+                      </button>
+                    </div>
+                  )}
+                  <SerialTimeline serialId={selectedSerial.id} serialNumber={selectedSerial.serialNumber} stockInAt={selectedSerial.stockInAt} />
+                </>
               ) : (
                 <div>
                   {serials
@@ -413,6 +426,47 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
           </>
         )}
       </div>
+
+      {/* Return to DC confirmation modal */}
+      {returningSerial && selectedSerial && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)" }}>
+          <div style={{ background: "var(--bg-surface)", border: "1px solid var(--line)", width: 400, maxWidth: "90vw", padding: 20 }}>
+            <h3 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700, color: "var(--text)" }}>Return to DC</h3>
+            <p style={{ margin: "0 0 4px", fontSize: 13, color: "var(--muted)" }}>
+              Serial <strong style={{ color: "var(--text)" }}>{selectedSerial.serialNumber}</strong> at <strong style={{ color: "var(--text)" }}>{selectedSerial.site?.siteName ?? "branch"}</strong>
+            </p>
+            <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--muted)" }}>
+              This will set it to <strong style={{ color: "var(--link)" }}>In Stock</strong> at DC and log the reason.
+            </p>
+            <textarea value={returnReason} onChange={(e) => setReturnReason(e.target.value)}
+              placeholder="Reason for return (e.g. Defective, Wrong item, RTS, etc.)"
+              rows={3}
+              style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "8px 10px", fontSize: 12, outline: "none", boxSizing: "border-box", resize: "vertical", background: "var(--bg-surface-elevated)", color: "var(--text)", fontFamily: "inherit" }} />
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+              <button type="button" onClick={() => { setReturningSerial(null); setReturnReason(""); }}
+                style={{ padding: "6px 14px", fontSize: 12, fontWeight: 600, border: "1px solid var(--line)", borderRadius: "var(--radius)", background: "transparent", color: "var(--muted)", cursor: "pointer" }}>
+                Cancel
+              </button>
+              <button type="button" onClick={async () => {
+                const id = returningSerial;
+                setReturningSerial("submitting");
+                try {
+                  await api.post(`/serials/${id}/return-to-dc`, { reason: returnReason.trim() || undefined });
+                  setReturningSerial(null);
+                  setReturnReason("");
+                  onClose();
+                  return;
+                } catch { }
+                setReturningSerial(null);
+                setReturnReason("");
+              }}
+                style={{ padding: "6px 14px", fontSize: 12, fontWeight: 700, border: "none", borderRadius: "var(--radius)", background: returningSerial === "submitting" ? "#d1d5db" : "var(--blue)", color: "#fff", cursor: returningSerial === "submitting" ? "not-allowed" : "pointer" }}>
+                {returningSerial === "submitting" ? "Returning..." : "Confirm Return"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
