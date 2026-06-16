@@ -3,7 +3,7 @@ import { useTableResize } from "@/components/ResizableColumns";
 import { DangerAction } from "@/components/DangerAction";
 import { useState, useEffect, useRef, type FormEvent } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Package, CheckCircle, Truck, Check, X, FileText, ScanLine, BookOpen } from "lucide-react";
+import { ArrowLeft, ArrowRight, Package, CheckCircle, Truck, Check, X, Trash2, FileText, ScanLine, BookOpen, Plus } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { AppLayout } from "@/components/AppLayout";
@@ -11,6 +11,7 @@ import { toCapitalized } from "@/lib/format";
 import { useBranding } from "@/lib/useBranding";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { ShipmentBookingPanel } from "@/components/ShipmentBookingPanel";
+import { PartNumberInput } from "@/components/PartNumberInput";
 
 type TransferStatus = "draft" | "booked" | "packed" | "in_transit" | "received" | "cancelled";
 
@@ -129,6 +130,22 @@ export function TransferDetailPage() {
   const [serialSaving, setSerialSaving] = useState<Record<string, boolean>>({});
   const [serialErrors, setSerialErrors] = useState<Record<string, string>>({});
 
+  // Add item to draft transfer
+  const [showAddItem, setShowAddItem] = useState(false);
+  const [addPartId, setAddPartId] = useState<string | null>(null);
+  const [addPartNumber, setAddPartNumber] = useState("");
+  const [addSerialInput, setAddSerialInput] = useState("");
+  const [addSerialId, setAddSerialId] = useState<string | null>(null);
+  const [addQty, setAddQty] = useState(1);
+  const [addSaving, setAddSaving] = useState(false);
+
+  // Auto-focus next serial input after assignment
+  const [focusSerialItemId, setFocusSerialItemId] = useState<string | null>(null);
+  const serialInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  // Confirm remove item
+  const [confirmRemoveItemId, setConfirmRemoveItemId] = useState<string | null>(null);
+
   async function assignSerial(itemId: string, partId: string, value: string) {
     const sn = value.trim().toUpperCase();
     if (!sn) return;
@@ -172,11 +189,20 @@ export function TransferDetailPage() {
       await api.put(`/transfers/${id}/assign-serial`, { itemId, serialId: serial.id });
       setSerialInputs(p => ({ ...p, [itemId]: "" }));
       await load(true);
+      // Focus next empty serial input
+      const nextItem = (transfer?.items ?? []).find(i => i.id !== itemId && !i.serial);
+      if (nextItem) setFocusSerialItemId(nextItem.id);
     } catch {
       setSerialErrors(p => ({ ...p, [itemId]: "Save failed" }));
     }
     setSerialSaving(p => ({ ...p, [itemId]: false }));
   }
+
+  useEffect(() => {
+    if (!focusSerialItemId) return;
+    const input = serialInputRefs.current[focusSerialItemId];
+    if (input) { input.focus(); setFocusSerialItemId(null); }
+  }, [focusSerialItemId]);
 
   // Pre-pack scan verification
   const [scanMode, setScanMode] = useState(false);
@@ -432,6 +458,38 @@ export function TransferDetailPage() {
     setCancelling(false);
   }
 
+  async function addItem() {
+    if (!transfer) return;
+    if (!addPartId && !addSerialId) return;
+    setAddSaving(true);
+    setActionError(null);
+    try {
+      const items = [{ partId: addPartId!, serialId: addSerialId ?? undefined, qty: addQty }];
+      await api.post(`/transfers/${transfer.id}/items`, { items });
+      setShowAddItem(false);
+      setAddPartId(null);
+      setAddPartNumber("");
+      setAddSerialInput("");
+      setAddSerialId(null);
+      setAddQty(1);
+      await load(true);
+    } catch (err) {
+      setActionError(friendlyError(err instanceof Error ? err : new Error(String(err))));
+    }
+    setAddSaving(false);
+  }
+
+  async function deleteItem(itemId: string) {
+    if (!transfer) return;
+    setActionError(null);
+    try {
+      await api.delete(`/transfers/${transfer.id}/items/${itemId}`);
+      await load(true);
+    } catch (err) {
+      setActionError(friendlyError(err instanceof Error ? err : new Error(String(err))));
+    }
+  }
+
   if (loading) return (
     <AppLayout>
       <div style={{ padding: 40, textAlign: "center", color: "var(--muted)" }}>Loading…</div>
@@ -474,7 +532,10 @@ export function TransferDetailPage() {
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
               {/* Secondary */}
               {(transfer.status === "draft" || transfer.status === "booked" || transfer.status === "packed") && (
-                <DangerAction label="Cancel transfer" confirmLabel="Yes, cancel" description="This cannot be undone."
+                <DangerAction label="Cancel transfer" confirmLabel="Yes, cancel"
+                  description={transfer.courierName && transfer.trackingNumber
+                    ? `This transfer has a ${transfer.courierName} booking with tracking ${transfer.trackingNumber}. Are you sure you want to cancel?`
+                    : "This cannot be undone."}
                   onConfirm={() => void cancelTransfer()} busy={cancelling} />
               )}
               {(transfer.status === "draft" || transfer.status === "booked") && (
@@ -557,6 +618,15 @@ export function TransferDetailPage() {
             </div>
           )}
         </div>
+        {/* Edit booking button for coordinator on booked transfers */}
+        {!canAdvance && role === "shipping_coordinator" && transfer.status === "booked" && (
+          <div style={{ marginBottom: 16, display: "flex", justifyContent: "flex-end" }}>
+            <button type="button" onClick={() => setShowBookingPanel(true)}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", color: "var(--text)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              Edit Booking
+            </button>
+          </div>
+        )}
         {actionError && (
           <div role="alert" style={{ marginBottom: 16, padding: "10px 14px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", color: "var(--negative)", fontSize: 13 }}>
             {actionError}
@@ -649,10 +719,16 @@ export function TransferDetailPage() {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: 16 }}>
           {/* Items table */}
           <div className="table-card">
-            <div style={{ padding: "10px 14px", borderBottom: "1px solid #d0d0d0" }}>
+            <div style={{ padding: "10px 14px", borderBottom: "1px solid #d0d0d0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <span style={{ fontSize: 13, fontWeight: 600, color: "#444" }}>
                 Items <span style={{ fontWeight: 400, color: "#888" }}>({transfer.items.length})</span>
               </span>
+              {transfer.status === "draft" && (
+                <button type="button" onClick={() => setShowAddItem(true)}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "transparent", border: "1px solid var(--line)", borderRadius: "var(--radius-sm)", padding: "3px 8px", fontSize: 11, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
+                  <Plus size={12} /> Add Item
+                </button>
+              )}
             </div>
             <div className="table-scroll">
               <table ref={tableRef}>
@@ -663,11 +739,12 @@ export function TransferDetailPage() {
                     <th>Description</th>
                     <th>Category</th>
                     <th className="num">Qty</th>
+                    {transfer.status === "draft" && <th style={{ width: 40, padding: 0 }}></th>}
                   </tr>
                 </thead>
                 <tbody>
                   {transfer.items.length === 0 && (
-                    <tr><td colSpan={transfer.status === "in_transit" ? 5 : 4} className="empty-row">No items.</td></tr>
+                    <tr><td colSpan={transfer.status === "in_transit" || transfer.status === "draft" ? 5 : 4} className="empty-row">No items.</td></tr>
                   )}
                   {transfer.items.map((item) => (
                     <tr key={item.id} style={{ background: receivedItems.has(item.id) ? "#f0fdf4" : undefined }}>
@@ -691,9 +768,15 @@ export function TransferDetailPage() {
                               <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                                 <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
                                   <input
+                                    ref={el => { serialInputRefs.current[item.id] = el; }}
                                     value={serialInputs[item.id] ?? ""}
                                     onChange={e => setSerialInputs(p => ({ ...p, [item.id]: e.target.value.toUpperCase() }))}
-                                    onKeyDown={e => { if (e.key === "Enter") void assignSerial(item.id, item.part!.id, serialInputs[item.id] ?? ""); }}
+                                    onKeyDown={e => {
+                                      if (e.key === "Enter" || e.key === "Tab") {
+                                        e.preventDefault();
+                                        void assignSerial(item.id, item.part!.id, serialInputs[item.id] ?? "");
+                                      }
+                                    }}
                                     onBlur={e => { if (e.target.value.trim()) void assignSerial(item.id, item.part!.id, e.target.value); }}
                                     placeholder="Enter serial number"
                                     disabled={serialSaving[item.id]}
@@ -715,6 +798,17 @@ export function TransferDetailPage() {
                         {toCapitalized(item.part?.category) || "—"}
                       </td>
                       <td className="num">{item.qty}</td>
+                      {transfer.status === "draft" && (
+                        <td style={{ padding: "4px 8px", textAlign: "center", width: 40 }}>
+                          <button type="button" onClick={() => setConfirmRemoveItemId(item.id)}
+                            title="Remove item"
+                            style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", padding: 4, borderRadius: "var(--radius-sm)", display: "inline-flex", alignItems: "center", justifyContent: "center", transition: "all 0.12s" }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = "var(--negative)"; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = "var(--muted)"; }}>
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -800,6 +894,95 @@ export function TransferDetailPage() {
           onScan={handleScan}
           onClose={() => setShowScanner(false)}
         />
+      )}
+
+      {showAddItem && (
+        <>
+          <div onClick={() => setShowAddItem(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 100 }} />
+          <div role="dialog" aria-modal="true" style={{
+            position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+            background: "var(--bg-surface)", borderRadius: "var(--radius)",
+            padding: 24, width: 380, zIndex: 101,
+            boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+          }}>
+            <h2 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 700, color: "var(--text)" }}>Add Item</h2>
+
+            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 4 }}>Serial <span style={{ color: "var(--muted)", fontWeight: 400 }}>(or search part below)</span></label>
+            <input value={addSerialInput}
+              onChange={async e => {
+                const val = e.target.value.toUpperCase();
+                setAddSerialInput(val);
+                if (val.trim().length >= 2) {
+                  try {
+                    const serial = await api.get(`/serials/${encodeURIComponent(val.trim())}`);
+                    if (serial?.id && serial.status === "in_stock" && !serial.reservedInActiveTransfer) {
+                      setAddPartNumber(serial.partNumber ?? "");
+                      setAddPartId(serial.part_id ?? null);
+                      setAddSerialId(serial.id);
+                      setAddQty(1);
+                    } else {
+                      setAddSerialId(null);
+                    }
+                  } catch { setAddSerialId(null); }
+                } else {
+                  setAddSerialId(null);
+                }
+              }}
+              placeholder="Scan or type serial number"
+              style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius-sm)", padding: "7px 10px", fontSize: 13, fontFamily: "monospace", color: "var(--text)", background: "var(--bg-surface)", outline: "none" }}
+            />
+
+            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text)", marginTop: 14, marginBottom: 4 }}>Part</label>
+            <PartNumberInput
+              value={addPartNumber}
+              onChange={(pn, part) => { setAddPartNumber(pn); setAddPartId(part?.id ?? null); setAddSerialId(null); }}
+              style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius-sm)", padding: "7px 10px", fontSize: 13, color: "var(--text)", background: "var(--bg-surface)", outline: "none" }}
+            />
+
+            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text)", marginTop: 14, marginBottom: 4 }}>Qty</label>
+            <input type="number" min={1} value={addQty}
+              onChange={e => setAddQty(Math.max(1, parseInt(e.target.value) || 1))}
+              style={{ width: 80, border: "1px solid var(--line)", borderRadius: "var(--radius-sm)", padding: "7px 10px", fontSize: 13, color: "var(--text)", background: "var(--bg-surface)", outline: "none" }}
+            />
+
+            <div style={{ marginTop: 20, display: "flex", gap: 8 }}>
+              <button type="button" onClick={() => setShowAddItem(false)}
+                style={{ flex: 1, border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "7px 0", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
+                Cancel
+              </button>
+              <button type="button" onClick={() => void addItem()} disabled={(!addPartId && !addSerialId) || addSaving}
+                style={{ flex: 1, background: (addPartId || addSerialId) && !addSaving ? "var(--blue)" : "var(--bg-surface)", color: (addPartId || addSerialId) && !addSaving ? "#fff" : "var(--muted)", border: (addPartId || addSerialId) && !addSaving ? "none" : "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 0", fontSize: 13, fontWeight: 600, cursor: (addPartId || addSerialId) && !addSaving ? "pointer" : "not-allowed" }}>
+                {addSaving ? "Adding…" : "Add Item"}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {confirmRemoveItemId && (
+        <>
+          <div onClick={() => setConfirmRemoveItemId(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 100 }} />
+          <div role="dialog" aria-modal="true" style={{
+            position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+            background: "var(--bg-surface)", borderRadius: "var(--radius)",
+            padding: 24, width: 320, zIndex: 101,
+            boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+          }}>
+            <p style={{ margin: "0 0 16px", fontSize: 14, color: "var(--text)", lineHeight: 1.5 }}>
+              Remove this item from the transfer?
+            </p>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button type="button" onClick={() => setConfirmRemoveItemId(null)}
+                style={{ flex: 1, border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "7px 0", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
+                Cancel
+              </button>
+              <button type="button" onClick={() => { const id = confirmRemoveItemId; setConfirmRemoveItemId(null); void deleteItem(id); }}
+                style={{ flex: 1, background: "var(--negative)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "7px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                Remove
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </AppLayout>
   );

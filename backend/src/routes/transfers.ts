@@ -650,3 +650,99 @@ transfersRouter.post("/:id/generate-pdf", authMiddleware, async (req, res) => {
 
   res.json({ ok: true });
 });
+
+transfersRouter.post("/:id/items", authMiddleware, async (req, res) => {
+  const db = await getDb();
+  const id = queryString(req.params.id) ?? "";
+  const { items: transferItemsData } = req.body;
+
+  if (!id) { res.status(400).json({ error: "Invalid transfer ID" }); return; }
+  if (!transferItemsData?.length) { res.status(400).json({ error: "No items provided" }); return; }
+
+  const [prevRows] = await db.execute(sql`SELECT status FROM transfers WHERE id = ${id} LIMIT 1`);
+  const prev = (prevRows as unknown as any[])?.[0];
+  if (!prev) { res.status(404).json({ error: "Transfer not found" }); return; }
+  if (prev.status !== "draft") { res.status(400).json({ error: "Can only add items to draft transfers" }); return; }
+
+  const serialIds = transferItemsData.map((item: any) => item.serialId ?? item.serial_id).filter(Boolean);
+  if (serialIds.length) {
+    const hasDup = serialIds.some((val: string, index: number) => serialIds.indexOf(val) !== index);
+    if (hasDup) { res.status(400).json({ error: "Duplicate serial numbers in request" }); return; }
+
+    for (const sId of serialIds) {
+      const [activeTfrRows] = await db.execute(sql`
+        SELECT t.transfer_no AS transferNo, t.status
+        FROM transfer_items ti
+        JOIN transfers t ON t.id = ti.transfer_id
+        WHERE ti.serial_id = ${sId}
+          AND t.status IN ('draft', 'packed', 'in_transit')
+      `);
+      const activeTfr = (activeTfrRows as unknown as any[])?.[0];
+      if (activeTfr) {
+        res.status(400).json({ error: `Serial is already reserved on active Transfer ${activeTfr.transferNo} (${activeTfr.status})` });
+        return;
+      }
+
+      const [serialRows] = await db.execute(sql`
+        SELECT status FROM serial_numbers WHERE id = ${sId} LIMIT 1
+      `);
+      const s = (serialRows as unknown as any[])?.[0];
+      if (!s || s.status !== "in_stock") {
+        res.status(400).json({ error: "One or more serials are not available in stock" });
+        return;
+      }
+    }
+  }
+
+  const items = transferItemsData.map((item: any) => ({
+    id: uuid(),
+    transferId: id,
+    partId: item.partId ?? item.part_id,
+    serialId: item.serialId ?? item.serial_id ?? null,
+    qty: item.qty ?? 1,
+  }));
+  await db.insert(transferItems).values(items);
+
+  await writeAuditLog({
+    actorId: req.user!.id,
+    action: "insert",
+    entityType: "transfer_item",
+    entityId: id,
+    newValue: { itemsAdded: items.length },
+    note: `Added ${items.length} item(s) to transfer`,
+  });
+
+  res.json({ ok: true, items });
+});
+
+transfersRouter.delete("/:id/items/:itemId", authMiddleware, async (req, res) => {
+  const db = await getDb();
+  const id = queryString(req.params.id) ?? "";
+  const itemId = queryString(req.params.itemId) ?? "";
+
+  if (!id || !itemId) { res.status(400).json({ error: "Invalid params" }); return; }
+
+  const [prevRows] = await db.execute(sql`SELECT status FROM transfers WHERE id = ${id} LIMIT 1`);
+  const prev = (prevRows as unknown as any[])?.[0];
+  if (!prev) { res.status(404).json({ error: "Transfer not found" }); return; }
+  if (prev.status !== "draft") { res.status(400).json({ error: "Can only remove items from draft transfers" }); return; }
+
+  const [itemRows] = await db.execute(sql`
+    SELECT id, serial_id AS serialId, part_id AS partId, qty FROM transfer_items WHERE id = ${itemId} AND transfer_id = ${id} LIMIT 1
+  `);
+  const item = (itemRows as unknown as any[])?.[0];
+  if (!item) { res.status(404).json({ error: "Item not found on this transfer" }); return; }
+
+  await db.delete(transferItems).where(eq(transferItems.id, itemId));
+
+  await writeAuditLog({
+    actorId: req.user!.id,
+    action: "delete",
+    entityType: "transfer_item",
+    entityId: itemId,
+    oldValue: item,
+    note: `Removed item from transfer`,
+  });
+
+  res.json({ ok: true });
+});

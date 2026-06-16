@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 
 const COURIER_OPTIONS = [
   "Lalamove",
+  "Grab",
   "Pickup by Utility",
   "Other",
 ];
@@ -12,6 +13,7 @@ type Props = {
   transfer: {
     id: string;
     transferNo: string;
+    status?: string;
     invoiceRef?: string | null;
     courierName?: string | null;
     trackingNumber?: string | null;
@@ -32,6 +34,8 @@ export function ShipmentBookingPanel({ transfer, onClose, onBooked }: Props) {
   const [customCourier, setCustomCourier] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const editMode = transfer.status === "booked";
 
   const isPickup = courier === "Pickup by Utility";
   const isOther = courier === "Other";
@@ -180,7 +184,11 @@ export function ShipmentBookingPanel({ transfer, onClose, onBooked }: Props) {
 
           {/* Next steps */}
           <div style={{ marginBottom: 20, padding: "10px 14px", border: "1px solid var(--line)", borderRadius: "var(--radius)", fontSize: 12, color: "var(--muted)", lineHeight: 1.5 }}>
-            An operator will pack the items and mark them <strong style={{ color: "var(--text)" }}>ready to dispatch</strong>. Come back here to confirm dispatch once packed.
+            {editMode ? (
+              "Update the courier or tracking details below. The operator will see the latest info when packing."
+            ) : (
+              <>An operator will pack the items and mark them <strong style={{ color: "var(--text)" }}>ready to dispatch</strong>. Come back here to confirm dispatch once packed.</>
+            )}
           </div>
 
           {error && (
@@ -197,7 +205,7 @@ export function ShipmentBookingPanel({ transfer, onClose, onBooked }: Props) {
             </button>
             <button type="submit" disabled={!canSubmit}
               style={{ flex: 1, background: canSubmit ? "var(--blue)" : "var(--bg-surface)", color: canSubmit ? "#fff" : "var(--muted)", border: canSubmit ? "none" : "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 0", fontSize: 13, fontWeight: 600, cursor: canSubmit ? "pointer" : "not-allowed" }}>
-              {saving ? "Booking…" : "Confirm Booking"}
+              {saving ? "Saving…" : editMode ? "Update Booking" : "Confirm Booking"}
             </button>
           </div>
         </form>

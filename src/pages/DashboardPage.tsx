@@ -373,6 +373,7 @@ type QueueTransfer = {
   transferNo: string;
   status: string;
   createdAt: string;
+  bookedAt: string | null;
   destSiteName: string;
   destSiteCode: string;
   itemCount: number;
@@ -401,7 +402,7 @@ function ShippingQueue({
 }) {
   const total = draftItems.length + bookedItems.length + packedItems.length;
 
-  function TicketCard({ item, kind }: { item: QueueTransfer; kind: "book" | "dispatch" }) {
+  function TicketCard({ item, kind }: { item: QueueTransfer; kind: "book" | "booked" | "dispatch" }) {
     return (
       <div style={{
         background: "var(--bg-surface)",
@@ -450,12 +451,19 @@ function ShippingQueue({
 
         {/* Action */}
         {kind === "booked" ? (
-          <div style={{ fontSize: 12, color: "var(--muted)", display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--muted)", display: "inline-block" }} />
-            Awaiting packing
+          <div onClick={e => e.stopPropagation()} style={{ fontSize: 12, color: "var(--muted)", display: "flex", flexDirection: "column", gap: 4 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--muted)", display: "inline-block" }} />
+              Awaiting packing
+            </div>
+            {item.bookedAt && (
+              <span style={{ fontSize: 11, color: "var(--muted)", paddingLeft: 12 }}>
+                Booked {timeAgo(item.bookedAt)}
+              </span>
+            )}
           </div>
         ) : kind === "book" ? (
-          <button type="button" onClick={() => onBookClick(item)}
+          <button type="button" onClick={e => { e.stopPropagation(); onBookClick(item); }}
             style={{
               width: "100%", padding: "7px 0", fontSize: 13, fontWeight: 600,
               background: "var(--link)", color: "#fff", border: "none",
@@ -465,7 +473,7 @@ function ShippingQueue({
             Book Courier
           </button>
         ) : dispatchConfirm === item.id ? (
-          <div style={{ display: "flex", gap: 8 }}>
+          <div onClick={e => e.stopPropagation()} style={{ display: "flex", gap: 8 }}>
             <button type="button" onClick={() => onDispatchConfirm(item.id)} disabled={dispatchingId === item.id}
               style={{
                 flex: 1, padding: "7px 0", fontSize: 13, fontWeight: 600,
@@ -485,7 +493,7 @@ function ShippingQueue({
             </button>
           </div>
         ) : (
-          <button type="button" onClick={() => onDispatchClick(item.id)}
+          <button type="button" onClick={e => { e.stopPropagation(); onDispatchClick(item.id); }}
             style={{
               width: "100%", padding: "7px 0", fontSize: 13, fontWeight: 600,
               background: "var(--link)", color: "#fff", border: "none",
@@ -537,7 +545,7 @@ function ShippingQueue({
       </div>
 
       {/* Three-column queue */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20, marginBottom: 24 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 20, marginBottom: 24 }}>
         {/* Needs Booking */}
         <section>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>

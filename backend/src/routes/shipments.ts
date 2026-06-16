@@ -40,7 +40,7 @@ shipmentsRouter.get("/pending", authMiddleware, requireRole(...SHIP), async (req
 });
 
 // POST /api/shipments/:id/book
-// Shipping coordinator books a courier for a draft transfer → status becomes "booked"
+// Shipping coordinator books a courier (draft → booked) or updates booking (booked → stays booked)
 shipmentsRouter.post("/:id/book", authMiddleware, requireRole(...SHIP), async (req, res) => {
   const db = await getDb();
   const id = queryString(req.params.id) ?? "";
@@ -53,36 +53,36 @@ shipmentsRouter.post("/:id/book", authMiddleware, requireRole(...SHIP), async (r
   }
 
   const [prevRows] = await db.execute(sql`
-    SELECT status FROM transfers WHERE id = ${id} LIMIT 1
+    SELECT status, courier_name AS courierName FROM transfers WHERE id = ${id} LIMIT 1
   `);
   const prev = (prevRows as unknown as any[])?.[0];
   if (!prev) { res.status(404).json({ error: "Transfer not found" }); return; }
-  if (prev.status !== "draft") {
+  if (!["draft", "booked"].includes(prev.status)) {
     res.status(400).json({ error: `Cannot book transfer in ${prev.status} status` });
     return;
   }
 
+  const isUpdate = prev.status === "booked";
+
   await db.update(transfers)
     .set({
-      status: "booked",
+      ...(isUpdate ? {} : { status: "booked", bookedBy: req.user!.id, bookedAt: new Date() }),
       courierName: courierName.trim(),
       trackingNumber: trackingNumber?.trim() ?? null,
       fixablySeries: fixablySeries?.trim() ?? null,
-      bookedBy: req.user!.id,
-      bookedAt: new Date(),
     })
     .where(eq(transfers.id, id));
 
   await writeAuditLog({
     actorId: req.user!.id,
-    action: "update",
+    action: isUpdate ? "update" : "update",
     entityType: "transfer",
     entityId: id,
-    newValue: { status: "booked", courierName, trackingNumber, fixablySeries },
-    note: `Courier booked: ${courierName}`,
+    newValue: { status: isUpdate ? prev.status : "booked", courierName, trackingNumber, fixablySeries },
+    note: isUpdate ? `Booking updated: ${courierName}` : `Courier booked: ${courierName}`,
   });
 
-  res.json({ ok: true });
+  res.json({ ok: true, isUpdate });
 });
 
 // POST /api/shipments/:id/dispatch
