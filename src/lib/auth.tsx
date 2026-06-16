@@ -7,7 +7,7 @@ import {
 } from "react";
 import { api } from "./api";
 
-export type UserRole = "system_admin" | "dc_admin" | "dc_operator" | "dc_viewer";
+export type UserRole = "system_admin" | "dc_admin" | "dc_operator" | "dc_viewer" | "shipping_coordinator";
 
 type Profile = {
   id: string;

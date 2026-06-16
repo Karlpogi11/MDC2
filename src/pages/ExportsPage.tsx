@@ -194,7 +194,7 @@ export function ExportsPage() {
                   <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#666", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>Status</label>
                   <select value={trStatus} onChange={(e) => setTrStatus(e.target.value)} style={{ ...inputStyle, cursor: "pointer" }}>
                     <option value="">All statuses</option>
-                    {["draft","packed","in_transit","received","cancelled"].map((s) => (
+                    {["draft","booked","packed","in_transit","received","cancelled"].map((s) => (
                       <option key={s} value={s}>{s.replace("_", " ")}</option>
                     ))}
                   </select>

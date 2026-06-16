@@ -17,19 +17,22 @@ import { PhysicalCountPage } from "@/pages/PhysicalCountPage";
 import { ReceivePage } from "@/pages/ReceivePage";
 import { AuditLogPage } from "@/pages/AuditLogPage";
 import { ReportsPage } from "@/pages/ReportsPage";
+import { ShipmentsPage } from "@/pages/ShipmentsPage";
 import { RoleGuard } from "@/components/RoleGuard";
 
 const ALL   = ["system_admin", "dc_admin", "dc_operator", "dc_viewer"] as const;
 const OPS   = ["system_admin", "dc_admin", "dc_operator"] as const;
 const ADMIN = ["system_admin", "dc_admin"] as const;
 const SYS   = ["system_admin"] as const;
+const SHIP  = ["system_admin", "dc_admin", "shipping_coordinator"] as const;
 
 export function App() {
   return (
     <Routes>
       <Route path="/login"                      element={<LoginPage />} />
       <Route path="/change-password"            element={<ChangePasswordPage />} />
-      <Route path="/dashboard"                  element={<RoleGuard allow={[...ALL]}><DashboardPage /></RoleGuard>} />
+      <Route path="/dashboard"                  element={<RoleGuard allow={[...ALL, "shipping_coordinator"]}><DashboardPage /></RoleGuard>} />
+      <Route path="/shipments"                  element={<RoleGuard allow={[...SHIP]}><ShipmentsPage /></RoleGuard>} />
       <Route path="/" element={
         window.location.hash.includes("type=recovery") || window.location.hash.includes("type=invite")
           ? <LoginPage />
@@ -37,12 +40,12 @@ export function App() {
           ? <LoginPage />
           : <Navigate to="/dashboard" replace />
       } />
-      <Route path="/inventory"                  element={<RoleGuard allow={[...ALL]}><InventoryPage /></RoleGuard>} />
+      <Route path="/inventory"                  element={<RoleGuard allow={[...ALL, "shipping_coordinator"]}><InventoryPage /></RoleGuard>} />
       <Route path="/stock-in"                   element={<RoleGuard allow={[...OPS]}><StockInPage /></RoleGuard>} />
-      <Route path="/transfers"                  element={<RoleGuard allow={[...ALL]}><TransfersPage /></RoleGuard>} />
+      <Route path="/transfers"                  element={<RoleGuard allow={[...ALL, "shipping_coordinator"]}><TransfersPage /></RoleGuard>} />
       <Route path="/transfers/new"              element={<RoleGuard allow={[...OPS]}><TransferNewPage /></RoleGuard>} />
       <Route path="/transfers/templates"        element={<RoleGuard allow={[...ADMIN]}><TransferTemplatesPage /></RoleGuard>} />
-      <Route path="/transfers/:id"              element={<RoleGuard allow={[...ALL]}><TransferDetailPage /></RoleGuard>} />
+      <Route path="/transfers/:id"              element={<RoleGuard allow={[...ALL, "shipping_coordinator"]}><TransferDetailPage /></RoleGuard>} />
       {/* Public receipt link: ReceivePage validates signed token via get_transfer_by_token; logged-in DC staff use RLS-backed access. */}
       <Route path="/transfers/:id/receive"      element={<ReceivePage />} />
       <Route path="/corrections"                element={<RoleGuard allow={[...ADMIN]}><CorrectionsPage /></RoleGuard>} />

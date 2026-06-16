@@ -13,6 +13,7 @@ import {
   Users,
   LogOut,
   ShieldAlert,
+  Truck,
   type LucideIcon,
   X,
   LayoutDashboard,
@@ -20,24 +21,25 @@ import {
   Moon,
   Sun,
 } from "lucide-react";
-import { useAuth } from "@/lib/auth";
+import { useAuth, type UserRole } from "@/lib/auth";
 import { useBranding } from "@/lib/useBranding";
 import { NotificationBell } from "@/components/NotificationBell";
 import { getTheme, applyTheme, type Theme } from "@/lib/theme";
 import { useOnlineStatus } from "@/lib/useOnlineStatus";
 import { prefetchRouteData } from "@/services/navigationCache";
 
-type Module = { label: string; icon: LucideIcon; path: string };
+type Module = { label: string; icon: LucideIcon; path: string; roles?: UserRole[] };
 
 const MODULES: Module[] = [
   { label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
+  { label: "Shipments", icon: Truck, path: "/shipments", roles: ["system_admin", "dc_admin", "shipping_coordinator"] },
   { label: "Inventory", icon: Boxes, path: "/inventory" },
-  { label: "Stock-in", icon: PackagePlus, path: "/stock-in" },
+  { label: "Stock-in", icon: PackagePlus, path: "/stock-in", roles: ["system_admin", "dc_admin", "dc_operator"] },
   { label: "Transfers", icon: ShieldCheck, path: "/transfers" },
-  { label: "Corrections", icon: ClipboardCheck, path: "/corrections" },
-  { label: "Reconcile",     icon: ClipboardList, path: "/physical-count" },
+  { label: "Corrections", icon: ClipboardCheck, path: "/corrections", roles: ["system_admin", "dc_admin"] },
+  { label: "Reconcile", icon: ClipboardList, path: "/physical-count", roles: ["system_admin", "dc_admin", "dc_operator"] },
   { label: "Reports", icon: FileBarChart2, path: "/reports" },
-  { label: "Analytics", icon: BarChart3, path: "/analytics" },
+  { label: "Analytics", icon: BarChart3, path: "/analytics", roles: ["system_admin", "dc_admin", "dc_operator"] },
 ];
 
 type Props = {
@@ -171,7 +173,7 @@ export function AppLayout({ children, activeModule }: Props) {
             {headerBrandName}
           </button>
           <nav className="main-modules" aria-label="Main modules">
-            {MODULES.map((item) => {
+            {MODULES.filter(item => !item.roles || item.roles.includes(userRole as UserRole)).map((item) => {
               const Icon = item.icon;
               const isActive = activePath === item.path || (item.path !== "/" && activePath.startsWith(item.path));
               return (
@@ -290,6 +292,7 @@ export function AppLayout({ children, activeModule }: Props) {
                 { role: "System Admin", desc: "Full access — users, config, all operations." },
                 { role: "DC Admin", desc: "All inventory ops + corrections + audit log." },
                 { role: "DC Operator", desc: "Stock-in, transfers, analytics. No corrections." },
+                { role: "Shipping Coordinator", desc: "Book couriers, enter tracking info, and dispatch shipments." },
                 { role: "DC Viewer", desc: "Read-only. Inventory and reports only." },
               ].map(({ role, desc }) => (
                 <div key={role} style={{ marginBottom: 8 }}>

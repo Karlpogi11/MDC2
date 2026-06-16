@@ -50,7 +50,7 @@ dashboardRouter.get("/", authMiddleware, async (req, res) => {
     `),
     db.execute(sql`SELECT t.id, t.transfer_no, t.status, t.packed_at, t.created_at, s.site_name as dest_site_name
       FROM transfers t LEFT JOIN sites s ON s.id = t.destination_site_id
-      WHERE t.status IN ('draft', 'packed', 'in_transit')
+      WHERE t.status IN ('draft', 'booked', 'packed', 'in_transit')
       ORDER BY t.created_at DESC LIMIT 200`),
     db.execute(sql`SELECT * FROM stock_in_batches ORDER BY imported_at DESC LIMIT 5`),
     db.execute(sql`SELECT * FROM serial_corrections ORDER BY corrected_at DESC LIMIT 5`),

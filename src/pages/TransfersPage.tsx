@@ -6,7 +6,7 @@ import { FileText, ArrowUp, ArrowDown, ArrowUpDown, RefreshCw, ChevronLeft, Chev
 import { api } from "@/lib/api";
 import { AppLayout } from "@/components/AppLayout";
 
-type TransferStatus = "draft" | "packed" | "in_transit" | "received" | "cancelled";
+type TransferStatus = "draft" | "booked" | "packed" | "in_transit" | "received" | "cancelled";
 
 type TransferRow = {
   id: string;
@@ -163,7 +163,7 @@ export function TransfersPage() {
         {/* Status filter tabs + search */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--line)", marginBottom: 16 }}>
           <div style={{ display: "flex" }}>
-          {(["all", "draft", "packed", "in_transit", "received", "cancelled"] as const).map((s) => (
+          {(["all", "draft", "booked", "packed", "in_transit", "received", "cancelled"] as const).map((s) => (
             <button
               key={s}
               type="button"

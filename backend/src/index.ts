@@ -23,6 +23,7 @@ import { physicalCountsRouter } from "./routes/physicalCounts";
 import { correctionsRouter } from "./routes/corrections";
 import { notificationsRouter } from "./routes/notifications";
 import { receiveRouter } from "./routes/receive";
+import { shipmentsRouter } from "./routes/shipments";
 import { runMigrations } from "./migrations/runner";
 
 const app = express();
@@ -85,6 +86,7 @@ app.use("/api/physical-counts", physicalCountsRouter);
 app.use("/api/corrections", correctionsRouter);
 app.use("/api/notifications", notificationsRouter);
 app.use("/api/receive", receiveRouter);
+app.use("/api/shipments", shipmentsRouter);
 
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error("Unhandled error:", err?.sql ?? err?.message ?? err);

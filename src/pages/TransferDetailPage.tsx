@@ -1,17 +1,18 @@
 import { friendlyError } from "@/lib/friendlyError";
 import { useTableResize } from "@/components/ResizableColumns";
 import { DangerAction } from "@/components/DangerAction";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type FormEvent } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Package, CheckCircle, Truck, Check, X, FileText, ScanLine } from "lucide-react";
+import { ArrowLeft, ArrowRight, Package, CheckCircle, Truck, Check, X, FileText, ScanLine, BookOpen } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { AppLayout } from "@/components/AppLayout";
 import { toCapitalized } from "@/lib/format";
 import { useBranding } from "@/lib/useBranding";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
+import { ShipmentBookingPanel } from "@/components/ShipmentBookingPanel";
 
-type TransferStatus = "draft" | "packed" | "in_transit" | "received" | "cancelled";
+type TransferStatus = "draft" | "booked" | "packed" | "in_transit" | "received" | "cancelled";
 
 type TransferDetail = {
   id: string;
@@ -21,11 +22,19 @@ type TransferDetail = {
   createdAt: string;
   packedAt: string | null;
   fixablySeries: string | null;
+  courierName: string | null;
+  trackingNumber: string | null;
+  bookedBy: string | null;
+  bookedAt: string | null;
+  shippedBy: string | null;
+  shippedAt: string | null;
   receiptToken: string | null;
   sourceSite: { siteName: string; invoicePrefix: string | null; address: string | null; isDc: boolean } | null;
   destinationSite: { siteName: string; siteCode: string; address: string | null } | null;
   requestedByProfile: { fullName: string | null; username: string | null } | null;
   packedByProfile: { fullName: string | null; username: string | null } | null;
+  bookedByProfile: { fullName: string | null; username: string | null } | null;
+  shippedByProfile: { fullName: string | null; username: string | null } | null;
   items: {
     id: string;
     qty: number;
@@ -34,27 +43,41 @@ type TransferDetail = {
   }[];
 };
 
-const STATUS_ORDER: TransferStatus[] = ["draft", "packed", "in_transit", "received"];
+const STATUS_ORDER: TransferStatus[] = ["draft", "booked", "packed", "in_transit", "received"];
 
 const STATUS_META: Record<TransferStatus, { label: string; icon: React.ReactNode; color: string; bg: string }> = {
-  draft:      { label: "Draft",      icon: <Package size={16} />,      color: "var(--muted)", bg: "var(--bg-surface-elevated)" },
-  packed:     { label: "Packed",     icon: <Package size={16} />,      color: "var(--blue)",  bg: "var(--bg-surface-elevated)" },
-  in_transit: { label: "In Transit", icon: <Truck size={16} />,        color: "var(--muted)",    bg: "var(--bg-surface-elevated)" },
-  received:   { label: "Received",   icon: <CheckCircle size={16} />,  color: "var(--text)",     bg: "var(--bg-surface-elevated)" },
-  cancelled:  { label: "Cancelled",  icon: <X size={16} />,            color: "var(--negative)", bg: "var(--bg-surface-elevated)" },
+  draft:      { label: "Draft",      icon: <Package size={16} />,        color: "var(--muted)",    bg: "var(--bg-surface-elevated)" },
+  booked:     { label: "Booked",     icon: <BookOpen size={16} />,       color: "var(--blue)",     bg: "var(--bg-surface-elevated)" },
+  packed:     { label: "Packed",     icon: <Package size={16} />,        color: "var(--blue)",     bg: "var(--bg-surface-elevated)" },
+  in_transit: { label: "In Transit", icon: <Truck size={16} />,          color: "var(--muted)",    bg: "var(--bg-surface-elevated)" },
+  received:   { label: "Received",   icon: <CheckCircle size={16} />,    color: "var(--text)",     bg: "var(--bg-surface-elevated)" },
+  cancelled:  { label: "Cancelled",  icon: <X size={16} />,              color: "var(--negative)", bg: "var(--bg-surface-elevated)" },
 };
 
 const NEXT_STATUS: Partial<Record<TransferStatus, TransferStatus>> = {
-  draft:      "packed",
+  draft:      "booked",
+  booked:     "packed",
   packed:     "in_transit",
   in_transit: "received",
 };
 
 const NEXT_LABEL: Partial<Record<TransferStatus, string>> = {
-  draft:      "Mark as Packed",
-  packed:     "Mark as In Transit",
+  draft:      "Book Courier",
+  booked:     "Mark as Packed",
+  packed:     "Confirm Dispatch",
   in_transit: "Mark as Received",
 };
+
+function canAdvanceStatus(role: string | null, status: TransferStatus): boolean {
+  if (!role) return false;
+  const next = NEXT_STATUS[status];
+  if (!next) return false;
+  if (status === "draft") return ["shipping_coordinator", "dc_admin", "system_admin"].includes(role);
+  if (status === "booked") return ["dc_operator", "dc_admin", "system_admin"].includes(role);
+  if (status === "packed") return ["shipping_coordinator", "dc_admin", "system_admin"].includes(role);
+  if (status === "in_transit") return true;
+  return false;
+}
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString("en-US", { year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" });
@@ -67,7 +90,7 @@ export function TransferDetailPage() {
   const { state: authState } = useAuth();
   const actorId = authState.status === "authenticated" ? authState.profile.id : null;
   const role = authState.status === "authenticated" ? authState.profile.role : null;
-  const canAdvance = role === "system_admin" || role === "dc_admin" || role === "dc_operator";
+  const canAdvance = canAdvanceStatus(role, transfer?.status ?? "draft");
 
   const [transfer, setTransfer] = useState<TransferDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -80,9 +103,8 @@ export function TransferDetailPage() {
   const { brandName } = useBranding();
   const orgName = brandName ?? window.location.hostname;
 
-  // Fixably series modal (shown before Mark as In Transit)
-  const [showFixablyModal, setShowFixablyModal] = useState(false);
-  const [fixablySeries, setFixablySeries] = useState("");
+  // Booking panel (shown before Book Courier)
+  const [showBookingPanel, setShowBookingPanel] = useState(false);
   const [showReceiptConfirm, setShowReceiptConfirm] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
   const RESEND_COOLDOWN_MS = 3 * 60 * 1000; // 3 minutes
@@ -180,6 +202,8 @@ export function TransferDetailPage() {
         destinationAddress: transfer.destinationSite?.address ?? null,
         requestedBy: transfer.requestedByProfile?.fullName ?? transfer.requestedByProfile?.username ?? "—",
         fixablySeries: transfer.fixablySeries ?? null,
+        courierName: transfer.courierName ?? null,
+        trackingNumber: transfer.trackingNumber ?? null,
         items: transfer.items.map((item) => ({
           serialNumber: item.serial?.serialNumber ?? null,
           partNumber: item.part?.partNumber ?? "—",
@@ -212,6 +236,8 @@ export function TransferDetailPage() {
         destinationSite: Array.isArray(d.destinationSite) ? d.destinationSite[0] ?? null : d.destinationSite,
         requestedByProfile: Array.isArray(d.requestedByProfile) ? d.requestedByProfile[0] ?? null : d.requestedByProfile,
         packedByProfile: Array.isArray(d.packedByProfile) ? d.packedByProfile[0] ?? null : d.packedByProfile,
+        bookedByProfile: Array.isArray(d.bookedByProfile) ? d.bookedByProfile[0] ?? null : d.bookedByProfile,
+        shippedByProfile: Array.isArray(d.shippedByProfile) ? d.shippedByProfile[0] ?? null : d.shippedByProfile,
         items: (d.items ?? []).map((item: any) => ({
           ...item,
           part: Array.isArray(item.part) ? item.part[0] ?? null : item.part,
@@ -278,7 +304,7 @@ export function TransferDetailPage() {
     return { ok: false, detail };
   }
 
-  async function generateAndUploadPDF(fixablySeriesOverride?: string | null): Promise<string | null> {
+  async function generateAndUploadPDF(): Promise<string | null> {
     if (!transfer || !actorId) return null;
     try {
       const { generatePackingListPDF } = await import("@/lib/packingList");
@@ -293,7 +319,9 @@ export function TransferDetailPage() {
         destinationSite: transfer.destinationSite?.siteName ?? "—",
         destinationAddress: transfer.destinationSite?.address ?? null,
         requestedBy: transfer.requestedByProfile?.fullName ?? transfer.requestedByProfile?.username ?? "—",
-        fixablySeries: fixablySeriesOverride ?? transfer.fixablySeries ?? null,
+        fixablySeries: transfer.fixablySeries ?? null,
+        courierName: transfer.courierName ?? null,
+        trackingNumber: transfer.trackingNumber ?? null,
         items: transfer.items.map((item) => ({
           serialNumber: item.serial?.serialNumber ?? null,
           partNumber: item.part?.partNumber ?? "—",
@@ -358,47 +386,34 @@ export function TransferDetailPage() {
     setTimeout(() => setScanFeedback(null), 4000);
   }
 
-  async function advanceStatus(fixablySeries?: string) {
+  async function advanceStatus() {
     if (!transfer || !actorId) return;
     const next = NEXT_STATUS[transfer.status];
     if (!next) return;
     setAdvancing(true); setActionError(null);
 
     try {
-      await api.put(`/transfers/${transfer.id}/status`, {
-        status: next,
-        actorId,
-        ...(next === "packed" ? { packed_by: actorId, packed_at: new Date().toISOString() } : {}),
-        ...(next === "in_transit" && fixablySeries?.trim() ? { fixablySeries: fixablySeries.trim() } : {}),
-      });
+      if (transfer.status === "draft" && next === "booked") {
+        await api.post(`/shipments/${transfer.id}/book`, {
+          courierName: transfer.courierName,
+          trackingNumber: transfer.trackingNumber,
+          fixablySeries: transfer.fixablySeries,
+        });
+      } else if (transfer.status === "packed" && next === "in_transit") {
+        const res = await api.post(`/shipments/${transfer.id}/dispatch`, {});
+        if ((res as any)?.emailSent === false) {
+          setActionNotice("Transfer dispatched. No email sent — destination site may have no contact email.");
+        }
+      } else {
+        await api.put(`/transfers/${transfer.id}/status`, {
+          status: next,
+          actorId,
+        });
+      }
     } catch (err) {
       setActionError(friendlyError(err instanceof Error ? err : new Error(String(err))));
       setAdvancing(false);
       return;
-    }
-
-    // When dispatched (in_transit), generate PDF + send email
-    if (next === "in_transit") {
-      const pdfBase64 = await generateAndUploadPDF(fixablySeries?.trim());
-      try {
-        const cfg = await api.get(`/transfers/${transfer.id}/email-config`);
-        const emailEnabled = (cfg as any)?.sendEmail !== false;
-        if (emailEnabled) {
-          setSendingEmail(true);
-          const result = await invokeTransferEmail(transfer.id, { attempts: 1, includeAttachment: true, pdfBase64 });
-          if (!result.ok) {
-            const isMissingEmail = (result.detail ?? "").includes("contact_emails") || (result.detail ?? "").includes("No valid");
-            setActionError(
-              isMissingEmail
-                ? "Transfer dispatched. No email sent — destination site has no contact email. Add one in Config → Sites."
-                : `Transfer dispatched, but email failed: ${result.detail ?? "Unknown error"}`
-            );
-          }
-          setSendingEmail(false);
-        }
-      } catch {
-        // email config lookup non-fatal
-      }
     }
 
     await load(true);
@@ -458,11 +473,11 @@ export function TransferDetailPage() {
           {canAdvance && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
               {/* Secondary */}
-              {(transfer.status === "draft" || transfer.status === "packed") && (
+              {(transfer.status === "draft" || transfer.status === "booked" || transfer.status === "packed") && (
                 <DangerAction label="Cancel transfer" confirmLabel="Yes, cancel" description="This cannot be undone."
                   onConfirm={() => void cancelTransfer()} busy={cancelling} />
               )}
-              {transfer.status === "draft" && (
+              {(transfer.status === "draft" || transfer.status === "booked") && (
                 <button type="button" onClick={() => setScanMode(v => !v)}
                   style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", color: "var(--text)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                   <ScanLine size={14} /> {scanMode ? "Exit Scan Mode" : "Verify Serials"}
@@ -507,8 +522,8 @@ export function TransferDetailPage() {
               {nextStatus && nextStatus !== "received" && (
                 <button type="button"
                   onClick={() => {
-                    if (NEXT_STATUS[transfer.status] === "in_transit") {
-                      setFixablySeries(""); setShowFixablyModal(true);
+                    if (NEXT_STATUS[transfer.status] === "booked") {
+                      setShowBookingPanel(true);
                     } else if (NEXT_STATUS[transfer.status] === "packed") {
                       if (transfer.items.length === 0) {
                         setActionError("Cannot pack: transfer has no items."); return;
@@ -590,7 +605,7 @@ export function TransferDetailPage() {
         </div>
 
         {/* Pre-pack scan verification panel */}
-        {scanMode && transfer.status === "draft" && (
+        {scanMode && (transfer.status === "draft" || transfer.status === "booked") && (
           <div style={{ background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "14px 18px", marginBottom: 16 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -671,7 +686,7 @@ export function TransferDetailPage() {
                       <td style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--blue)", overflow: "hidden", textOverflow: "ellipsis" }}>
                         {item.serial?.serialNumber
                           ? item.serial.serialNumber
-                          : transfer.status === "draft" && item.part
+                          : (transfer.status === "draft" || transfer.status === "booked") && item.part
                             ? (
                               <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                                 <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
@@ -722,6 +737,10 @@ export function TransferDetailPage() {
                 <InfoRow label="Invoice prefix" value={transfer.sourceSite.invoicePrefix} mono />
               )}
               {transfer.fixablySeries && <InfoRow label="Fixably series" value={transfer.fixablySeries} />}
+              {transfer.courierName && <InfoRow label="Courier" value={transfer.courierName} />}
+              {transfer.trackingNumber && <InfoRow label="Tracking no." value={transfer.trackingNumber} mono />}
+              {transfer.bookedAt && <InfoRow label="Booked" value={formatDate(transfer.bookedAt)} />}
+              {transfer.bookedByProfile?.fullName && <InfoRow label="Booked by" value={transfer.bookedByProfile.fullName} />}
             </InfoCard>
 
             <InfoCard title="Destination">
@@ -735,43 +754,13 @@ export function TransferDetailPage() {
         </div>
       </main>
 
-      {/* Fixably series modal */}
-      {showFixablyModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-          <form
-            onSubmit={(e) => { e.preventDefault(); if (!fixablySeries.trim() || advancing) return; setShowFixablyModal(false); void advanceStatus(fixablySeries); }}
-            style={{ background: "var(--bg-surface)", borderRadius: 0, width: "100%", maxWidth: 420, padding: 24, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
-          >
-            <h2 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700, color: "var(--text)" }}>Mark as In Transit</h2>
-            <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--muted)" }}>Enter Fixably series before dispatching.</p>
-
-            <div style={{ marginBottom: 24 }}>
-              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#666", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 5 }}>
-                Fixably Series <span style={{ color: "var(--negative)" }}>*</span>
-              </label>
-              <input
-                value={fixablySeries}
-                onChange={(e) => setFixablySeries(e.target.value)}
-                placeholder="e.g. iPhone 15 Pro Max"
-                autoFocus
-                style={{ width: "100%", border: `1px solid ${fixablySeries.trim() ? "var(--line)" : "#fca5a5"}`, borderRadius: 0, padding: "5px 8px", fontSize: 13, outline: "none", boxSizing: "border-box" }}
-              />
-              {!fixablySeries.trim() && <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--negative)" }}>Fixably series is required.</p>}
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button type="button" onClick={() => setShowFixablyModal(false)}
-                style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: 0, padding: "4px 10px", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
-                Cancel
-              </button>
-              <button type="submit"
-                disabled={!fixablySeries.trim() || advancing}
-                style={{ background: fixablySeries.trim() ? "var(--blue)" : "#d1d5db", color: "#fff", border: "none", borderRadius: 0, padding: "7px 18px", fontSize: 13, fontWeight: 600, cursor: fixablySeries.trim() ? "pointer" : "not-allowed" }}>
-                Dispatch
-              </button>
-            </div>
-          </form>
-        </div>
+      {/* Booking panel */}
+      {showBookingPanel && transfer && (
+        <ShipmentBookingPanel
+          transfer={transfer}
+          onClose={() => setShowBookingPanel(false)}
+          onBooked={() => { setShowBookingPanel(false); void load(true); }}
+        />
       )}
 
       {showReceiptConfirm && transfer && (

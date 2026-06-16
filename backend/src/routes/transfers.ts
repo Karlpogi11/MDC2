@@ -35,7 +35,11 @@ transfersRouter.get("/", authMiddleware, async (req, res) => {
     db.execute(sql`
       SELECT
         t.id, t.transfer_no AS transferNo, t.invoice_ref AS invoiceRef,
-        t.fixably_series AS fixablySeries, t.source_site_id AS sourceSiteId,
+        t.fixably_series AS fixablySeries,
+        t.courier_name AS courierName, t.tracking_number AS trackingNumber,
+        t.booked_by AS bookedBy, t.booked_at AS bookedAt,
+        t.shipped_by AS shippedBy, t.shipped_at AS shippedAt,
+        t.source_site_id AS sourceSiteId,
         t.destination_site_id AS destinationSiteId, t.status,
         t.requested_by AS requestedBy, t.packed_by AS packedBy,
         t.packed_at AS packedAt, t.created_at AS createdAt, t.updated_at AS updatedAt,
@@ -95,6 +99,12 @@ transfersRouter.get("/", authMiddleware, async (req, res) => {
     transferNo: r.transferNo,
     invoiceRef: r.invoiceRef,
     fixablySeries: r.fixablySeries,
+    courierName: r.courierName,
+    trackingNumber: r.trackingNumber,
+    bookedBy: r.bookedBy,
+    bookedAt: r.bookedAt,
+    shippedBy: r.shippedBy,
+    shippedAt: r.shippedAt,
     sourceSiteId: r.sourceSiteId,
     destinationSiteId: r.destinationSiteId,
     status: r.status,
@@ -123,7 +133,11 @@ transfersRouter.get("/:id", authMiddleware, async (req, res) => {
   const transferResult = await db.execute(sql`
     SELECT
       t.id, t.transfer_no AS transferNo, t.invoice_ref AS invoiceRef,
-      t.fixably_series AS fixablySeries, t.source_site_id AS sourceSiteId,
+      t.fixably_series AS fixablySeries,
+      t.courier_name AS courierName, t.tracking_number AS trackingNumber,
+      t.booked_by AS bookedBy, t.booked_at AS bookedAt,
+      t.shipped_by AS shippedBy, t.shipped_at AS shippedAt,
+      t.source_site_id AS sourceSiteId,
       t.destination_site_id AS destinationSiteId, t.status,
       t.requested_by AS requestedBy, t.packed_by AS packedBy,
       t.packed_at AS packedAt, t.receipt_token AS receiptToken,
@@ -132,12 +146,16 @@ transfersRouter.get("/:id", authMiddleware, async (req, res) => {
       ss.site_name AS srcSiteName, ss.site_code AS srcSiteCode,
       ds.site_name AS destSiteName, ds.site_code AS destSiteCode,
       rp.full_name AS reqFullName, rp.username AS reqUsername,
-      pp.full_name AS packFullName, pp.username AS packUsername
+      pp.full_name AS packFullName, pp.username AS packUsername,
+      bp.full_name AS bookFullName, bp.username AS bookUsername,
+      sp.full_name AS shipFullName, sp.username AS shipUsername
     FROM transfers t
     LEFT JOIN sites ss ON ss.id = t.source_site_id
     LEFT JOIN sites ds ON ds.id = t.destination_site_id
     LEFT JOIN profiles rp ON rp.id = t.requested_by
     LEFT JOIN profiles pp ON pp.id = t.packed_by
+    LEFT JOIN profiles bp ON bp.id = t.booked_by
+    LEFT JOIN profiles sp ON sp.id = t.shipped_by
     WHERE t.id = ${req.params.id}
     LIMIT 1
   `);
@@ -165,6 +183,12 @@ transfersRouter.get("/:id", authMiddleware, async (req, res) => {
     transferNo: t.transferNo,
     invoiceRef: t.invoiceRef,
     fixablySeries: t.fixablySeries,
+    courierName: t.courierName,
+    trackingNumber: t.trackingNumber,
+    bookedBy: t.bookedBy,
+    bookedAt: t.bookedAt,
+    shippedBy: t.shippedBy,
+    shippedAt: t.shippedAt,
     sourceSiteId: t.sourceSiteId,
     destinationSiteId: t.destinationSiteId,
     status: t.status,
@@ -179,6 +203,8 @@ transfersRouter.get("/:id", authMiddleware, async (req, res) => {
     destinationSite: { id: t.destinationSiteId, siteName: t.destSiteName, siteCode: t.destSiteCode, isDc: false, isActive: true, address: null, shipToCode: null, invoicePrefix: null, contactEmails: null, createdAt: t.createdAt, updatedAt: t.updatedAt },
     requestedByProfile: { fullName: t.reqFullName, username: t.reqUsername },
     packedByProfile: t.packFullName ? { fullName: t.packFullName, username: t.packUsername } : null,
+    bookedByProfile: t.bookFullName ? { fullName: t.bookFullName, username: t.bookUsername } : null,
+    shippedByProfile: t.shipFullName ? { fullName: t.shipFullName, username: t.shipUsername } : null,
     items: itemRows.map((i: any) => ({
       id: i.id,
       transferId: i.transferId,
@@ -288,19 +314,42 @@ transfersRouter.post("/", authMiddleware, async (req, res) => {
 
 transfersRouter.put("/:id/status", authMiddleware, async (req, res) => {
   const db = await getDb();
-  const { status, actorId, fixablySeries } = req.body;
+  const { status, actorId, fixablySeries, courierName, trackingNumber } = req.body;
   const id = queryString(req.params.id) ?? "";
 
   const [prevRows] = await db.execute(sql`SELECT status, fixably_series AS fixablySeries FROM transfers WHERE id = ${id} LIMIT 1`);
   const prev = (prevRows as unknown as any[])[0] as any;
 
+  const role = req.user!.role;
+  const validTransition = (
+    (status === "booked" && (prev?.status === "draft") && ["shipping_coordinator", "dc_admin", "system_admin"].includes(role)) ||
+    (status === "packed" && (prev?.status === "booked") && ["dc_operator", "dc_admin", "system_admin"].includes(role)) ||
+    (status === "in_transit" && (prev?.status === "packed") && ["shipping_coordinator", "dc_admin", "system_admin"].includes(role)) ||
+    (status === "received" && (prev?.status === "in_transit")) ||
+    (status === "cancelled" && ["dc_admin", "system_admin"].includes(role)) ||
+    // Allow old-style draft→packed or draft→in_transit for backwards compatibility during transition
+    (status === "packed" && (prev?.status === "draft") && ["dc_operator", "dc_admin", "system_admin"].includes(role))
+  );
+  if (!validTransition) {
+    res.status(403).json({ error: "Invalid status transition or insufficient permissions" });
+    return;
+  }
+
   const updates: Record<string, any> = { status };
+  if (status === "booked") {
+    updates.courierName = courierName ?? null;
+    updates.trackingNumber = trackingNumber ?? null;
+    updates.fixablySeries = fixablySeries ?? null;
+    updates.bookedBy = actorId ?? req.user!.id;
+    updates.bookedAt = new Date();
+  }
   if (status === "packed") {
     updates.packedBy = actorId ?? req.user!.id;
     updates.packedAt = new Date();
   }
   if (status === "in_transit") {
-    if (fixablySeries) updates.fixablySeries = fixablySeries;
+    updates.shippedBy = actorId ?? req.user!.id;
+    updates.shippedAt = new Date();
     updates.receiptToken = uuid();
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 30);
@@ -386,7 +435,7 @@ transfersRouter.put("/:id/status", authMiddleware, async (req, res) => {
     entityType: "transfer",
     entityId: id,
     oldValue: prev ? { status: prev.status, fixablySeries: prev.fixablySeries } : null,
-    newValue: { status, fixablySeries: fixablySeries ?? null },
+    newValue: { status, courierName, trackingNumber, fixablySeries: fixablySeries ?? null },
     note: `Status changed to ${status}`,
   });
 

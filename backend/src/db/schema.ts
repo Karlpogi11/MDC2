@@ -107,6 +107,12 @@ export const transfers = mysqlTable("transfers", {
   transferNo: varchar("transfer_no", { length: 50 }).notNull(),
   invoiceRef: varchar("invoice_ref", { length: 50 }),
   fixablySeries: varchar("fixably_series", { length: 50 }),
+  courierName: varchar("courier_name", { length: 100 }),
+  trackingNumber: varchar("tracking_number", { length: 100 }),
+  bookedBy: uuid("booked_by"),
+  bookedAt: timestamp("booked_at"),
+  shippedBy: uuid("shipped_by"),
+  shippedAt: timestamp("shipped_at"),
   sourceSiteId: uuid("source_site_id").notNull(),
   destinationSiteId: uuid("destination_site_id").notNull(),
   status: varchar("status", { length: 20 }).notNull().default("draft"),
@@ -121,6 +127,7 @@ export const transfers = mysqlTable("transfers", {
   transferNoIdx: unique("uq_transfers_transfer_no").on(table.transferNo),
   invoiceRefIdx: index("idx_transfers_invoice_ref").on(table.invoiceRef),
   statusIdx: index("idx_transfers_status").on(table.status),
+  trackingIdx: index("idx_transfers_tracking").on(table.trackingNumber),
 }));
 
 export const transferItems = mysqlTable("transfer_items", {
@@ -359,12 +366,6 @@ export const rateLimitLog = mysqlTable("rate_limit_log", {
 // ── Relations ──────────────────────────────────────────────────────
 import { relations } from "drizzle-orm";
 
-export const profilesRelations = relations(profiles, ({ many }) => ({
-  stockInBatches: many(stockInBatches),
-  transfersRequested: many(transfers, { relationName: "requested_by" }),
-  transfersPacked: many(transfers, { relationName: "packed_by" }),
-}));
-
 export const serialNumbersRelations = relations(serialNumbers, ({ one }) => ({
   part: one(parts, { fields: [serialNumbers.partId], references: [parts.id] }),
   site: one(sites, { fields: [serialNumbers.currentSiteId], references: [sites.id] }),
@@ -382,8 +383,18 @@ export const transfersRelations = relations(transfers, ({ one, many }) => ({
   destinationSite: one(sites, { fields: [transfers.destinationSiteId], references: [sites.id] }),
   requestedByProfile: one(profiles, { fields: [transfers.requestedBy], references: [profiles.id], relationName: "requested_by" }),
   packedByProfile: one(profiles, { fields: [transfers.packedBy], references: [profiles.id], relationName: "packed_by" }),
+  bookedByProfile: one(profiles, { fields: [transfers.bookedBy], references: [profiles.id], relationName: "booked_by" }),
+  shippedByProfile: one(profiles, { fields: [transfers.shippedBy], references: [profiles.id], relationName: "shipped_by" }),
   items: many(transferItems),
   packingList: one(packingLists),
+}));
+
+export const profilesRelations = relations(profiles, ({ many }) => ({
+  stockInBatches: many(stockInBatches),
+  transfersRequested: many(transfers, { relationName: "requested_by" }),
+  transfersPacked: many(transfers, { relationName: "packed_by" }),
+  transfersBooked: many(transfers, { relationName: "booked_by" }),
+  transfersShipped: many(transfers, { relationName: "shipped_by" }),
 }));
 
 export const stockInBatchesRelations = relations(stockInBatches, ({ one }) => ({
