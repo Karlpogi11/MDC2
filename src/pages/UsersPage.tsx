@@ -201,7 +201,7 @@ export function UsersPage() {
     const t = setTimeout(async () => {
       try {
         const data = await api.get(`/users/check-username?username=${encodeURIComponent(username.trim())}`);
-        setUsernameStatus(data?.taken ? "taken" : "available");
+        setUsernameStatus(data?.available === false ? "taken" : "available");
       } catch {
         setUsernameStatus("available");
       }
