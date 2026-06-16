@@ -489,26 +489,18 @@ function ShippingQueue({
         display: "flex", alignItems: "center", justifyContent: "space-between",
         marginBottom: 20, padding: "10px 16px",
         background: total > 0 ? "var(--bg-surface)" : "transparent",
-        border: `1px solid ${total > 0 ? "var(--positive)" : "var(--line)"}`,
+        border: `1px solid ${total > 0 ? "var(--link)" : "var(--line)"}`,
         borderRadius: "var(--radius)",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{
             width: 8, height: 8, borderRadius: "50%",
-            background: total > 0 ? "var(--positive)" : "var(--muted)",
+            background: total > 0 ? "var(--link)" : "var(--muted)",
             display: "inline-block",
             animation: total > 0 ? "pulse 2s infinite" : "none",
           }} />
           <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>
             {total > 0 ? `${total} transfer${total !== 1 ? "s" : ""} waiting` : "All clear"}
-          </span>
-          <span style={{
-            fontSize: 10, fontWeight: 700, fontFamily: "monospace",
-            padding: "1px 6px", borderRadius: "var(--radius-pill)",
-            background: "var(--bg-surface-elevated)",
-            color: total > 0 ? "var(--positive)" : "var(--muted)",
-          }}>
-            ⟳ Live
           </span>
         </div>
         {total > 0 && (
@@ -516,7 +508,7 @@ function ShippingQueue({
             fontSize: 11, fontWeight: 600, padding: "3px 10px",
             borderRadius: "var(--radius-pill)",
             background: "var(--bg-surface-elevated)",
-            color: "var(--positive)",
+            color: "var(--link)",
           }}>
             {draftItems.length} need booking · {packedItems.length} ready to dispatch
           </span>
