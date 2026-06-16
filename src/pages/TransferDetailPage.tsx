@@ -90,9 +90,9 @@ export function TransferDetailPage() {
   const { state: authState } = useAuth();
   const actorId = authState.status === "authenticated" ? authState.profile.id : null;
   const role = authState.status === "authenticated" ? authState.profile.role : null;
-  const canAdvance = canAdvanceStatus(role, transfer?.status ?? "draft");
 
   const [transfer, setTransfer] = useState<TransferDetail | null>(null);
+  const canAdvance = canAdvanceStatus(role, transfer?.status ?? "draft");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [advancing, setAdvancing] = useState(false);
