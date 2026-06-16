@@ -151,6 +151,7 @@ export function DashboardPage() {
   const [pendingLoading, setPendingLoading] = useState(true);
   const [bookTarget, setBookTarget] = useState<any | null>(null);
   const [bookLoading, setBookLoading] = useState(false);
+  const [bookSuccess, setBookSuccess] = useState<string | null>(null);
   const [dispatchingId, setDispatchingId] = useState<string | null>(null);
   const [dispatchConfirm, setDispatchConfirm] = useState<string | null>(null);
 
@@ -183,6 +184,7 @@ export function DashboardPage() {
   }
 
   const draftItems = pendingItems.filter((p: any) => p.status === "draft");
+  const bookedItems = pendingItems.filter((p: any) => p.status === "booked");
   const packedItems = pendingItems.filter((p: any) => p.status === "packed");
 
   return (
@@ -208,27 +210,35 @@ export function DashboardPage() {
         )}
 
         {isCoordinator ? (
-          <ShippingQueue
-            draftItems={draftItems}
-            packedItems={packedItems}
-            pendingLoading={pendingLoading}
-            onBookClick={async (item) => {
-              setBookLoading(true);
-              try {
-                const full = await api.get(`/transfers/${item.id}`);
-                if (full) {
-                  setBookTarget(full);
-                }
-              } catch {}
-              setBookLoading(false);
-            }}
-            dispatchConfirm={dispatchConfirm}
-            onDispatchClick={(id) => setDispatchConfirm(id)}
-            onDispatchConfirm={handleDispatch}
-            dispatchingId={dispatchingId}
-            onCancelDispatch={() => setDispatchConfirm(null)}
-            navigate={navigate}
-          />
+          <>
+            {bookSuccess && (
+              <div style={{ marginBottom: 16, padding: "10px 14px", border: "1px solid var(--positive)", borderRadius: "var(--radius)", color: "var(--positive)", fontSize: 13, fontWeight: 600 }}>
+                {bookSuccess}
+              </div>
+            )}
+            <ShippingQueue
+              draftItems={draftItems}
+              bookedItems={bookedItems}
+              packedItems={packedItems}
+              pendingLoading={pendingLoading}
+              onBookClick={async (item) => {
+                setBookLoading(true);
+                try {
+                  const full = await api.get(`/transfers/${item.id}`);
+                  if (full) {
+                    setBookTarget(full);
+                  }
+                } catch {}
+                setBookLoading(false);
+              }}
+              dispatchConfirm={dispatchConfirm}
+              onDispatchClick={(id) => setDispatchConfirm(id)}
+              onDispatchConfirm={handleDispatch}
+              dispatchingId={dispatchingId}
+              onCancelDispatch={() => setDispatchConfirm(null)}
+              navigate={navigate}
+            />
+          </>
         ) : (
           <>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
@@ -340,7 +350,12 @@ export function DashboardPage() {
         <ShipmentBookingPanel
           transfer={bookTarget}
           onClose={() => setBookTarget(null)}
-          onBooked={() => { setBookTarget(null); fetchPending(); }}
+          onBooked={() => {
+            setBookTarget(null);
+            fetchPending();
+            setBookSuccess("Courier booked successfully");
+            setTimeout(() => setBookSuccess(null), 4000);
+          }}
         />
       )}
     </AppLayout>
@@ -368,11 +383,12 @@ type QueueTransfer = {
 };
 
 function ShippingQueue({
-  draftItems, packedItems, pendingLoading,
+  draftItems, bookedItems, packedItems, pendingLoading,
   onBookClick, dispatchConfirm, onDispatchClick,
   onDispatchConfirm, dispatchingId, onCancelDispatch, navigate,
 }: {
   draftItems: QueueTransfer[];
+  bookedItems: QueueTransfer[];
   packedItems: QueueTransfer[];
   pendingLoading: boolean;
   onBookClick: (t: any) => void;
@@ -383,7 +399,7 @@ function ShippingQueue({
   onCancelDispatch: () => void;
   navigate: (path: string) => void;
 }) {
-  const total = draftItems.length + packedItems.length;
+  const total = draftItems.length + bookedItems.length + packedItems.length;
 
   function TicketCard({ item, kind }: { item: QueueTransfer; kind: "book" | "dispatch" }) {
     return (
@@ -433,7 +449,12 @@ function ShippingQueue({
         </div>
 
         {/* Action */}
-        {kind === "book" ? (
+        {kind === "booked" ? (
+          <div style={{ fontSize: 12, color: "var(--muted)", display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--muted)", display: "inline-block" }} />
+            Awaiting packing
+          </div>
+        ) : kind === "book" ? (
           <button type="button" onClick={() => onBookClick(item)}
             style={{
               width: "100%", padding: "7px 0", fontSize: 13, fontWeight: 600,
@@ -510,13 +531,13 @@ function ShippingQueue({
             background: "var(--bg-surface-elevated)",
             color: "var(--link)",
           }}>
-            {draftItems.length} need booking · {packedItems.length} ready to dispatch
+            {draftItems.length} need booking · {bookedItems.length} booked · {packedItems.length} ready to dispatch
           </span>
         )}
       </div>
 
-      {/* Two-column queue */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
+      {/* Three-column queue */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20, marginBottom: 24 }}>
         {/* Needs Booking */}
         <section>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
@@ -539,6 +560,32 @@ function ShippingQueue({
               </div>
             ) : draftItems.map((item: any) => (
               <TicketCard key={item.id} item={item} kind="book" />
+            ))}
+          </div>
+        </section>
+
+        {/* Booked */}
+        <section>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>Booked</span>
+            {bookedItems.length > 0 && (
+              <span style={{
+                fontSize: 11, fontWeight: 700, padding: "1px 8px",
+                borderRadius: "var(--radius-pill)",
+                background: "var(--bg-surface-elevated)",
+                color: "var(--muted)",
+              }}>
+                {bookedItems.length}
+              </span>
+            )}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {bookedItems.length === 0 ? (
+              <div style={{ padding: "24px 16px", textAlign: "center", fontSize: 13, color: "var(--muted)", background: "var(--bg-surface)", border: "1px dashed var(--line)", borderRadius: "var(--radius)" }}>
+                No booked transfers
+              </div>
+            ) : bookedItems.map((item: any) => (
+              <TicketCard key={item.id} item={item} kind="booked" />
             ))}
           </div>
         </section>

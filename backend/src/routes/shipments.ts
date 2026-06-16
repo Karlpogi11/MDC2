@@ -32,7 +32,7 @@ shipmentsRouter.get("/pending", authMiddleware, requireRole(...SHIP), async (req
     LEFT JOIN sites ds ON ds.id = t.destination_site_id
     LEFT JOIN profiles rp ON rp.id = t.requested_by
     LEFT JOIN profiles bp ON bp.id = t.booked_by
-    WHERE t.status IN ('draft', 'packed')
+    WHERE t.status IN ('draft', 'booked', 'packed')
     ORDER BY t.created_at ASC
   `);
   const data = (rows as unknown as any[]) ?? [];
