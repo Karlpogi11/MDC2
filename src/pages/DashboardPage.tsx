@@ -385,17 +385,19 @@ function ShippingQueue({
         display: "flex",
         flexDirection: "column",
         gap: 10,
+        transition: "border-color 0.15s",
       }}>
         {/* Top row: transfer no + age badge */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
           <button type="button" onClick={() => navigate(`/transfers/${item.id}`)}
-            style={{ fontSize: 14, fontWeight: 700, fontFamily: "monospace", color: "var(--blue)", background: "none", border: "none", cursor: "pointer", padding: 0, textAlign: "left" }}>
+            style={{ fontSize: 14, fontWeight: 700, fontFamily: "monospace", color: "var(--link)", background: "none", border: "none", cursor: "pointer", padding: 0, textAlign: "left" }}>
             {item.transferNo}
           </button>
           <span style={{
             fontSize: 11, fontWeight: 700, fontFamily: "monospace",
             padding: "2px 8px", borderRadius: "var(--radius-pill)",
             background: ageColor(item.createdAt), color: "#fff", flexShrink: 0,
+            opacity: 0.92,
           }}>
             {ageLabel(item.createdAt)}
           </span>
@@ -403,19 +405,19 @@ function ShippingQueue({
 
         {/* Destination */}
         <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text)" }}>
-          <MapPin size={13} color="var(--muted)" />
+          <MapPin size={13} color="var(--muted)" style={{ opacity: 0.7 }} />
           <span style={{ fontWeight: 500 }}>{item.destSiteName}</span>
           <span style={{ color: "var(--muted)", fontFamily: "monospace", fontSize: 12 }}>{item.destSiteCode}</span>
         </div>
 
         {/* Meta */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 12, color: "var(--muted)" }}>
-          <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <Package size={12} /> {item.totalUnits} unit{item.totalUnits !== 1 ? "s" : ""}
+        <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 12, color: "var(--muted)" }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <Package size={12} style={{ opacity: 0.6 }} /> {item.totalUnits} unit{item.totalUnits !== 1 ? "s" : ""}
           </span>
           {item.reqFullName && (
-            <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <User size={12} /> {item.reqFullName}
+            <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <User size={12} style={{ opacity: 0.6 }} /> {item.reqFullName}
             </span>
           )}
         </div>
@@ -425,8 +427,9 @@ function ShippingQueue({
           <button type="button" onClick={() => onBookClick(item)}
             style={{
               width: "100%", padding: "7px 0", fontSize: 13, fontWeight: 600,
-              background: "var(--blue)", color: "#fff", border: "none",
+              background: "var(--link)", color: "#fff", border: "none",
               borderRadius: "var(--radius)", cursor: "pointer",
+              opacity: 1, transition: "opacity 0.15s",
             }}>
             Book Courier
           </button>
@@ -437,13 +440,14 @@ function ShippingQueue({
                 flex: 1, padding: "7px 0", fontSize: 13, fontWeight: 600,
                 background: dispatchingId === item.id ? "var(--muted)" : "var(--negative)",
                 color: "#fff", border: "none", borderRadius: "var(--radius)", cursor: "pointer",
+                opacity: dispatchingId === item.id ? 0.6 : 1,
               }}>
               {dispatchingId === item.id ? "Dispatching…" : "Confirm Dispatch"}
             </button>
             <button type="button" onClick={onCancelDispatch}
               style={{
                 padding: "7px 12px", fontSize: 13, fontWeight: 600,
-                background: "var(--bg-surface)", color: "var(--text)",
+                background: "transparent", color: "var(--text)",
                 border: "1px solid var(--line)", borderRadius: "var(--radius)", cursor: "pointer",
               }}>
               Cancel
@@ -453,8 +457,9 @@ function ShippingQueue({
           <button type="button" onClick={() => onDispatchClick(item.id)}
             style={{
               width: "100%", padding: "7px 0", fontSize: 13, fontWeight: 600,
-              background: "var(--blue)", color: "#fff", border: "none",
+              background: "var(--link)", color: "#fff", border: "none",
               borderRadius: "var(--radius)", cursor: "pointer",
+              transition: "opacity 0.15s",
             }}>
             {item.courierName ? `Dispatch (${item.courierName})` : "Dispatch"}
           </button>
@@ -474,28 +479,34 @@ function ShippingQueue({
         display: "flex", alignItems: "center", justifyContent: "space-between",
         marginBottom: 20, padding: "10px 16px",
         background: total > 0 ? "var(--bg-surface)" : "transparent",
-        border: total > 0 ? "1px solid var(--blue)" : "none",
+        border: `1px solid ${total > 0 ? "var(--positive)" : "var(--line)"}`,
         borderRadius: "var(--radius)",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{
             width: 8, height: 8, borderRadius: "50%",
-            background: total > 0 ? "#22c55e" : "var(--muted)",
+            background: total > 0 ? "var(--positive)" : "var(--muted)",
             display: "inline-block",
             animation: total > 0 ? "pulse 2s infinite" : "none",
           }} />
           <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>
             {total > 0 ? `${total} transfer${total !== 1 ? "s" : ""} waiting` : "All clear"}
           </span>
-          <span style={{ fontSize: 11, color: "var(--muted)", fontFamily: "monospace" }}>
+          <span style={{
+            fontSize: 10, fontWeight: 700, fontFamily: "monospace",
+            padding: "1px 6px", borderRadius: "var(--radius-pill)",
+            background: "var(--bg-surface-elevated)",
+            color: total > 0 ? "var(--positive)" : "var(--muted)",
+          }}>
             ⟳ Live
           </span>
         </div>
         {total > 0 && (
           <span style={{
-            fontSize: 11, fontWeight: 600, padding: "2px 10px",
+            fontSize: 11, fontWeight: 600, padding: "3px 10px",
             borderRadius: "var(--radius-pill)",
-            background: "#22c55e", color: "#fff",
+            background: "var(--bg-surface-elevated)",
+            color: "var(--positive)",
           }}>
             {draftItems.length} need booking · {packedItems.length} ready to dispatch
           </span>
@@ -512,7 +523,8 @@ function ShippingQueue({
               <span style={{
                 fontSize: 11, fontWeight: 700, padding: "1px 8px",
                 borderRadius: "var(--radius-pill)",
-                background: "var(--blue)", color: "#fff",
+                background: "var(--bg-surface-elevated)",
+                color: "var(--link)",
               }}>
                 {draftItems.length}
               </span>
@@ -537,7 +549,8 @@ function ShippingQueue({
               <span style={{
                 fontSize: 11, fontWeight: 700, padding: "1px 8px",
                 borderRadius: "var(--radius-pill)",
-                background: "#ca8a04", color: "#fff",
+                background: "var(--bg-surface-elevated)",
+                color: "var(--warning)",
               }}>
                 {packedItems.length}
               </span>
@@ -568,7 +581,7 @@ function getGreeting(): string {
 function ageColor(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   if (diff < 2 * 3600000) return "var(--blue)";
-  if (diff < 24 * 3600000) return "#ca8a04";
+  if (diff < 24 * 3600000) return "var(--warning)";
   return "var(--negative)";
 }
 
