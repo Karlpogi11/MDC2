@@ -85,14 +85,14 @@ export function LoginPage() {
   }
 
   const inputStyle: React.CSSProperties = {
-    width: "100%", border: "1px solid #d1d5db", borderRadius: 6,
+    width: "100%", border: "1px solid #9ca3af", borderRadius: 6,
     padding: "8px 10px", fontSize: 14, color: "#1d1d1f",
     background: "#fff", outline: "none", boxSizing: "border-box", height: 38,
     WebkitTextFillColor: "#1d1d1f",
   };
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "#f5f5f7" }}>
+    <div style={{ display: "flex", minHeight: "100vh", background: "#fff" }}>
       {/* Left panel */}
       <div className="login-panel" style={{
         width: 360, flexShrink: 0,
@@ -131,7 +131,7 @@ export function LoginPage() {
       </div>
 
       {/* Right panel — always light, never dark */}
-      <div className="login-right" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 40, background: "#f5f5f7" }}>
+      <div className="login-right" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 40, background: "#fff" }}>
         <div style={{ width: "100%", maxWidth: 360 }}>
           <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, borderRadius: 8, background: "#e8edf5", marginBottom: 20 }}>
             <Lock size={18} color="#13294b" />
@@ -184,7 +184,7 @@ export function LoginPage() {
                 onChange={(e) => setUsername(e.target.value)}
                 style={inputStyle}
                 onFocus={(e) => (e.target.style.borderColor = "#0071e3")}
-                onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                onBlur={(e) => (e.target.style.borderColor = "#9ca3af")}
               />
             </div>
 
@@ -201,7 +201,7 @@ export function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 style={inputStyle}
                 onFocus={(e) => (e.target.style.borderColor = "#0071e3")}
-                onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                onBlur={(e) => (e.target.style.borderColor = "#9ca3af")}
               />
             </div>
 
