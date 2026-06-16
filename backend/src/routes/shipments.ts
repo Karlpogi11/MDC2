@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { getDb } from "../db/connection";
 import { authMiddleware, requireRole } from "../middleware/auth";
-import { transfers, serialNumbers, transferEmails } from "../db/schema";
+import { transfers, serialNumbers, transferEmails, appConfig } from "../db/schema";
 import { eq, inArray, sql } from "drizzle-orm";
 import { randomUUID as uuid } from "node:crypto";
 import { writeAuditLog } from "../utils/audit";
@@ -157,15 +157,19 @@ shipmentsRouter.post("/:id/dispatch", authMiddleware, requireRole(...SHIP), asyn
     note: `Transfer dispatched`,
   });
 
-  // Send dispatch email
-  const emails: string[] = [];
-  if (prev.destContactEmails) {
-    const parsed = typeof prev.destContactEmails === "string" ? JSON.parse(prev.destContactEmails) : prev.destContactEmails;
-    if (Array.isArray(parsed)) emails.push(...parsed.filter(Boolean).map(String));
-  }
-
+  // Check if email on dispatch is enabled
   let emailSent = false;
-  if (emails.length > 0) {
+  const config = await db.query.appConfig.findFirst({
+    where: eq(appConfig.key, "send_email_on_dispatch"),
+  });
+  if (config?.value === "true") {
+    const emails: string[] = [];
+    if (prev.destContactEmails) {
+      const parsed = typeof prev.destContactEmails === "string" ? JSON.parse(prev.destContactEmails) : prev.destContactEmails;
+      if (Array.isArray(parsed)) emails.push(...parsed.filter(Boolean).map(String));
+    }
+
+    if (emails.length > 0) {
     const frontendUrl = (process.env.CORS_ORIGIN ?? "http://localhost:5173").replace(/\/+$/, "");
     const confirmUrl = `${frontendUrl}/transfers/${id}/receive?token=${receiptToken}`;
     const transferLabel = prev.invoiceRef || prev.transferNo;
@@ -222,6 +226,7 @@ shipmentsRouter.post("/:id/dispatch", authMiddleware, requireRole(...SHIP), asyn
       sentAt: result.ok ? new Date() : null,
       errorDetail: result.error ?? null,
     });
+  }
   }
 
   res.json({ ok: true, emailSent });
