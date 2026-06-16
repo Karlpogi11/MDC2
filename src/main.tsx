@@ -15,7 +15,7 @@ document.getElementById("__theme_init")?.remove();
 if (window.location.pathname === "/login" || window.location.pathname === "/change-password") {
   document.documentElement.classList.remove("dark-theme");
   document.documentElement.removeAttribute("data-theme");
-  document.documentElement.style.background = "#f5f5f7";
+  document.documentElement.style.background = "#fff";
 }
 
 export let pendingPasswordRecovery = false;
