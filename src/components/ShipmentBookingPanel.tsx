@@ -132,6 +132,7 @@ export function ShipmentBookingPanel({ transfer, onClose, onBooked }: Props) {
               <input
                 value={customCourier}
                 onChange={(e) => setCustomCourier(e.target.value)}
+                placeholder="Enter courier name"
                 required
                 style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 10px", fontSize: 13, color: "var(--text)", background: "var(--bg-surface)", outline: "none" }}
               />
@@ -161,7 +162,6 @@ export function ShipmentBookingPanel({ transfer, onClose, onBooked }: Props) {
               <input
                 value={riderName}
                 onChange={(e) => setRiderName(e.target.value)}
-                placeholder="e.g. Toyota HiAce ABC-123"
                 style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 10px", fontSize: 13, color: "var(--text)", background: "var(--bg-surface)", outline: "none" }}
               />
             </div>
