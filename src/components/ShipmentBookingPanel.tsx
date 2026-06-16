@@ -18,11 +18,11 @@ type Props = {
   transfer: {
     id: string;
     transferNo: string;
-    invoiceRef: string | null;
+    invoiceRef?: string | null;
     courierName?: string | null;
     trackingNumber?: string | null;
     fixablySeries?: string | null;
-    items: { qty: number; part: { partNumber: string; partName: string } | null; serial: { serialNumber: string } | null }[];
+    items?: { qty: number; part: { partNumber: string; partName: string } | null; serial: { serialNumber: string } | null }[];
     destinationSite: { siteName: string } | null;
     createdAt: string;
   };
@@ -62,7 +62,7 @@ export function ShipmentBookingPanel({ transfer, onClose, onBooked }: Props) {
     setSaving(false);
   }
 
-  const totalQty = transfer.items.reduce((sum, i) => sum + i.qty, 0);
+  const totalQty = transfer.items ? transfer.items.reduce((sum, i) => sum + i.qty, 0) : 0;
 
   return (
     <>
@@ -90,15 +90,18 @@ export function ShipmentBookingPanel({ transfer, onClose, onBooked }: Props) {
         <form onSubmit={(e) => void handleSubmit(e)} style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
           {/* Parts summary */}
           <div style={{ marginBottom: 24, padding: "10px 14px", background: "var(--bg-surface-elevated)", borderRadius: "var(--radius)" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>Items ({transfer.items.length})</div>
-            {transfer.items.slice(0, 10).map((item, i) => (
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>Items ({transfer.items?.length ?? "?"})</div>
+            {transfer.items && transfer.items.slice(0, 10).map((item, i) => (
               <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--text)", marginBottom: 3 }}>
                 <span style={{ fontFamily: "monospace", fontWeight: 600 }}>{item.part?.partNumber ?? "—"}</span>
                 <span style={{ color: "var(--muted)" }}>x{item.qty}</span>
               </div>
             ))}
-            {transfer.items.length > 10 && (
+            {transfer.items && transfer.items.length > 10 && (
               <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>+{transfer.items.length - 10} more items</div>
+            )}
+            {!transfer.items && (
+              <div style={{ fontSize: 12, color: "var(--muted)" }}>Loading items…</div>
             )}
             <div style={{ borderTop: "1px solid var(--line)", marginTop: 6, paddingTop: 6, fontSize: 12, fontWeight: 700, color: "var(--text)", display: "flex", justifyContent: "space-between" }}>
               <span>Total units</span>

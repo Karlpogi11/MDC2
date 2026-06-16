@@ -2,9 +2,11 @@ import { friendlyError } from "@/lib/friendlyError";
 import { useTableResize } from "@/components/ResizableColumns";
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileText, ArrowUp, ArrowDown, ArrowUpDown, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
+import { FileText, ArrowUp, ArrowDown, ArrowUpDown, RefreshCw, ChevronLeft, ChevronRight, CheckCircle, Truck, Clock } from "lucide-react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { AppLayout } from "@/components/AppLayout";
+import { ShipmentBookingPanel } from "@/components/ShipmentBookingPanel";
 
 type TransferStatus = "draft" | "booked" | "packed" | "in_transit" | "received" | "cancelled";
 
@@ -14,12 +16,32 @@ type TransferRow = {
   status: TransferStatus;
   createdAt: string;
   packedAt: string | null;
+  courierName: string | null;
+  trackingNumber: string | null;
   destinationSite: { siteName: string; siteCode: string } | null;
   requestedByProfile: { fullName: string | null; username: string | null } | null;
   itemCount: number;
 };
 
 const PAGE_SIZE = 30;
+
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.floor(hours / 24)}d`;
+}
+
+function ageColor(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const hours = diff / 3600000;
+  if (hours < 2) return "var(--blue)";
+  if (hours < 24) return "#ca8a04";
+  return "var(--negative)";
+}
 
 function getAge(transfer: TransferRow): string | null {
   if (transfer.status === "received" || transfer.status === "cancelled") return null;
@@ -35,6 +57,7 @@ function getAge(transfer: TransferRow): string | null {
 
 const STATUS_STYLE: Record<TransferStatus, { bg: string; color: string; label: string }> = {
   draft:      { bg: "var(--bg-surface-elevated)", color: "var(--muted)",    label: "Draft" },
+  booked:     { bg: "var(--bg-surface-elevated)", color: "var(--blue)",     label: "Booked" },
   packed:     { bg: "var(--bg-surface-elevated)", color: "var(--blue)",     label: "Packed" },
   in_transit: { bg: "var(--bg-surface-elevated)", color: "var(--muted)",    label: "In Transit" },
   received:   { bg: "var(--bg-surface-elevated)", color: "var(--text)",     label: "Received" },
@@ -52,6 +75,8 @@ function formatRow(row: any): TransferRow {
     status: row.status,
     createdAt: row.createdAt,
     packedAt: row.packedAt,
+    courierName: row.courierName ?? null,
+    trackingNumber: row.trackingNumber ?? null,
     destinationSite: Array.isArray(row.destinationSite) ? row.destinationSite[0] ?? null : row.destinationSite,
     requestedByProfile: Array.isArray(row.requestedByProfile) ? row.requestedByProfile[0] ?? null : row.requestedByProfile,
     itemCount: row.itemCount ?? row.item_count ?? 0,
@@ -61,7 +86,10 @@ function formatRow(row: any): TransferRow {
 export function TransfersPage() {
   const navigate = useNavigate();
   const tableRef = useTableResize();
-  const [statusFilter, setStatusFilter] = useState<TransferStatus | "all">("all");
+  const { state: authState } = useAuth();
+  const role = authState.status === "authenticated" ? authState.profile.role : null;
+  const isCoordinator = role === "shipping_coordinator";
+  const [statusFilter, setStatusFilter] = useState<TransferStatus | "all">(isCoordinator ? "draft" : "all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<{ key: "transferNo" | "destination" | "items" | "date"; dir: "asc" | "desc" }>({ key: "date", dir: "desc" });
   // Pagination state
@@ -71,6 +99,10 @@ export function TransfersPage() {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const pageCount = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  // Booking panel
+  const [bookingTransfer, setBookingTransfer] = useState<TransferRow | null>(null);
+  const [dispatching, setDispatching] = useState<Set<string>>(new Set());
+  const [actionMsg, setActionMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
   function toggleSort(key: typeof sort.key) {
     setSort(s => s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" });
@@ -131,6 +163,24 @@ export function TransfersPage() {
   function goToPage(p: number) { setPage(Math.max(0, Math.min(p, pageCount - 1))); }
   function handleRefresh() { fetchPage(page, statusFilter); }
 
+  async function handleDispatch(id: string) {
+    setDispatching((prev) => new Set(prev).add(id));
+    setActionMsg(null);
+    try {
+      const res = await api.post(`/shipments/${id}/dispatch`, {});
+      const ok = (res as any)?.ok === true;
+      setActionMsg({ text: ok ? "Dispatched! Email sent." : "Dispatch completed.", ok });
+      await fetchPage(page, statusFilter, true);
+    } catch (err: any) {
+      setActionMsg({ text: err?.message ?? "Dispatch failed", ok: false });
+    }
+    setDispatching((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }
+
   return (
     <AppLayout>
       <main style={{ maxWidth: 960, margin: "0 auto", padding: "32px 24px" }}>
@@ -188,6 +238,13 @@ export function TransfersPage() {
             style={{ fontSize: 13, width: 200, color: "var(--text)", marginBottom: 4 }}
           />
         </div>
+
+        {actionMsg && (
+          <div style={{ marginBottom: 16, padding: "10px 14px", background: "var(--bg-surface-elevated)", border: `1px solid ${actionMsg.ok ? "var(--blue)" : "var(--negative)"}`, borderRadius: "var(--radius)", color: actionMsg.ok ? "var(--text)" : "var(--negative)", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
+            {actionMsg.ok ? <CheckCircle size={14} /> : null}
+            {actionMsg.text}
+          </div>
+        )}
 
         <section className="table-card">
           <div className="table-scroll" style={{ maxHeight: "80vh" }}>
@@ -261,10 +318,25 @@ export function TransfersPage() {
                     </td>
                     <td style={{ padding: "10px 12px", color: "var(--muted)" }}>{formatDate(t.createdAt)}</td>
                     <td style={{ padding: "10px 12px" }}>
-                      <button type="button" onClick={() => navigate(`/transfers/${t.id}`)}
-                        style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", padding: "5px 12px", fontSize: 12, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
-                        View
-                      </button>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <button type="button" onClick={() => navigate(`/transfers/${t.id}`)}
+                          style={{ border: "1px solid var(--line)", background: "var(--bg-surface)", padding: "5px 12px", fontSize: 12, fontWeight: 600, color: "var(--text)", cursor: "pointer", whiteSpace: "nowrap" }}>
+                          View
+                        </button>
+                        {isCoordinator && t.status === "draft" && (
+                          <button type="button" onClick={() => setBookingTransfer(t)}
+                            style={{ background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+                            Book Courier
+                          </button>
+                        )}
+                        {isCoordinator && t.status === "packed" && (
+                          <button type="button" onClick={() => void handleDispatch(t.id)}
+                            disabled={dispatching.has(t.id)}
+                            style={{ background: dispatching.has(t.id) ? "var(--bg-surface-elevated)" : "var(--blue)", color: dispatching.has(t.id) ? "var(--muted)" : "#fff", border: "none", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: dispatching.has(t.id) ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}>
+                            {dispatching.has(t.id) ? "…" : "Dispatch"}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -290,6 +362,14 @@ export function TransfersPage() {
           </div>
         )}
       </main>
+
+      {bookingTransfer && (
+        <ShipmentBookingPanel
+          transfer={bookingTransfer}
+          onClose={() => setBookingTransfer(null)}
+          onBooked={() => { setBookingTransfer(null); void fetchPage(page, statusFilter, true); }}
+        />
+      )}
     </AppLayout>
   );
 }

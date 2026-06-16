@@ -13,7 +13,6 @@ import {
   Users,
   LogOut,
   ShieldAlert,
-  Truck,
   type LucideIcon,
   X,
   LayoutDashboard,
@@ -32,7 +31,6 @@ type Module = { label: string; icon: LucideIcon; path: string; roles?: UserRole[
 
 const MODULES: Module[] = [
   { label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
-  { label: "Shipments", icon: Truck, path: "/shipments", roles: ["system_admin", "dc_admin", "shipping_coordinator"] },
   { label: "Inventory", icon: Boxes, path: "/inventory" },
   { label: "Stock-in", icon: PackagePlus, path: "/stock-in", roles: ["system_admin", "dc_admin", "dc_operator"] },
   { label: "Transfers", icon: ShieldCheck, path: "/transfers" },

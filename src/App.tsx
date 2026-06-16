@@ -17,14 +17,12 @@ import { PhysicalCountPage } from "@/pages/PhysicalCountPage";
 import { ReceivePage } from "@/pages/ReceivePage";
 import { AuditLogPage } from "@/pages/AuditLogPage";
 import { ReportsPage } from "@/pages/ReportsPage";
-import { ShipmentsPage } from "@/pages/ShipmentsPage";
 import { RoleGuard } from "@/components/RoleGuard";
 
 const ALL   = ["system_admin", "dc_admin", "dc_operator", "dc_viewer"] as const;
 const OPS   = ["system_admin", "dc_admin", "dc_operator"] as const;
 const ADMIN = ["system_admin", "dc_admin"] as const;
 const SYS   = ["system_admin"] as const;
-const SHIP  = ["system_admin", "dc_admin", "shipping_coordinator"] as const;
 
 export function App() {
   return (
@@ -32,7 +30,6 @@ export function App() {
       <Route path="/login"                      element={<LoginPage />} />
       <Route path="/change-password"            element={<ChangePasswordPage />} />
       <Route path="/dashboard"                  element={<RoleGuard allow={[...ALL, "shipping_coordinator"]}><DashboardPage /></RoleGuard>} />
-      <Route path="/shipments"                  element={<RoleGuard allow={[...SHIP]}><ShipmentsPage /></RoleGuard>} />
       <Route path="/" element={
         window.location.hash.includes("type=recovery") || window.location.hash.includes("type=invite")
           ? <LoginPage />
