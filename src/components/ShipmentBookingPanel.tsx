@@ -29,13 +29,15 @@ export function ShipmentBookingPanel({ transfer, onClose, onBooked }: Props) {
   const [tracking, setTracking] = useState(transfer.trackingNumber ?? "");
   const [fixablySeries, setFixablySeries] = useState(transfer.fixablySeries ?? "");
   const [riderName, setRiderName] = useState("");
+  const [customCourier, setCustomCourier] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isPickup = courier === "Pickup by Utility";
   const isOther = courier === "Other";
   const trackingRequired = !isPickup;
-  const canSubmit = courier.trim() && (!trackingRequired || tracking.trim()) && !saving;
+  const effectiveCourier = isOther ? customCourier.trim() : courier.trim();
+  const canSubmit = effectiveCourier && (!trackingRequired || tracking.trim()) && !saving;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -45,7 +47,7 @@ export function ShipmentBookingPanel({ transfer, onClose, onBooked }: Props) {
 
     try {
       await api.post(`/shipments/${transfer.id}/book`, {
-        courierName: courier.trim() + (isPickup && riderName.trim() ? ` (${riderName.trim()})` : ""),
+        courierName: effectiveCourier + (isPickup && riderName.trim() ? ` (${riderName.trim()})` : ""),
         trackingNumber: isPickup ? (riderName.trim() || "Utility pickup") : tracking.trim(),
         fixablySeries: fixablySeries.trim() || null,
       });
@@ -120,6 +122,22 @@ export function ShipmentBookingPanel({ transfer, onClose, onBooked }: Props) {
               {COURIER_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
+
+          {/* Custom courier name (Other only) */}
+          {isOther && (
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 5 }}>
+                Courier name <span style={{ color: "var(--negative)" }}>*</span>
+              </label>
+              <input
+                value={customCourier}
+                onChange={(e) => setCustomCourier(e.target.value)}
+                placeholder="Enter courier name"
+                required
+                style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 10px", fontSize: 13, color: "var(--text)", background: "var(--bg-surface)", outline: "none" }}
+              />
+            </div>
+          )}
 
           {/* Tracking number (not for Pickup by Utility) */}
           {!isPickup && (
