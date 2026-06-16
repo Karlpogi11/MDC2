@@ -3,14 +3,8 @@ import { api } from "@/lib/api";
 import { X } from "lucide-react";
 
 const COURIER_OPTIONS = [
-  "LBC",
-  "J&T Express",
-  "2GO Express",
-  "DHL",
-  "GoGo Xpress",
-  "Ninja Van",
-  "Air21",
-  "In-house rider",
+  "Lalamove",
+  "Pickup by Utility",
   "Other",
 ];
 
@@ -38,9 +32,9 @@ export function ShipmentBookingPanel({ transfer, onClose, onBooked }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isInHouse = courier === "In-house rider";
+  const isPickup = courier === "Pickup by Utility";
   const isOther = courier === "Other";
-  const trackingRequired = !isInHouse;
+  const trackingRequired = !isPickup;
   const canSubmit = courier.trim() && (!trackingRequired || tracking.trim()) && !saving;
 
   async function handleSubmit(e: FormEvent) {
@@ -51,8 +45,8 @@ export function ShipmentBookingPanel({ transfer, onClose, onBooked }: Props) {
 
     try {
       await api.post(`/shipments/${transfer.id}/book`, {
-        courierName: courier.trim(),
-        trackingNumber: isInHouse ? (riderName.trim() || "In-house") : tracking.trim(),
+        courierName: courier.trim() + (isPickup && riderName.trim() ? ` (${riderName.trim()})` : ""),
+        trackingNumber: isPickup ? (riderName.trim() || "Utility pickup") : tracking.trim(),
         fixablySeries: fixablySeries.trim() || null,
       });
       onBooked();
@@ -89,21 +83,23 @@ export function ShipmentBookingPanel({ transfer, onClose, onBooked }: Props) {
         {/* Content */}
         <form onSubmit={(e) => void handleSubmit(e)} style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
           {/* Parts summary */}
-          <div style={{ marginBottom: 24, padding: "10px 14px", background: "var(--bg-surface-elevated)", borderRadius: "var(--radius)" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>Items ({transfer.items?.length ?? "?"})</div>
-            {transfer.items && transfer.items.slice(0, 10).map((item, i) => (
-              <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--text)", marginBottom: 3 }}>
-                <span style={{ fontFamily: "monospace", fontWeight: 600 }}>{item.part?.partNumber ?? "—"}</span>
-                <span style={{ color: "var(--muted)" }}>x{item.qty}</span>
-              </div>
-            ))}
-            {transfer.items && transfer.items.length > 10 && (
-              <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>+{transfer.items.length - 10} more items</div>
-            )}
-            {!transfer.items && (
-              <div style={{ fontSize: 12, color: "var(--muted)" }}>Loading items…</div>
-            )}
-            <div style={{ borderTop: "1px solid var(--line)", marginTop: 6, paddingTop: 6, fontSize: 12, fontWeight: 700, color: "var(--text)", display: "flex", justifyContent: "space-between" }}>
+          <div style={{ marginBottom: 24, border: "1px solid var(--line)", borderRadius: "var(--radius)" }}>
+            <div style={{ padding: "10px 14px 6px", fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Items ({transfer.items?.length ?? "?"})</div>
+            <div style={{ padding: "0 14px" }}>
+              {transfer.items && transfer.items.slice(0, 10).map((item, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--text)", marginBottom: 3 }}>
+                  <span style={{ fontFamily: "monospace", fontWeight: 600 }}>{item.part?.partNumber ?? "—"}</span>
+                  <span style={{ color: "var(--muted)" }}>x{item.qty}</span>
+                </div>
+              ))}
+              {transfer.items && transfer.items.length > 10 && (
+                <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>+{transfer.items.length - 10} more items</div>
+              )}
+              {!transfer.items && (
+                <div style={{ fontSize: 12, color: "var(--muted)" }}>Loading items…</div>
+              )}
+            </div>
+            <div style={{ borderTop: "1px solid var(--line)", marginTop: 6, padding: "6px 14px 10px", fontSize: 12, fontWeight: 700, color: "var(--text)", display: "flex", justifyContent: "space-between" }}>
               <span>Total units</span>
               <span>{totalQty}</span>
             </div>
@@ -125,8 +121,8 @@ export function ShipmentBookingPanel({ transfer, onClose, onBooked }: Props) {
             </select>
           </div>
 
-          {/* Tracking number */}
-          {!isInHouse && (
+          {/* Tracking number (not for Pickup by Utility) */}
+          {!isPickup && (
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 5 }}>
                 Tracking / Waybill {isOther && <span style={{ color: "var(--negative)" }}>*</span>}
@@ -141,14 +137,14 @@ export function ShipmentBookingPanel({ transfer, onClose, onBooked }: Props) {
             </div>
           )}
 
-          {/* Rider name (in-house only) */}
-          {isInHouse && (
+          {/* Utility name (Pickup by Utility only) */}
+          {isPickup && (
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 5 }}>Rider name</label>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 5 }}>Utility name</label>
               <input
                 value={riderName}
                 onChange={(e) => setRiderName(e.target.value)}
-                placeholder="Rider name"
+                placeholder="e.g. Toyota HiAce ABC-123"
                 style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 10px", fontSize: 13, color: "var(--text)", background: "var(--bg-surface)", outline: "none" }}
               />
             </div>
@@ -166,12 +162,12 @@ export function ShipmentBookingPanel({ transfer, onClose, onBooked }: Props) {
           </div>
 
           {/* Note about packing list */}
-          <div style={{ marginBottom: 20, padding: "10px 14px", background: "var(--bg-surface-elevated)", borderRadius: "var(--radius)", fontSize: 12, color: "var(--muted)", lineHeight: 1.5 }}>
+          <div style={{ marginBottom: 20, padding: "10px 14px", border: "1px solid var(--line)", borderRadius: "var(--radius)", fontSize: 12, color: "var(--muted)", lineHeight: 1.5 }}>
             After booking, the packing list will include courier and tracking info. Print it and place <strong style={{ color: "var(--text)" }}>inside</strong> the box before sealing.
           </div>
 
           {error && (
-            <div style={{ marginBottom: 16, padding: "8px 12px", background: "var(--bg-surface-elevated)", border: "1px solid var(--negative)", borderRadius: "var(--radius)", color: "var(--negative)", fontSize: 13 }}>
+            <div style={{ marginBottom: 16, padding: "8px 12px", border: "1px solid var(--negative)", borderRadius: "var(--radius)", color: "var(--negative)", fontSize: 13 }}>
               {error}
             </div>
           )}
@@ -183,7 +179,7 @@ export function ShipmentBookingPanel({ transfer, onClose, onBooked }: Props) {
               Cancel
             </button>
             <button type="submit" disabled={!canSubmit}
-              style={{ flex: 1, background: canSubmit ? "var(--blue)" : "var(--bg-surface-elevated)", color: canSubmit ? "#fff" : "var(--muted)", border: "none", borderRadius: "var(--radius)", padding: "7px 0", fontSize: 13, fontWeight: 600, cursor: canSubmit ? "pointer" : "not-allowed" }}>
+              style={{ flex: 1, background: canSubmit ? "var(--blue)" : "var(--bg-surface)", color: canSubmit ? "#fff" : "var(--muted)", border: canSubmit ? "none" : "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 0", fontSize: 13, fontWeight: 600, cursor: canSubmit ? "pointer" : "not-allowed" }}>
               {saving ? "Booking…" : "Confirm Booking"}
             </button>
           </div>
