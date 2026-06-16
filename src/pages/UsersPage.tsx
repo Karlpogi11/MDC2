@@ -19,12 +19,13 @@ type UserRow = {
   created_at: string;
 };
 
-const ROLES: UserRole[] = ["system_admin", "dc_admin", "dc_operator", "dc_viewer"];
+const ROLES: UserRole[] = ["system_admin", "dc_admin", "dc_operator", "dc_viewer", "shipping_coordinator"];
 const ROLE_LABELS: Record<UserRole, string> = {
   system_admin: "System Admin",
   dc_admin: "DC Admin",
   dc_operator: "DC Operator",
   dc_viewer: "DC Viewer",
+  shipping_coordinator: "Shipping Coordinator",
 };
 const PAGE_SIZE = 50;
 
