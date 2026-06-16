@@ -150,6 +150,7 @@ export function DashboardPage() {
   const [pendingItems, setPendingItems] = useState<any[]>([]);
   const [pendingLoading, setPendingLoading] = useState(true);
   const [bookTarget, setBookTarget] = useState<any | null>(null);
+  const [bookLoading, setBookLoading] = useState(false);
   const [dispatchingId, setDispatchingId] = useState<string | null>(null);
   const [dispatchConfirm, setDispatchConfirm] = useState<string | null>(null);
 
@@ -211,7 +212,16 @@ export function DashboardPage() {
             draftItems={draftItems}
             packedItems={packedItems}
             pendingLoading={pendingLoading}
-            onBookClick={setBookTarget}
+            onBookClick={async (item) => {
+              setBookLoading(true);
+              try {
+                const full = await api.get(`/transfers/${item.id}`);
+                if (full) {
+                  setBookTarget(full);
+                }
+              } catch {}
+              setBookLoading(false);
+            }}
             dispatchConfirm={dispatchConfirm}
             onDispatchClick={(id) => setDispatchConfirm(id)}
             onDispatchConfirm={handleDispatch}
