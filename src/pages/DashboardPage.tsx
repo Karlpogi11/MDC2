@@ -128,6 +128,7 @@ export function DashboardPage() {
     staleTime: NAVIGATION_CACHE_STALE_TIME,
     gcTime: NAVIGATION_CACHE_GC_TIME,
   });
+  const isCoordinator = authState.status === "authenticated" && authState.profile.role === "shipping_coordinator";
   const metrics = data?.metrics ?? null;
   const pipeline = data?.pipeline ?? [];
   const activity = data?.activity ?? [];
@@ -165,13 +166,14 @@ export function DashboardPage() {
           </div>
         )}
 
-        {/* Metric cards */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
-          <MetricCard label="In Stock" value={metrics?.inStock ?? "—"} />
-          <MetricCard label="In Transit" value={metrics?.inTransit ?? "—"} />
-          <MetricCard label="Overdue (>3d)" value={metrics?.overdue ?? "—"} alert={!!metrics?.overdue} />
-          <MetricCard label="Stocked In This Week" value={stockInThisWeek ?? "—"} />
-        </div>
+        {!isCoordinator && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
+            <MetricCard label="In Stock" value={metrics?.inStock ?? "—"} />
+            <MetricCard label="In Transit" value={metrics?.inTransit ?? "—"} />
+            <MetricCard label="Overdue (>3d)" value={metrics?.overdue ?? "—"} alert={!!metrics?.overdue} />
+            <MetricCard label="Stocked In This Week" value={stockInThisWeek ?? "—"} />
+          </div>
+        )}
 
         {/* Pipeline + Activity */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
@@ -232,42 +234,43 @@ export function DashboardPage() {
           </section>
         </div>
 
-        {/* Top Parts by Movement */}
-        <section className="table-card" style={{ padding: 0, marginBottom: 20 }}>
-          <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>Top Parts This Week</span>
-            <button type="button" onClick={() => navigate("/inventory")}
-              style={{ fontSize: 12, color: "var(--blue)", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>
-              View inventory →
-            </button>
-          </div>
-          {topParts.length === 0 ? (
-            <div style={{ padding: "16px", fontSize: 13, color: "var(--muted)", textAlign: "center" }}>No movement this week</div>
-          ) : (
-            <div>
-              {topParts.map((p, i) => (
-                <div key={p.part_number} style={{ display: "flex", alignItems: "center", gap: 12, padding: "7px 16px", borderBottom: i < topParts.length - 1 ? "1px solid var(--line)" : "none" }}>
-                  <span style={{ fontSize: 11, color: "var(--muted)", width: 16, textAlign: "right", flexShrink: 0 }}>{i + 1}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", fontFamily: "monospace" }}>{p.part_number}</div>
-                    <div style={{ fontSize: 11, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.part_name}</div>
-                  </div>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--blue)", flexShrink: 0 }}>{p.movement}</span>
-                </div>
-              ))}
+        {!isCoordinator && (
+          <section className="table-card" style={{ padding: 0, marginBottom: 20 }}>
+            <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>Top Parts This Week</span>
+              <button type="button" onClick={() => navigate("/inventory")}
+                style={{ fontSize: 12, color: "var(--blue)", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>
+                View inventory →
+              </button>
             </div>
-          )}
-        </section>
+            {topParts.length === 0 ? (
+              <div style={{ padding: "16px", fontSize: 13, color: "var(--muted)", textAlign: "center" }}>No movement this week</div>
+            ) : (
+              <div>
+                {topParts.map((p, i) => (
+                  <div key={p.part_number} style={{ display: "flex", alignItems: "center", gap: 12, padding: "7px 16px", borderBottom: i < topParts.length - 1 ? "1px solid var(--line)" : "none" }}>
+                    <span style={{ fontSize: 11, color: "var(--muted)", width: 16, textAlign: "right", flexShrink: 0 }}>{i + 1}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", fontFamily: "monospace" }}>{p.part_number}</div>
+                      <div style={{ fontSize: 11, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.part_name}</div>
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "var(--blue)", flexShrink: 0 }}>{p.movement}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Quick Actions */}
         <section className="table-card" style={{ padding: "14px 16px" }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 12 }}>Quick Actions</div>
           <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
             <QuickAction label="New Transfer" onClick={() => navigate("/transfers/new")} />
-            <QuickAction label="Stock-In" onClick={() => navigate("/stock-in")} />
+            {!isCoordinator && <QuickAction label="Stock-In" onClick={() => navigate("/stock-in")} />}
             <QuickAction label="View Transfers" onClick={() => navigate("/transfers")} />
             <QuickAction label="Exports" onClick={() => navigate("/exports")} />
-            <QuickAction label="Reconcile" onClick={() => navigate("/physical-count")} />
+            {!isCoordinator && <QuickAction label="Reconcile" onClick={() => navigate("/physical-count")} />}
           </div>
         </section>
       </main>
