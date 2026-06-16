@@ -178,9 +178,9 @@ export function ShipmentBookingPanel({ transfer, onClose, onBooked }: Props) {
             />
           </div>
 
-          {/* Note about packing list */}
+          {/* Next steps */}
           <div style={{ marginBottom: 20, padding: "10px 14px", border: "1px solid var(--line)", borderRadius: "var(--radius)", fontSize: 12, color: "var(--muted)", lineHeight: 1.5 }}>
-            After booking, the packing list will include courier and tracking info. Print it and place <strong style={{ color: "var(--text)" }}>inside</strong> the box before sealing.
+            An operator will pack the items and mark them <strong style={{ color: "var(--text)" }}>ready to dispatch</strong>. Come back here to confirm dispatch once packed.
           </div>
 
           {error && (
