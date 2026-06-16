@@ -27,16 +27,16 @@ import { getTheme, applyTheme, type Theme } from "@/lib/theme";
 import { useOnlineStatus } from "@/lib/useOnlineStatus";
 import { prefetchRouteData } from "@/services/navigationCache";
 
-type Module = { label: string; icon: LucideIcon; path: string; roles?: UserRole[] };
+type Module = { label: string; icon: LucideIcon; path: string; roles?: UserRole[]; excludeRoles?: UserRole[] };
 
 const MODULES: Module[] = [
   { label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
-  { label: "Inventory", icon: Boxes, path: "/inventory" },
+  { label: "Inventory", icon: Boxes, path: "/inventory", excludeRoles: ["shipping_coordinator"] },
   { label: "Stock-in", icon: PackagePlus, path: "/stock-in", roles: ["system_admin", "dc_admin", "dc_operator"] },
   { label: "Transfers", icon: ShieldCheck, path: "/transfers" },
   { label: "Corrections", icon: ClipboardCheck, path: "/corrections", roles: ["system_admin", "dc_admin"] },
   { label: "Reconcile", icon: ClipboardList, path: "/physical-count", roles: ["system_admin", "dc_admin", "dc_operator"] },
-  { label: "Reports", icon: FileBarChart2, path: "/reports" },
+  { label: "Reports", icon: FileBarChart2, path: "/reports", excludeRoles: ["shipping_coordinator"] },
   { label: "Analytics", icon: BarChart3, path: "/analytics", roles: ["system_admin", "dc_admin", "dc_operator"] },
 ];
 
@@ -171,7 +171,7 @@ export function AppLayout({ children, activeModule }: Props) {
             {headerBrandName}
           </button>
           <nav className="main-modules" aria-label="Main modules">
-            {MODULES.filter(item => !item.roles || item.roles.includes(userRole as UserRole)).map((item) => {
+            {MODULES.filter(item => (!item.roles || item.roles.includes(userRole as UserRole)) && (!item.excludeRoles || !item.excludeRoles.includes(userRole as UserRole))).map((item) => {
               const Icon = item.icon;
               const isActive = activePath === item.path || (item.path !== "/" && activePath.startsWith(item.path));
               return (

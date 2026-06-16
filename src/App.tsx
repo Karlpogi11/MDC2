@@ -37,7 +37,7 @@ export function App() {
           ? <LoginPage />
           : <Navigate to="/dashboard" replace />
       } />
-      <Route path="/inventory"                  element={<RoleGuard allow={[...ALL, "shipping_coordinator"]}><InventoryPage /></RoleGuard>} />
+      <Route path="/inventory"                  element={<RoleGuard allow={[...ALL]}><InventoryPage /></RoleGuard>} />
       <Route path="/stock-in"                   element={<RoleGuard allow={[...OPS]}><StockInPage /></RoleGuard>} />
       <Route path="/transfers"                  element={<RoleGuard allow={[...ALL, "shipping_coordinator"]}><TransfersPage /></RoleGuard>} />
       <Route path="/transfers/new"              element={<RoleGuard allow={[...OPS]}><TransferNewPage /></RoleGuard>} />
