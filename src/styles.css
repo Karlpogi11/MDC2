@@ -1245,6 +1245,11 @@ th .col-resize-handle:active::after {
   50% { opacity: 0.3; }
 }
 
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.3); }
+}
+
 
 /* ── Search inputs — pill shape, darker bg ── */
 .search-input,
