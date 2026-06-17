@@ -156,7 +156,7 @@ export function TransfersPage() {
 
   // Poll for updates every 15 seconds
   useEffect(() => {
-    const interval = setInterval(() => fetchPage(page, statusFilter, true), 15000);
+    const interval = setInterval(() => fetchPage(page, statusFilter, true), 30000);
     return () => clearInterval(interval);
   }, [page, statusFilter, fetchPage]);
 

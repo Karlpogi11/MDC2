@@ -2,7 +2,7 @@ import { Router } from "express";
 import { getDb } from "../db/connection";
 import { transfers, transferItems, sites, profiles, parts, serialNumbers, appConfig, packingLists, transferEmails } from "../db/schema";
 import { eq, and, desc, inArray, like, gte, lt, sql } from "drizzle-orm";
-import { authMiddleware } from "../middleware/auth";
+import { authMiddleware, requireRole } from "../middleware/auth";
 import { randomUUID as uuid } from "node:crypto";
 import { queryNumber, queryString } from "../utils/query";
 import { writeAuditLog } from "../utils/audit";
@@ -280,11 +280,17 @@ transfersRouter.post("/", authMiddleware, async (req, res) => {
         }
 
         const [serialRows] = await db.execute(sql`
-          SELECT status FROM serial_numbers WHERE id = ${sId} LIMIT 1
+          SELECT status, part_id AS partId FROM serial_numbers WHERE id = ${sId} LIMIT 1
         `);
         const s = (serialRows as unknown as any[])?.[0];
         if (!s || s.status !== "in_stock") {
           res.status(400).json({ error: "One or more serials are not available in stock" });
+          return;
+        }
+
+        const item = transferItemsData.find((i: any) => (i.serialId ?? i.serial_id) === sId);
+        if (item && s.partId && (item.partId ?? item.part_id) && s.partId !== (item.partId ?? item.part_id)) {
+          res.status(400).json({ error: "Serial belongs to a different part" });
           return;
         }
       }
@@ -651,7 +657,7 @@ transfersRouter.post("/:id/generate-pdf", authMiddleware, async (req, res) => {
   res.json({ ok: true });
 });
 
-transfersRouter.post("/:id/items", authMiddleware, async (req, res) => {
+transfersRouter.post("/:id/items", authMiddleware, requireRole("system_admin", "dc_admin", "dc_operator"), async (req, res) => {
   const db = await getDb();
   const id = queryString(req.params.id) ?? "";
   const { items: transferItemsData } = req.body;
@@ -684,11 +690,17 @@ transfersRouter.post("/:id/items", authMiddleware, async (req, res) => {
       }
 
       const [serialRows] = await db.execute(sql`
-        SELECT status FROM serial_numbers WHERE id = ${sId} LIMIT 1
+        SELECT status, part_id AS partId FROM serial_numbers WHERE id = ${sId} LIMIT 1
       `);
       const s = (serialRows as unknown as any[])?.[0];
       if (!s || s.status !== "in_stock") {
         res.status(400).json({ error: "One or more serials are not available in stock" });
+        return;
+      }
+
+      const item = transferItemsData.find((i: any) => (i.serialId ?? i.serial_id) === sId);
+      if (item && s.partId && (item.partId ?? item.part_id) && s.partId !== (item.partId ?? item.part_id)) {
+        res.status(400).json({ error: "Serial belongs to a different part" });
         return;
       }
     }
@@ -715,7 +727,7 @@ transfersRouter.post("/:id/items", authMiddleware, async (req, res) => {
   res.json({ ok: true, items });
 });
 
-transfersRouter.delete("/:id/items/:itemId", authMiddleware, async (req, res) => {
+transfersRouter.delete("/:id/items/:itemId", authMiddleware, requireRole("system_admin", "dc_admin", "dc_operator"), async (req, res) => {
   const db = await getDb();
   const id = queryString(req.params.id) ?? "";
   const itemId = queryString(req.params.itemId) ?? "";

@@ -92,6 +92,7 @@ export function TransferDetailPage() {
   const actorId = authState.status === "authenticated" ? authState.profile.id : null;
   const role = authState.status === "authenticated" ? authState.profile.role : null;
 
+  const isOpsRole = ["system_admin", "dc_admin", "dc_operator"].includes(role ?? "");
   const [transfer, setTransfer] = useState<TransferDetail | null>(null);
   const canAdvance = canAdvanceStatus(role, transfer?.status ?? "draft");
   const [loading, setLoading] = useState(true);
@@ -136,12 +137,14 @@ export function TransferDetailPage() {
   const [addPartNumber, setAddPartNumber] = useState("");
   const [addSerialInput, setAddSerialInput] = useState("");
   const [addSerialId, setAddSerialId] = useState<string | null>(null);
+  const [addSerialError, setAddSerialError] = useState("");
   const [addQty, setAddQty] = useState(1);
   const [addSaving, setAddSaving] = useState(false);
 
   // Auto-focus next serial input after assignment
   const [focusSerialItemId, setFocusSerialItemId] = useState<string | null>(null);
   const serialInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Confirm remove item
   const [confirmRemoveItemId, setConfirmRemoveItemId] = useState<string | null>(null);
@@ -180,7 +183,7 @@ export function TransferDetailPage() {
         setSerialSaving(p => ({ ...p, [itemId]: false }));
         return;
       }
-      if (serial.part_id !== partId) {
+      if ((serial.partId ?? serial.part_id) !== partId) {
         setSerialErrors(p => ({ ...p, [itemId]: "Serial belongs to a different part" }));
         setSerialSaving(p => ({ ...p, [itemId]: false }));
         return;
@@ -278,10 +281,10 @@ export function TransferDetailPage() {
 
   useEffect(() => { void load(); }, [id]);
 
-  // Poll for updates every 10 seconds
+  // Poll for updates
   useEffect(() => {
     if (!id) return;
-    const interval = setInterval(() => void load(true), 10000);
+    const interval = setInterval(() => void load(true), 30000);
     return () => clearInterval(interval);
   }, [id]);
 
@@ -723,8 +726,8 @@ export function TransferDetailPage() {
               <span style={{ fontSize: 13, fontWeight: 600, color: "#444" }}>
                 Items <span style={{ fontWeight: 400, color: "#888" }}>({transfer.items.length})</span>
               </span>
-              {transfer.status === "draft" && (
-                <button type="button" onClick={() => setShowAddItem(true)}
+              {transfer.status === "draft" && isOpsRole && (
+                <button type="button" onClick={() => { setShowAddItem(true); setAddSerialError(""); }}
                   style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "transparent", border: "1px solid var(--line)", borderRadius: "var(--radius-sm)", padding: "3px 8px", fontSize: 11, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
                   <Plus size={12} /> Add Item
                 </button>
@@ -744,7 +747,7 @@ export function TransferDetailPage() {
                 </thead>
                 <tbody>
                   {transfer.items.length === 0 && (
-                    <tr><td colSpan={transfer.status === "in_transit" || transfer.status === "draft" ? 5 : 4} className="empty-row">No items.</td></tr>
+                    <tr><td colSpan={transfer.status === "in_transit" ? 5 : (transfer.status === "draft" && isOpsRole ? 5 : 4)} className="empty-row">No items.</td></tr>
                   )}
                   {transfer.items.map((item) => (
                     <tr key={item.id} style={{ background: receivedItems.has(item.id) ? "#f0fdf4" : undefined }}>
@@ -798,7 +801,7 @@ export function TransferDetailPage() {
                         {toCapitalized(item.part?.category) || "—"}
                       </td>
                       <td className="num">{item.qty}</td>
-                      {transfer.status === "draft" && (
+                      {transfer.status === "draft" && isOpsRole && (
                         <td style={{ padding: "4px 8px", textAlign: "center", width: 40 }}>
                           <button type="button" onClick={() => setConfirmRemoveItemId(item.id)}
                             title="Remove item"
@@ -898,7 +901,7 @@ export function TransferDetailPage() {
 
       {showAddItem && (
         <>
-          <div onClick={() => setShowAddItem(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 100 }} />
+          <div onClick={() => { setShowAddItem(false); setAddSerialError(""); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 100 }} />
           <div role="dialog" aria-modal="true" style={{
             position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
             background: "var(--bg-surface)", borderRadius: "var(--radius)",
@@ -907,37 +910,62 @@ export function TransferDetailPage() {
           }}>
             <h2 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 700, color: "var(--text)" }}>Add Item</h2>
 
-            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 4 }}>Serial <span style={{ color: "var(--muted)", fontWeight: 400 }}>(or search part below)</span></label>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 4 }}>Serial</label>
             <input value={addSerialInput}
-              onChange={async e => {
+              onChange={e => {
                 const val = e.target.value.toUpperCase();
                 setAddSerialInput(val);
+                setAddSerialError("");
+                if (debounceRef.current) clearTimeout(debounceRef.current);
                 if (val.trim().length >= 2) {
-                  try {
-                    const serial = await api.get(`/serials/${encodeURIComponent(val.trim())}`);
-                    if (serial?.id && serial.status === "in_stock" && !serial.reservedInActiveTransfer) {
-                      setAddPartNumber(serial.partNumber ?? "");
-                      setAddPartId(serial.part_id ?? null);
-                      setAddSerialId(serial.id);
-                      setAddQty(1);
-                    } else {
-                      setAddSerialId(null);
-                    }
-                  } catch { setAddSerialId(null); }
+                  setAddSerialId(null);
+                  setAddPartId(null);
+                  setAddPartNumber("");
+                  debounceRef.current = setTimeout(async () => {
+                    try {
+                      const serial = await api.get(`/serials/${encodeURIComponent(val.trim())}`);
+                      if (!serial?.id) {
+                        setAddSerialError("Serial number not found in inventory");
+                      } else if (serial.reservedInActiveTransfer) {
+                        const label = serial.activeTransferStatus === "draft" ? "Draft" : serial.activeTransferStatus === "packed" ? "Packed" : "In Transit";
+                        setAddSerialError(`Already reserved on Transfer ${serial.activeTransferNo} (${label})`);
+                      } else if (serial.status !== "in_stock") {
+                        setAddSerialError(`Not available — ${serial.status === "in_transit" ? "Reserved for another transfer" : serial.status === "transferred" ? "Already transferred out" : serial.status.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())}`);
+                      } else {
+                        setAddPartNumber(serial.part?.partNumber ?? serial.partNumber ?? "");
+                        setAddPartId(serial.part_id ?? serial.partId ?? null);
+                        setAddSerialId(serial.id);
+                        setAddQty(1);
+                      }
+                    } catch { setAddSerialError("Serial lookup failed"); }
+                  }, 300);
                 } else {
                   setAddSerialId(null);
+                  setAddPartId(null);
+                  setAddPartNumber("");
                 }
               }}
               placeholder="Scan or type serial number"
               style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius-sm)", padding: "7px 10px", fontSize: 13, fontFamily: "monospace", color: "var(--text)", background: "var(--bg-surface)", outline: "none" }}
             />
+            {addSerialError && <div style={{ fontSize: 11, color: "var(--negative)", marginTop: 4 }}>{addSerialError}</div>}
 
-            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text)", marginTop: 14, marginBottom: 4 }}>Part</label>
-            <PartNumberInput
-              value={addPartNumber}
-              onChange={(pn, part) => { setAddPartNumber(pn); setAddPartId(part?.id ?? null); setAddSerialId(null); }}
-              style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius-sm)", padding: "7px 10px", fontSize: 13, color: "var(--text)", background: "var(--bg-surface)", outline: "none" }}
-            />
+            {role !== "dc_operator" && (
+              <>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text)", marginTop: 14, marginBottom: 4 }}>Part</label>
+                {addSerialId && addPartNumber ? (
+                  <div style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius-sm)", padding: "7px 10px", fontSize: 13, fontFamily: "monospace", color: "var(--text)", background: "var(--bg-surface)", outline: "none" }}>
+                    {addPartNumber}
+                  </div>
+                ) : (
+                  <PartNumberInput
+                    value={addPartNumber}
+                    onChange={(pn, part) => { setAddPartNumber(pn); setAddPartId(part?.id ?? null); }}
+                    style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius-sm)", padding: "7px 10px", fontSize: 13, color: "var(--text)", background: "var(--bg-surface)", outline: "none" }}
+                  />
+                )}
+              </>
+            )}
 
             <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text)", marginTop: 14, marginBottom: 4 }}>Qty</label>
             <input type="number" min={1} value={addQty}
@@ -946,7 +974,7 @@ export function TransferDetailPage() {
             />
 
             <div style={{ marginTop: 20, display: "flex", gap: 8 }}>
-              <button type="button" onClick={() => setShowAddItem(false)}
+              <button type="button" onClick={() => { setShowAddItem(false); setAddSerialError(""); }}
                 style={{ flex: 1, border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "7px 0", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
                 Cancel
               </button>

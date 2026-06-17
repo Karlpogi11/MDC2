@@ -22,28 +22,38 @@ inventoryRouter.get("/", authMiddleware, async (req, res) => {
   // ── Fetch all serial numbers and their actual statuses ──
   // stockedOut is now derived from the serial's actual status, NOT from transfer_items,
   // to avoid double-counting serials that were received (status returned to in_stock).
-  const [activeTransfersRes, transferItemsRes, reservedItemsRes, inTransitSerialsRes, serialsRes] = await Promise.all([
-    db.execute(sql`
+  async function safeQuery(label: string, query: any) {
+    try {
+      const res = await db.execute(query);
+      return (res as unknown as any[])[0] ?? [];
+    } catch (err: any) {
+      console.warn(`Inventory query "${label}" failed:`, err.message);
+      return [];
+    }
+  }
+
+  const [activeTransfersRows, transferItemsRows, reservedItemsRows, inTransitSerialsRows, serialsRows] = await Promise.all([
+    safeQuery("activeTransfers", sql`
       SELECT t.id, t.created_at, t.packed_at, t.status
       FROM transfers t
       WHERE t.status IN ('in_transit', 'received')
       ORDER BY t.created_at DESC LIMIT 1500
     `),
-    db.execute(sql`
+    safeQuery("transferItems", sql`
       SELECT ti.transfer_id, ti.part_id, ti.serial_id, ti.qty
       FROM transfer_items ti
       JOIN transfers t ON t.id = ti.transfer_id
       WHERE t.status IN ('in_transit', 'received')
       LIMIT 10000
     `),
-    db.execute(sql`
+    safeQuery("reservedItems", sql`
       SELECT ti.transfer_id, ti.part_id, ti.serial_id, t.status AS transferStatus
       FROM transfer_items ti
       JOIN transfers t ON t.id = ti.transfer_id
       WHERE t.status IN ('draft', 'packed', 'in_transit')
       LIMIT 10000
     `),
-    db.execute(sql`
+    safeQuery("inTransitSerials", sql`
       SELECT ti.serial_id
       FROM transfer_items ti
       JOIN transfers t ON t.id = ti.transfer_id
@@ -51,19 +61,13 @@ inventoryRouter.get("/", authMiddleware, async (req, res) => {
         AND ti.serial_id IS NOT NULL
       LIMIT 10000
     `),
-    db.execute(sql`
+    safeQuery("allSerials", sql`
       SELECT sn.id, sn.part_id AS partId, sn.status, sn.stock_in_at AS stockInAt
       FROM serial_numbers sn
       ORDER BY sn.stock_in_at DESC
       LIMIT 50000
     `),
   ]);
-
-  const activeTransfersRows = (activeTransfersRes as unknown as any[])[0] ?? [];
-  const transferItemsRows = (transferItemsRes as unknown as any[])[0] ?? [];
-  const reservedItemsRows = (reservedItemsRes as unknown as any[])[0] ?? [];
-  const inTransitSerialsRows = (inTransitSerialsRes as unknown as any[])[0] ?? [];
-  const serialsRows = (serialsRes as unknown as any[])[0] ?? [];
 
   const inTransitSerialIds = new Set<string>(inTransitSerialsRows.map((r: any) => r.serial_id));
 

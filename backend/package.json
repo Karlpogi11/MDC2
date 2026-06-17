@@ -11,7 +11,9 @@
     "db:push": "drizzle-kit push",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "db:check": "drizzle-kit check"
+    "db:check": "drizzle-kit check",
+    "db:pull": "powershell -ExecutionPolicy Bypass -File scripts/db-pull.ps1",
+    "db:migrate:prod": "powershell -ExecutionPolicy Bypass -File scripts/db-migrate-prod.ps1"
   },
   "dependencies": {
     "@drizzle-team/brocli": "^0.10.2",

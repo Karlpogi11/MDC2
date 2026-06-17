@@ -5,5 +5,5 @@ ALTER TABLE transfers
   ADD COLUMN booked_at       DATETIME     NULL AFTER booked_by,
   ADD COLUMN shipped_by      VARCHAR(36)  NULL AFTER booked_at,
   ADD COLUMN shipped_at      DATETIME     NULL AFTER shipped_by;
-
+--> statement-breakpoint
 CREATE INDEX idx_transfers_tracking ON transfers(tracking_number);

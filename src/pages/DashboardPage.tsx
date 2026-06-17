@@ -16,6 +16,7 @@ import { friendlyError } from "@/lib/friendlyError";
 
 const STATUS_LABEL: Record<string, string> = {
   draft: "Draft",
+  booked: "Booked",
   packed: "Packed",
   in_transit: "In Transit",
   received: "Received",
@@ -134,6 +135,9 @@ export function DashboardPage() {
   const metrics = data?.metrics ?? null;
   const pipeline = data?.pipeline ?? [];
   const activity = data?.activity ?? [];
+  const [showAllActivity, setShowAllActivity] = useState(false);
+  const ACTIVITY_LIMIT = 5;
+  const displayedActivity = showAllActivity ? activity : activity.slice(0, ACTIVITY_LIMIT);
   const stockInThisWeek = data?.stockInThisWeek ?? null;
   const pendingCorrections = data?.pendingCorrections ?? null;
   const topParts = data?.topParts ?? [];
@@ -166,7 +170,7 @@ export function DashboardPage() {
   useEffect(() => {
     if (!isCoordinator) return;
     fetchPending();
-    const interval = setInterval(fetchPending, 10000);
+    const interval = setInterval(fetchPending, 30000);
     return () => clearInterval(interval);
   }, [isCoordinator, fetchPending]);
 
@@ -291,7 +295,7 @@ export function DashboardPage() {
                   {activity.length === 0 && (
                     <div style={{ padding: "16px", fontSize: 13, color: "var(--muted)", textAlign: "center" }}>No recent activity</div>
                   )}
-                  {activity.map((a) => (
+                  {displayedActivity.map((a) => (
                     <div key={a.id + a.type} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "5px 12px", borderBottom: "1px solid var(--line)" }}>
                       <span style={{ marginTop: 1, flexShrink: 0 }}>{ACTIVITY_ICON[a.type]}</span>
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -300,6 +304,14 @@ export function DashboardPage() {
                       <span style={{ fontSize: 11, color: "var(--muted)", flexShrink: 0, whiteSpace: "nowrap" }}>{timeAgo(a.time)}</span>
                     </div>
                   ))}
+                  {activity.length > ACTIVITY_LIMIT && (
+                    <div style={{ textAlign: "center", padding: "6px" }}>
+                      <button type="button" onClick={() => setShowAllActivity(!showAllActivity)}
+                        style={{ fontSize: 12, color: "var(--blue)", background: "none", border: "none", cursor: "pointer", fontWeight: 600, padding: "4px 12px" }}>
+                        {showAllActivity ? "Show less" : `Show more (${activity.length - ACTIVITY_LIMIT} more)`}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </section>
             </div>
@@ -364,6 +376,7 @@ export function DashboardPage() {
 
 const PIPELINE_COLOR: Record<string, string> = {
   draft:      "var(--muted)",
+  booked:     "var(--blue)",
   packed:     "var(--blue)",
   in_transit: "var(--muted)",
 };

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { X, Search, Clock } from "lucide-react";
 import { api } from "@/lib/api";
 
@@ -240,6 +240,11 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
   const [returningSerial, setReturningSerial] = useState<string | null>(null);
   const [returnReason, setReturnReason] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
+  const [closing, setClosing] = useState(false);
+  const handleClose = useCallback(() => {
+    setClosing(true);
+    setTimeout(() => onClose(), 200);
+  }, [onClose]);
 
   useEffect(() => {
     api.get("/serials?part_id=" + partId + "&limit=500")
@@ -255,10 +260,10 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
     api.get("/sites/dc").then((site: any) => setDcSiteId(site?.id ?? null));
 
     setTimeout(() => searchRef.current?.focus(), 50);
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") handleClose(); };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [partId, onClose]);
+  }, [partId, onClose, handleClose]);
 
   useEffect(() => {
     setStatusFilter(initialStatusFilter ?? "all");
@@ -283,8 +288,8 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
 
   return (
     <>
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 100 }} />
-      <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 560, background: "var(--bg-surface)", zIndex: 101, display: "flex", flexDirection: "column", boxShadow: "-4px 0 24px rgba(0,0,0,0.15)" }}>
+      <div onClick={handleClose} className={"drawer-backdrop" + (closing ? " closing" : "")} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 100 }} />
+      <div className={"drawer-panel" + (closing ? " closing" : "")} style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 560, background: "var(--bg-surface)", zIndex: 101, display: "flex", flexDirection: "column", boxShadow: "-4px 0 24px rgba(0,0,0,0.15)" }}>
 
         {/* Header */}
         <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--line)", background: "var(--bg-surface-elevated)", flexShrink: 0 }}>
@@ -297,7 +302,7 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
                 {initialStatusFilter === "transferred" && <span style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", background: "var(--bg-surface-elevated)", padding: "1px 8px", borderRadius: "var(--radius-pill)", display: "inline-block" }}>Stocked Out</span>}
               </div>
             </div>
-            <button type="button" onClick={onClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--muted)", padding: 4 }}>
+            <button type="button" onClick={handleClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--muted)", padding: 4 }}>
               <X size={20} />
             </button>
           </div>
@@ -452,9 +457,8 @@ export function SerialDrawer({ partId, partName, partNumber, initialStatusFilter
                 setReturningSerial("submitting");
                 try {
                   await api.post(`/serials/${id}/return-to-dc`, { reason: returnReason.trim() || undefined });
-                  setReturningSerial(null);
                   setReturnReason("");
-                  onClose();
+                  handleClose();
                   return;
                 } catch { }
                 setReturningSerial(null);

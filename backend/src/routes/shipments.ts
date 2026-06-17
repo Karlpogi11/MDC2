@@ -33,6 +33,7 @@ shipmentsRouter.get("/pending", authMiddleware, requireRole(...SHIP), async (req
     LEFT JOIN profiles rp ON rp.id = t.requested_by
     LEFT JOIN profiles bp ON bp.id = t.booked_by
     WHERE t.status IN ('draft', 'booked', 'packed')
+      AND (t.status != 'draft' OR EXISTS (SELECT 1 FROM transfer_items ti WHERE ti.transfer_id = t.id))
     ORDER BY t.created_at ASC
   `);
   const data = (rows as unknown as any[]) ?? [];
@@ -53,12 +54,18 @@ shipmentsRouter.post("/:id/book", authMiddleware, requireRole(...SHIP), async (r
   }
 
   const [prevRows] = await db.execute(sql`
-    SELECT status, courier_name AS courierName FROM transfers WHERE id = ${id} LIMIT 1
+    SELECT t.status, t.courier_name AS courierName,
+      (SELECT COUNT(*) FROM transfer_items ti WHERE ti.transfer_id = t.id) AS itemCount
+    FROM transfers t WHERE t.id = ${id} LIMIT 1
   `);
   const prev = (prevRows as unknown as any[])?.[0];
   if (!prev) { res.status(404).json({ error: "Transfer not found" }); return; }
   if (!["draft", "booked"].includes(prev.status)) {
     res.status(400).json({ error: `Cannot book transfer in ${prev.status} status` });
+    return;
+  }
+  if (prev.itemCount === 0) {
+    res.status(400).json({ error: "Cannot book a transfer with no items. Add items first." });
     return;
   }
 

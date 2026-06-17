@@ -450,6 +450,11 @@ function DrawerRow({ label, value, mono }: { label: string; value: string; mono?
 }
 
 function SerialLookupDrawer({ serialNumber, onClose }: { serialNumber: string; onClose: () => void }) {
+  const [closing, setClosing] = useState(false);
+  const handleClose = useCallback(() => {
+    setClosing(true);
+    setTimeout(() => onClose(), 200);
+  }, [onClose]);
   const [data, setData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -487,8 +492,8 @@ function SerialLookupDrawer({ serialNumber, onClose }: { serialNumber: string; o
 
   return (
     <>
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", zIndex: 200 }} />
-      <aside style={{
+      <div onClick={handleClose} className={"drawer-backdrop" + (closing ? " closing" : "")} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", zIndex: 200 }} />
+      <aside className={"drawer-panel" + (closing ? " closing" : "")} style={{
         position: "fixed", top: 0, right: 0, bottom: 0, width: 360,
         background: "var(--bg-surface)", borderLeft: "1px solid var(--line)",
         zIndex: 201, display: "flex", flexDirection: "column", overflowY: "auto",
@@ -496,7 +501,7 @@ function SerialLookupDrawer({ serialNumber, onClose }: { serialNumber: string; o
         {/* Header */}
         <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>Serial Lookup</div>
-          <button type="button" onClick={onClose} style={{ border: "none", background: "transparent", cursor: "pointer", color: "var(--muted)", fontSize: 20, lineHeight: 1, padding: 4 }}>×</button>
+          <button type="button" onClick={handleClose} style={{ border: "none", background: "transparent", cursor: "pointer", color: "var(--muted)", fontSize: 20, lineHeight: 1, padding: 4 }}>×</button>
         </div>
         <div className="blue-rule" style={{ margin: 0 }} />
 

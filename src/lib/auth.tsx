@@ -47,9 +47,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setState((prev) => prev.status === "loading" ? { status: "connecting" } : prev);
     }, 3000);
 
+    const cached = sessionStorage.getItem("mdc-profile-cache");
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Date.now() - parsed.ts < 5 * 60 * 1000) {
+          clearTimeout(timeout);
+          setState({ status: "authenticated", profile: parsed.profile, token });
+          return;
+        }
+      } catch { /* ignore stale cache */ }
+    }
+
     api.auth.me()
       .then((profile) => {
         clearTimeout(timeout);
+        sessionStorage.setItem("mdc-profile-cache", JSON.stringify({ profile, ts: Date.now() }));
         setState({ status: "authenticated", profile, token });
       })
       .catch(() => {

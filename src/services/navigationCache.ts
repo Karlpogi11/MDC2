@@ -4,7 +4,7 @@ import { friendlyError } from "@/lib/friendlyError";
 import { api } from "@/lib/api";
 import type { InventoryQueryResult } from "@/types";
 
-export const NAVIGATION_CACHE_STALE_TIME = 60_000;
+export const NAVIGATION_CACHE_STALE_TIME = 300_000;
 export const NAVIGATION_CACHE_GC_TIME = 15 * 60_000;
 export const INVENTORY_PAGE_SIZE = 50;
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Search, X } from "lucide-react";
 import { api } from "@/lib/api";
 
@@ -49,6 +49,11 @@ export function ReservedSerialDrawer({ partId, partName, partNumber, reservedCou
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
+  const [closing, setClosing] = useState(false);
+  const handleClose = useCallback(() => {
+    setClosing(true);
+    setTimeout(() => onClose(), 200);
+  }, [onClose]);
 
   useEffect(() => {
     setLoading(true);
@@ -96,13 +101,13 @@ export function ReservedSerialDrawer({ partId, partName, partNumber, reservedCou
       });
 
     setTimeout(() => searchRef.current?.focus(), 50);
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") handleClose(); };
     window.addEventListener("keydown", handler);
     return () => {
       mounted = false;
       window.removeEventListener("keydown", handler);
     };
-  }, [partId, onClose, reservedCount]);
+  }, [partId, onClose, handleClose, reservedCount]);
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -120,8 +125,8 @@ export function ReservedSerialDrawer({ partId, partName, partNumber, reservedCou
 
   return (
     <>
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 100 }} />
-      <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 620, background: "var(--bg-surface)", zIndex: 101, display: "flex", flexDirection: "column", boxShadow: "-4px 0 24px rgba(0,0,0,0.15)" }}>
+      <div onClick={handleClose} className={"drawer-backdrop" + (closing ? " closing" : "")} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 100 }} />
+      <div className={"drawer-panel" + (closing ? " closing" : "")} style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 620, background: "var(--bg-surface)", zIndex: 101, display: "flex", flexDirection: "column", boxShadow: "-4px 0 24px rgba(0,0,0,0.15)" }}>
         <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--line)", background: "var(--bg-surface-elevated)", flexShrink: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
@@ -132,7 +137,7 @@ export function ReservedSerialDrawer({ partId, partName, partNumber, reservedCou
                 <span style={{ fontSize: 11, color: "var(--muted)" }}>{reservedCount} reserved total</span>
               </div>
             </div>
-            <button type="button" onClick={onClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--muted)", padding: 4 }}>
+            <button type="button" onClick={handleClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--muted)", padding: 4 }}>
               <X size={20} />
             </button>
           </div>

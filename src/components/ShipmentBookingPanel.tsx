@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, useCallback, type FormEvent } from "react";
 import { api } from "@/lib/api";
 import { X } from "lucide-react";
 
@@ -27,6 +27,11 @@ type Props = {
 };
 
 export function ShipmentBookingPanel({ transfer, onClose, onBooked }: Props) {
+  const [closing, setClosing] = useState(false);
+  const handleClose = useCallback(() => {
+    setClosing(true);
+    setTimeout(() => onClose(), 200);
+  }, [onClose]);
   const [courier, setCourier] = useState(transfer.courierName ?? "");
   const [tracking, setTracking] = useState(transfer.trackingNumber ?? "");
   const [fixablySeries, setFixablySeries] = useState(transfer.fixablySeries ?? "");
@@ -66,8 +71,9 @@ export function ShipmentBookingPanel({ transfer, onClose, onBooked }: Props) {
 
   return (
     <>
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 100 }} />
+      <div onClick={handleClose} className={"drawer-backdrop" + (closing ? " closing" : "")} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 100 }} />
       <div role="dialog" aria-modal="true" aria-label="Book courier"
+        className={"drawer-panel" + (closing ? " closing" : "")}
         style={{
           position: "fixed", top: 0, right: 0, width: 420, height: "100vh",
           background: "var(--bg-surface)", zIndex: 101,
@@ -81,7 +87,7 @@ export function ShipmentBookingPanel({ transfer, onClose, onBooked }: Props) {
             <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", fontFamily: "monospace" }}>{transfer.transferNo}</div>
             <div style={{ fontSize: 12, color: "var(--muted)" }}>{transfer.destinationSite?.siteName ?? "—"}</div>
           </div>
-          <button type="button" onClick={onClose} style={{ background: "transparent", border: "none", color: "var(--muted)", cursor: "pointer", padding: 4 }}>
+          <button type="button" onClick={handleClose} style={{ background: "transparent", border: "none", color: "var(--muted)", cursor: "pointer", padding: 4 }}>
             <X size={18} />
           </button>
         </div>
@@ -199,12 +205,12 @@ export function ShipmentBookingPanel({ transfer, onClose, onBooked }: Props) {
 
           {/* Actions */}
           <div style={{ display: "flex", gap: 8, marginTop: "auto" }}>
-            <button type="button" onClick={onClose}
+            <button type="button" onClick={handleClose}
               style={{ flex: 1, border: "1px solid var(--line)", background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "7px 0", fontSize: 13, fontWeight: 600, color: "var(--text)", cursor: "pointer" }}>
               Cancel
             </button>
             <button type="submit" disabled={!canSubmit}
-              style={{ flex: 1, background: canSubmit ? "var(--blue)" : "var(--bg-surface)", color: canSubmit ? "#fff" : "var(--muted)", border: canSubmit ? "none" : "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 0", fontSize: 13, fontWeight: 600, cursor: canSubmit ? "pointer" : "not-allowed" }}>
+              style={{ flex: 1, background: canSubmit ? "var(--blue)" : "var(--bg-surface)", color: canSubmit ? "#fff" : "var(--muted)", border: canSubmit ? "none" : "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 0", fontSize: 13, fontWeight: 600, cursor: canSubmit ? "pointer" : "not-allowed", opacity: saving ? 0.7 : 1 }}>
               {saving ? "Saving…" : editMode ? "Update Booking" : "Confirm Booking"}
             </button>
           </div>
