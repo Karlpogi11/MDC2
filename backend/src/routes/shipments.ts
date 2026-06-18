@@ -21,9 +21,10 @@ shipmentsRouter.get("/pending", authMiddleware, requireRole(...SHIP), async (req
       t.id, t.transfer_no AS transferNo, t.invoice_ref AS invoiceRef,
       t.fixably_series AS fixablySeries,
       t.courier_name AS courierName, t.tracking_number AS trackingNumber,
+      t.tracking_link AS trackingLink,
       t.status, t.packed_at AS packedAt, t.booked_at AS bookedAt,
       t.created_at AS createdAt,
-      ds.site_name AS destSiteName, ds.site_code AS destSiteCode,
+      ds.site_name AS destSiteName, ds.site_code AS destSiteCode, ds.address AS destSiteAddress,
       rp.full_name AS reqFullName,
       bp.full_name AS bookedByName,
       (SELECT COUNT(*) FROM transfer_items ti WHERE ti.transfer_id = t.id) AS itemCount,
@@ -40,12 +41,32 @@ shipmentsRouter.get("/pending", authMiddleware, requireRole(...SHIP), async (req
   res.json({ data });
 });
 
+// GET /api/shipments/my-bookings — history of transfers booked by current user
+shipmentsRouter.get("/my-bookings", authMiddleware, requireRole(...SHIP), async (req, res) => {
+  const db = await getDb();
+  const [rows] = await db.execute(sql`
+    SELECT
+      t.id, t.transfer_no AS transferNo, t.status,
+      t.courier_name AS courierName, t.tracking_number AS trackingNumber,
+      t.tracking_link AS trackingLink,
+      t.booked_at AS bookedAt, t.created_at AS createdAt,
+      ds.site_name AS destSiteName, ds.site_code AS destSiteCode
+    FROM transfers t
+    LEFT JOIN sites ds ON ds.id = t.destination_site_id
+    WHERE t.booked_by = ${req.user!.id}
+      AND t.status NOT IN ('draft')
+    ORDER BY t.booked_at DESC
+    LIMIT 50
+  `);
+  res.json({ data: (rows as unknown as any[]) ?? [] });
+});
+
 // POST /api/shipments/:id/book
 // Shipping coordinator books a courier (draft → booked) or updates booking (booked → stays booked)
 shipmentsRouter.post("/:id/book", authMiddleware, requireRole(...SHIP), async (req, res) => {
   const db = await getDb();
   const id = queryString(req.params.id) ?? "";
-  const { courierName, trackingNumber, fixablySeries } = req.body;
+  const { courierName, trackingNumber, trackingLink, fixablySeries } = req.body;
 
   if (!id) { res.status(400).json({ error: "Invalid transfer ID" }); return; }
   if (!courierName?.trim()) {
@@ -76,6 +97,7 @@ shipmentsRouter.post("/:id/book", authMiddleware, requireRole(...SHIP), async (r
       ...(isUpdate ? {} : { status: "booked", bookedBy: req.user!.id, bookedAt: new Date() }),
       courierName: courierName.trim(),
       trackingNumber: trackingNumber?.trim() ?? null,
+      trackingLink: trackingLink?.trim() ?? null,
       fixablySeries: fixablySeries?.trim() ?? null,
     })
     .where(eq(transfers.id, id));
@@ -85,7 +107,7 @@ shipmentsRouter.post("/:id/book", authMiddleware, requireRole(...SHIP), async (r
     action: isUpdate ? "update" : "update",
     entityType: "transfer",
     entityId: id,
-    newValue: { status: isUpdate ? prev.status : "booked", courierName, trackingNumber, fixablySeries },
+    newValue: { status: isUpdate ? prev.status : "booked", courierName, trackingNumber, trackingLink, fixablySeries },
     note: isUpdate ? `Booking updated: ${courierName}` : `Courier booked: ${courierName}`,
   });
 

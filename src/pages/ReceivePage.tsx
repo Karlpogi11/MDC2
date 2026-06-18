@@ -197,7 +197,7 @@ export function ReceivePage() {
 function StandalonePage({ children }: { children: React.ReactNode }) {
   const { brandName } = useBranding();
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg-surface-elevated)", display: "flex", flexDirection: "column", alignItems: "center", padding: "32px 16px", fontFamily: "\"Inter\", \"Segoe UI\", Arial, sans-serif" }}>
+    <div style={{ minHeight: "100vh", background: "var(--bg-surface-elevated)", display: "flex", flexDirection: "column", alignItems: "center", padding: "32px 16px", fontFamily: "Inter, sans-serif" }}>
       <div style={{ width: "100%", maxWidth: 480 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 24 }}>
           <div style={{ width: 32, height: 32, background: "var(--nav-bg)", display: "flex", alignItems: "center", justifyContent: "center" }}>

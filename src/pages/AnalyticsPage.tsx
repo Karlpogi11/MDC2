@@ -435,7 +435,7 @@ function AreaChart({ data, keys, height = 190 }: {
             <line x1={pad.l} x2={W - pad.r} y1={y} y2={y}
               stroke="currentColor" strokeOpacity={i === ticks ? 0.15 : 0.07} strokeWidth={i === ticks ? 1 : 0.75} />
             {/* Y labels: 9px, 70% opacity — supporting info */}
-            <text x={pad.l - 8} y={y + 3} textAnchor="end" fontSize={8} fill="currentColor" opacity={0.4} fontFamily="system-ui">{lbl}</text>
+            <text x={pad.l - 8} y={y + 3} textAnchor="end" fontSize={8} fill="currentColor" opacity={0.4} fontFamily="Inter">{lbl}</text>
           </g>
         );
       })}
@@ -460,9 +460,9 @@ function AreaChart({ data, keys, height = 190 }: {
           {/* Peak annotation only on sparse, single-series charts to avoid clutter */}
           <circle cx={peakX} cy={peakY} r={4} fill={keys[0].color} stroke="currentColor" strokeOpacity={0.3} strokeWidth={2} />
           <text x={peakX + (flipPeak ? -10 : 10)} y={peakY - 10} textAnchor={flipPeak ? "end" : "start"}
-            fontSize={14} fontWeight="800" fill="currentColor" fontFamily="system-ui" letterSpacing="-0.4">{peakLabel}</text>
+            fontSize={14} fontWeight="800" fill="currentColor" fontFamily="Inter" letterSpacing="-0.4">{peakLabel}</text>
           <text x={peakX + (flipPeak ? -10 : 10)} y={peakY + 4} textAnchor={flipPeak ? "end" : "start"}
-            fontSize={9} fill={MUTED} opacity={0.6} fontFamily="system-ui">peak</text>
+            fontSize={9} fill={MUTED} opacity={0.6} fontFamily="Inter">peak</text>
         </>
       )}
 
@@ -495,7 +495,7 @@ function AreaChart({ data, keys, height = 190 }: {
               fontWeight={(isJan || isFirst) ? "600" : "400"}
               fill="currentColor"
               opacity={(isJan || isFirst) ? 0.6 : 0.4}
-              fontFamily="system-ui">{display}</text>
+              fontFamily="Inter">{display}</text>
           </g>
         );
       })}
@@ -506,7 +506,7 @@ function AreaChart({ data, keys, height = 190 }: {
           {keys.map((k, i) => (
             <g key={i} transform={`translate(${-i * 110}, 0)`}>
               <line x1={-18} x2={-6} y1={0} y2={0} stroke={k.color} strokeWidth={2} opacity={0.8} />
-              <text x={-22} y={4} textAnchor="end" fontSize={9} fill={MUTED} opacity={0.7} fontFamily="system-ui">{k.label}</text>
+              <text x={-22} y={4} textAnchor="end" fontSize={9} fill={MUTED} opacity={0.7} fontFamily="Inter">{k.label}</text>
             </g>
           ))}
         </g>
@@ -694,8 +694,8 @@ function DonutChart({ data, centerLabel }: { data: { name: string; value: number
       <svg viewBox={`0 0 ${size} ${size}`} style={{ width: size, height: size, flex: "0 0 auto" }}>
         {slices.map((s, i) => <path key={i} d={s.path} fill={s.color}><title>{s.name}: {s.value.toLocaleString()}</title></path>)}
         {/* Center: LARGE number (dominant) + tiny label (supporting) */}
-        <text x={cx} y={cy - 4} textAnchor="middle" fontSize={20} fontWeight="800" fill={INK} fontFamily="system-ui" letterSpacing="-0.8">{total.toLocaleString()}</text>
-        <text x={cx} y={cy + 14} textAnchor="middle" fontSize={8.5} fill={MUTED} opacity={0.65} fontFamily="system-ui" letterSpacing="0.6">{(centerLabel ?? "total").toUpperCase()}</text>
+        <text x={cx} y={cy - 4} textAnchor="middle" fontSize={20} fontWeight="800" fill={INK} fontFamily="Inter" letterSpacing="-0.8">{total.toLocaleString()}</text>
+        <text x={cx} y={cy + 14} textAnchor="middle" fontSize={8.5} fill={MUTED} opacity={0.65} fontFamily="Inter" letterSpacing="0.6">{(centerLabel ?? "total").toUpperCase()}</text>
       </svg>
       <div style={{ display: "grid", gap: 8, flex: "1 1 220px", minWidth: 220 }}>
         {data.map((d, i) => {

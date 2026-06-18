@@ -17,6 +17,7 @@ type Props = {
     invoiceRef?: string | null;
     courierName?: string | null;
     trackingNumber?: string | null;
+    trackingLink?: string | null;
     fixablySeries?: string | null;
     items?: { qty: number; part: { partNumber: string; partName: string } | null; serial: { serialNumber: string } | null }[];
     destinationSite: { siteName: string } | null;
@@ -32,15 +33,32 @@ export function ShipmentBookingPanel({ transfer, onClose, onBooked }: Props) {
     setClosing(true);
     setTimeout(() => onClose(), 200);
   }, [onClose]);
-  const [courier, setCourier] = useState(transfer.courierName ?? "");
-  const [tracking, setTracking] = useState(transfer.trackingNumber ?? "");
-  const [fixablySeries, setFixablySeries] = useState(transfer.fixablySeries ?? "");
+  const [courier, setCourier] = useState(transfer?.courierName ?? "");
+  const [tracking, setTracking] = useState(transfer?.trackingNumber ?? "");
+  const [trackingLink, setTrackingLink] = useState(transfer?.trackingLink ?? "");
+  const [fixablySeries, setFixablySeries] = useState(transfer?.fixablySeries ?? "");
   const [riderName, setRiderName] = useState("");
   const [customCourier, setCustomCourier] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const editMode = transfer.status === "booked";
+  // Reset form when a new transfer is opened
+  useEffect(() => {
+    if (!transfer) return;
+    setClosing(false);
+    setCourier(transfer.courierName ?? "");
+    setTracking(transfer.trackingNumber ?? "");
+    setTrackingLink(transfer.trackingLink ?? "");
+    setFixablySeries(transfer.fixablySeries ?? "");
+    setRiderName("");
+    setCustomCourier("");
+    setError(null);
+    setSaving(false);
+  }, [transfer]);
+
+  const open = !!transfer;
+
+  const editMode = transfer?.status === "booked";
 
   const isPickup = courier === "Pickup by Utility";
   const isOther = courier === "Other";
@@ -50,7 +68,7 @@ export function ShipmentBookingPanel({ transfer, onClose, onBooked }: Props) {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!canSubmit) return;
+    if (!canSubmit || !transfer) return;
     setSaving(true);
     setError(null);
 
@@ -58,6 +76,7 @@ export function ShipmentBookingPanel({ transfer, onClose, onBooked }: Props) {
       await api.post(`/shipments/${transfer.id}/book`, {
         courierName: effectiveCourier + (isPickup && riderName.trim() ? ` (${riderName.trim()})` : ""),
         trackingNumber: isPickup ? (riderName.trim() || "Utility pickup") : tracking.trim(),
+        trackingLink: trackingLink.trim() || null,
         fixablySeries: fixablySeries.trim() || null,
       });
       onBooked();
@@ -67,16 +86,16 @@ export function ShipmentBookingPanel({ transfer, onClose, onBooked }: Props) {
     setSaving(false);
   }
 
-  const totalQty = transfer.items ? transfer.items.reduce((sum, i) => sum + i.qty, 0) : 0;
+  const totalQty = transfer?.items ? transfer.items.reduce((sum, i) => sum + i.qty, 0) : 0;
 
   return (
-    <>
-      <div onClick={handleClose} className={"drawer-backdrop" + (closing ? " closing" : "")} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 100 }} />
+    <div style={{ display: open ? "" : "none" }}>
+      <div onClick={handleClose} className={"drawer-backdrop" + (closing ? " closing" : "")} style={{ position: "fixed", inset: 0, zIndex: 100 }} />
       <div role="dialog" aria-modal="true" aria-label="Book courier"
         className={"drawer-panel" + (closing ? " closing" : "")}
         style={{
           position: "fixed", top: 0, right: 0, width: 420, height: "100vh",
-          background: "var(--bg-surface)", zIndex: 101,
+          zIndex: 101,
           boxShadow: "-4px 0 24px rgba(0,0,0,0.12)",
           display: "flex", flexDirection: "column",
         }}
@@ -84,8 +103,8 @@ export function ShipmentBookingPanel({ transfer, onClose, onBooked }: Props) {
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", borderBottom: "1px solid var(--line)" }}>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", fontFamily: "monospace" }}>{transfer.transferNo}</div>
-            <div style={{ fontSize: 12, color: "var(--muted)" }}>{transfer.destinationSite?.siteName ?? "—"}</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", fontFamily: "monospace" }}>{transfer?.transferNo ?? ""}</div>
+            <div style={{ fontSize: 12, color: "var(--muted)" }}>{transfer?.destinationSite?.siteName ?? "—"}</div>
           </div>
           <button type="button" onClick={handleClose} style={{ background: "transparent", border: "none", color: "var(--muted)", cursor: "pointer", padding: 4 }}>
             <X size={18} />
@@ -96,18 +115,18 @@ export function ShipmentBookingPanel({ transfer, onClose, onBooked }: Props) {
         <form onSubmit={(e) => void handleSubmit(e)} style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
           {/* Parts summary */}
           <div style={{ marginBottom: 24, border: "1px solid var(--line)", borderRadius: "var(--radius)" }}>
-            <div style={{ padding: "10px 14px 6px", fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Items ({transfer.items?.length ?? "?"})</div>
+            <div style={{ padding: "10px 14px 6px", fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Items ({transfer?.items?.length ?? "?"})</div>
             <div style={{ padding: "0 14px" }}>
-              {transfer.items && transfer.items.slice(0, 10).map((item, i) => (
+              {transfer?.items && transfer.items.slice(0, 10).map((item, i) => (
                 <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--text)", marginBottom: 3 }}>
                   <span style={{ fontFamily: "monospace", fontWeight: 600 }}>{item.part?.partNumber ?? "—"}</span>
                   <span style={{ color: "var(--muted)" }}>x{item.qty}</span>
                 </div>
               ))}
-              {transfer.items && transfer.items.length > 10 && (
+              {transfer?.items && transfer.items.length > 10 && (
                 <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>+{transfer.items.length - 10} more items</div>
               )}
-              {!transfer.items && (
+              {!transfer?.items && (
                 <div style={{ fontSize: 12, color: "var(--muted)" }}>Loading items…</div>
               )}
             </div>
@@ -178,12 +197,23 @@ export function ShipmentBookingPanel({ transfer, onClose, onBooked }: Props) {
           )}
 
           {/* Fixably series */}
-          <div style={{ marginBottom: 24 }}>
+          <div style={{ marginBottom: 16 }}>
             <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 5 }}>Fixably series <span style={{ color: "var(--muted)", fontWeight: 400 }}>(optional)</span></label>
             <input
               value={fixablySeries}
               onChange={(e) => setFixablySeries(e.target.value)}
               placeholder="e.g. iPhone 15 Pro Max"
+              style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 10px", fontSize: 13, color: "var(--text)", background: "var(--bg-surface)", outline: "none" }}
+            />
+          </div>
+
+          {/* Tracking link */}
+          <div style={{ marginBottom: 24 }}>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 5 }}>Tracking link <span style={{ color: "var(--muted)", fontWeight: 400 }}>(optional)</span></label>
+            <input
+              value={trackingLink}
+              onChange={(e) => setTrackingLink(e.target.value)}
+              placeholder="https://..."
               style={{ width: "100%", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "7px 10px", fontSize: 13, color: "var(--text)", background: "var(--bg-surface)", outline: "none" }}
             />
           </div>
@@ -216,6 +246,6 @@ export function ShipmentBookingPanel({ transfer, onClose, onBooked }: Props) {
           </div>
         </form>
       </div>
-    </>
+    </div>
   );
 }

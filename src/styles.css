@@ -15,16 +15,18 @@
   --text: #1d1d1f;
   --muted: #86868b;
   --negative: #ff3b30;
-  --radius: 4px;
-  --radius-sm: 3px;
+  --radius: 6px;
+  --radius-sm: 4px;
   --radius-pill: 20px;
   --accent-glow: rgba(0,113,227,0.12);
   --focus-outline: #0071e3;
+  --font-mono: "JetBrains Mono", "SF Mono", Monaco, "Cascadia Code", "Consolas", monospace;
   color-scheme: light;
 }
 
 /* GSX2-matched dark theme — exact colors from user spec */
 html.dark-theme {
+  background-color: #1a1a1a;
   --bg-page:             #1a1a1a;
   --bg-surface:          #242424;
   --bg-surface-elevated: #2e2e2e;
@@ -48,11 +50,11 @@ html.dark-theme {
   --radius:              6px;
   --radius-sm:           4px;
   --radius-pill:         20px;
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 /* Smooth transitions for theme switching */
-body, .katana-app, header, nav, .sub-nav, .control-btn, .view-switch, .view-switch-btn, .checklist-summary-card, .checklist-metrics article, .checklist-gate-card, .checklist-item, .table-card, th, td, input, button {
+body, .katana-app, header, nav, .sub-nav, .control-btn, .view-switch, .view-switch-btn, .checklist-summary-card, .checklist-metrics article, .checklist-gate-card, .checklist-item, .table-card {
   transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
@@ -85,13 +87,16 @@ body, .katana-app, header, nav, .sub-nav, .control-btn, .view-switch, .view-swit
   background: var(--muted);
 }
 
-/* Clean, theme-matching focus indicators (removes generic browser blue outline) */
-/* Remove browser default focus outline on buttons; keep subtle outline on inputs */
+/* Clean, modern focus indicators — subtle glow instead of thick outlines */
 button:focus { outline: none; }
-button:focus-visible { outline: 1px solid var(--focus-outline); outline-offset: 2px; }
+button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg-page), 0 0 0 4px var(--focus-outline);
+}
 input:focus:not([data-plain]), select:focus, textarea:focus {
-  outline: 2px solid var(--focus-outline) !important;
-  outline-offset: -1px;
+  outline: none !important;
+  box-shadow: 0 0 0 1.5px var(--focus-outline) !important;
+  border-color: var(--focus-outline) !important;
 }
 
 input[data-plain]:focus { outline: none !important; box-shadow: none !important; }
@@ -137,7 +142,7 @@ body {
   background: var(--bg-page);
   color: var(--text);
   font-family: "Inter", "Segoe UI", Arial, sans-serif;
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11" !important;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -181,6 +186,7 @@ button {
 .katana-app {
   min-height: 100vh;
   background: var(--bg-page);
+  background-color: var(--bg-page);
 }
 
 .global-nav {
@@ -238,7 +244,7 @@ html:not(.dark-theme) .global-nav {
 
 .brand-word {
   font-size: 14px;
-  font-family: "SF Pro Rounded", "Nunito", "Varela Round", "Inter", "Segoe UI", sans-serif;
+  font-family: "Nunito", "Inter", "SF Pro Rounded", "Varela Round", sans-serif;
   font-weight: 800;
   letter-spacing: 0.5px;
   text-transform: uppercase;
@@ -427,9 +433,10 @@ html:not(.dark-theme) .global-nav {
   font-size: 13px;
   padding: 14px 22px 11px;
   font-weight: 600;
-  border-bottom: 4px solid transparent;
+  border-bottom: 2px solid transparent;
   cursor: pointer;
   white-space: nowrap;
+  transition: border-color 0.15s ease, color 0.15s ease;
 }
 
 .sub-tab.active {
@@ -714,14 +721,13 @@ td {
 }
 
 td {
-  border-right: 1px solid var(--line);
+  border-right: none;
 }
 
 tbody tr:hover td {
   background: rgba(0,0,0,0.04);
 }
 
-td:last-child,
 tfoot td {
   border-right: none;
 }
@@ -1199,7 +1205,7 @@ th .col-resize-handle:active::after {
 
 /* ── react-datepicker overrides ──────────────────────────────────────────── */
 .react-datepicker {
-  font-family: "Inter", "Segoe UI", Arial, sans-serif !important;
+  font-family: "Inter", sans-serif !important;
   font-size: 13px !important;
   border: 1px solid #d0d0d0 !important;
   border-radius: 0 !important;
@@ -1268,12 +1274,15 @@ th .col-resize-handle:active::after {
 }
 
 .drawer-backdrop {
+  background-color: var(--overlay, rgba(0,0,0,0.45));
   animation: drawer-fade-in 0.15s ease-out;
 }
 .drawer-backdrop.closing {
+  background-color: var(--overlay, rgba(0,0,0,0.45));
   animation: drawer-fade-out 0.15s ease-out forwards;
 }
 .drawer-panel {
+  background: var(--bg-surface);
   animation: drawer-slide-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .drawer-panel.closing {
@@ -1406,10 +1415,8 @@ html.dark-theme td {
   background: var(--bg-surface) !important;
   color: var(--text) !important;
   border-bottom: 1px solid var(--line-soft) !important;
-  border-right: 1px solid var(--line-soft) !important;
+  border-right: none !important;
 }
-
-html.dark-theme td:last-child { border-right: none !important; }
 
 html.dark-theme tr:hover td { background: rgba(255,255,255,0.04) !important; }
 
@@ -1629,7 +1636,10 @@ html.dark-theme ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 .drawer-search:focus, .correction-search:focus { outline: none !important; border: none !important; box-shadow: none !important; }
 
 /* Bold all monospace text (serial numbers, part numbers, transfer refs) */
-[style*="monospace"], code { font-weight: 700 !important; }
+[style*="monospace"], code {
+  font-family: var(--font-mono) !important;
+  font-weight: 700 !important;
+}
 
 input[type="file"] { appearance: none; background: transparent !important; border: none !important; box-shadow: none !important; color: transparent !important; }
 input[type="file"]::-webkit-file-upload-button { visibility: hidden; display: none; width: 0; height: 0; padding: 0; border: none; }
@@ -1637,10 +1647,10 @@ input[type="file"]::file-selector-button { visibility: hidden; display: none; wi
 input[type="checkbox"], input[type="radio"] { accent-color: var(--blue); }
 input[type="checkbox"] {
   appearance: none; -webkit-appearance: none;
-  width: 15px; height: 15px; border-radius: 3px; flex-shrink: 0;
+  width: 16px; height: 16px; border-radius: 4px; flex-shrink: 0;
   border: 1.5px solid var(--line); background: var(--bg-surface-elevated);
   cursor: pointer; position: relative; vertical-align: middle;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
 input[type="checkbox"]:checked {
   background: var(--blue); border-color: var(--blue);
@@ -1652,3 +1662,23 @@ input[type="checkbox"]:checked::after {
 }
 
 html.dark-theme th { color: #ffffff !important; --muted: #ffffff; }
+
+/* Drawer panel dark mode */
+html.dark-theme .drawer-panel { background: var(--bg-surface) !important; }
+html.dark-theme .drawer-panel select { background: var(--bg-surface) !important; color: var(--text) !important; }
+html.dark-theme .drawer-panel select option { background: var(--bg-surface-elevated); color: var(--text); }
+html.dark-theme .drawer-panel input { background: var(--bg-surface) !important; color: var(--text) !important; }
+
+/* Force backgrounds on main content to prevent disappearing when drawer mounts */
+html.dark-theme .katana-app,
+html.dark-theme #root,
+html.dark-theme body,
+html.dark-theme html {
+  background-color: var(--bg-page) !important;
+}
+
+/* Coordinator dashboard main area */
+.coordinator-dashboard {
+  background-color: var(--bg-page);
+  transform: translateZ(0);
+}

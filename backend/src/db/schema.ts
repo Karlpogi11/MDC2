@@ -109,6 +109,7 @@ export const transfers = mysqlTable("transfers", {
   fixablySeries: varchar("fixably_series", { length: 50 }),
   courierName: varchar("courier_name", { length: 100 }),
   trackingNumber: varchar("tracking_number", { length: 100 }),
+  trackingLink: varchar("tracking_link", { length: 500 }),
   bookedBy: uuid("booked_by"),
   bookedAt: timestamp("booked_at"),
   shippedBy: uuid("shipped_by"),

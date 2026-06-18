@@ -32,18 +32,24 @@ html[data-theme="light"] {
 
   --focus-outline: #3a88f8;
 
-  --radius: 3px;
-  --radius-sm: 2px;
+  --radius: 6px;
+  --radius-sm: 4px;
   --radius-pill: 999px;
 
   --overlay: rgba(14, 18, 25, 0.45);
   --shadow-modal: 0 12px 30px rgba(10, 14, 22, 0.2);
+  --font-mono: "JetBrains Mono", "SF Mono", Monaco, "Cascadia Code", "Consolas", monospace;
 
+  color-scheme: light;
+}
+
+html.dark-theme {
   color-scheme: light;
 }
 
 html.dark-theme,
 html[data-theme="dark"] {
+  background-color: #202020 !important;
   /* Exact GSX2 dark palette */
   --bg-page:             #202020;
   --bg-surface:          #000000;      /* Table/card background — black */
@@ -75,19 +81,18 @@ html[data-theme="dark"] {
   --overlay:      rgba(0, 0, 0, 0.62);
   --shadow-modal: 0 12px 32px rgba(0, 0, 0, 0.60), 0 2px 8px rgba(0, 0, 0, 0.40);
 
-  color-scheme: dark;
 }
 
 html,
 body,
 #root,
 .katana-app {
-  background: var(--bg-page);
+  background-color: var(--bg-page);
   color: var(--text);
 }
 
 body {
-  font-family: "Segoe UI Variable", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  font-family: "Inter", "Segoe UI Variable", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
 }
 
 button,
@@ -117,8 +122,9 @@ button:focus-visible,
 input:focus,
 select:focus,
 textarea:focus {
-  outline: 2px solid var(--focus-outline) !important;
-  outline-offset: -1px;
+  outline: none !important;
+  box-shadow: 0 0 0 1.5px var(--focus-outline) !important;
+  border-color: var(--focus-outline) !important;
 }
 
 .global-nav {
@@ -149,7 +155,7 @@ html[data-theme="dark"] .global-nav {
 
 .brand-word {
   color: var(--nav-active);
-  font-family: "Segoe UI Variable Display", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  font-family: "Nunito", "Segoe UI Variable Display", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   font-size: 19px;
   font-weight: 650;
   letter-spacing: 0.2px;
@@ -388,7 +394,7 @@ html[data-theme="dark"] .global-nav {
   color: var(--muted);
   font-size: 12px;
   padding: 12px 14px 10px;
-  border-bottom-width: 3px;
+  border-bottom-width: 2px;
 }
 
 .sub-tab.active {
@@ -694,3 +700,22 @@ html.dark-theme [style*="background:#f3e8ff"] {
     width: calc(100vw - 14px);
   }
 }
+
+html.dark-theme .drawer-backdrop {
+  background-color: rgba(0, 0, 0, 0.08);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+html.dark-theme .drawer-backdrop.closing { background-color: rgba(0, 0, 0, 0.08); }
+html.dark-theme .drawer-panel { background: var(--bg-surface) !important; }
+html.dark-theme html,
+html.dark-theme body,
+html.dark-theme #root,
+html.dark-theme .katana-app {
+  background-color: var(--bg-page) !important;
+}
+html.dark-theme .drawer-panel select { background: var(--bg-surface) !important; color: var(--text) !important; }
+html.dark-theme .drawer-panel select option { background: var(--bg-surface-elevated); color: var(--text); }
+html.dark-theme .drawer-panel input { background: var(--bg-surface) !important; color: var(--text) !important; }
+
+.coordinator-dashboard { background-color: var(--bg-page); }

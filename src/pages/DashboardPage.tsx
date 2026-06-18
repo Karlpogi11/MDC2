@@ -1,6 +1,6 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, memo } from "react";
 import { useNavigate } from "react-router-dom";
-import { PackagePlus, ArrowRightLeft, AlertTriangle, Search, CheckCircle2, Truck, Package, Clock, MapPin, Hash, User } from "lucide-react";
+import { PackagePlus, ArrowRightLeft, AlertTriangle, Search, CheckCircle2, Truck, Package, Clock, Copy, Check, ExternalLink } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { AppLayout } from "@/components/AppLayout";
@@ -101,9 +101,7 @@ function GlobalSearch() {
           {loading && <div style={{ padding: "10px 14px", fontSize: 12, color: "var(--muted)" }}>Searching…</div>}
           {!loading && results.map((r, i) => (
             <div key={i} onMouseDown={() => { navigate(r.path); setQ(""); setOpen(false); }}
-              style={{ padding: "8px 14px", cursor: "pointer", borderBottom: "1px solid var(--line-soft)", display: "flex", alignItems: "center", gap: 10 }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
+              style={{ padding: "8px 14px", cursor: "pointer", borderBottom: "1px solid var(--line-soft)", display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{ fontSize: 10, fontWeight: 600, color: "var(--blue)", width: 48, flexShrink: 0, textTransform: "uppercase" }}>{TYPE_LABEL[r.type]}</span>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", fontFamily: r.type !== "part" ? "monospace" : "inherit", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.label}</div>
@@ -154,15 +152,17 @@ export function DashboardPage() {
   const [pendingItems, setPendingItems] = useState<any[]>([]);
   const [pendingLoading, setPendingLoading] = useState(true);
   const [bookTarget, setBookTarget] = useState<any | null>(null);
-  const [bookLoading, setBookLoading] = useState(false);
   const [bookSuccess, setBookSuccess] = useState<string | null>(null);
-  const [dispatchingId, setDispatchingId] = useState<string | null>(null);
-  const [dispatchConfirm, setDispatchConfirm] = useState<string | null>(null);
+  const [myBookings, setMyBookings] = useState<any[]>([]);
 
   const fetchPending = useCallback(async () => {
     try {
-      const res = await api.get("/shipments/pending");
-      setPendingItems(res?.data ?? []);
+      const [pendingRes, bookingsRes] = await Promise.all([
+        api.get("/shipments/pending"),
+        api.get("/shipments/my-bookings"),
+      ]);
+      setPendingItems(pendingRes?.data ?? []);
+      setMyBookings(bookingsRes?.data ?? []);
     } catch {}
     setPendingLoading(false);
   }, []);
@@ -174,26 +174,18 @@ export function DashboardPage() {
     return () => clearInterval(interval);
   }, [isCoordinator, fetchPending]);
 
-  async function handleDispatch(transferId: string) {
-    setDispatchingId(transferId);
-    try {
-      await api.post(`/shipments/${transferId}/dispatch`, {});
-      setDispatchConfirm(null);
-      await fetchPending();
-    } catch (err) {
-      setDispatchConfirm(null);
-      alert(friendlyError(err instanceof Error ? err : new Error(String(err))));
-    }
-    setDispatchingId(null);
-  }
-
   const draftItems = pendingItems.filter((p: any) => p.status === "draft");
-  const bookedItems = pendingItems.filter((p: any) => p.status === "booked");
-  const packedItems = pendingItems.filter((p: any) => p.status === "packed");
+
+  const handleBookClick = useCallback(async (item: any) => {
+    try {
+      const full = await api.get(`/transfers/${item.id}`);
+      if (full) setBookTarget(full);
+    } catch {}
+  }, []);
 
   return (
     <AppLayout activeModule="/dashboard">
-      <main style={{ maxWidth: 1080, margin: "0 auto", padding: "28px 24px" }}>
+      <main className="coordinator-dashboard" style={{ maxWidth: 1080, margin: "0 auto", padding: "28px 24px" }}>
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, gap: 16 }}>
           <div>
@@ -220,26 +212,11 @@ export function DashboardPage() {
                 {bookSuccess}
               </div>
             )}
-            <ShippingQueue
-              draftItems={draftItems}
-              bookedItems={bookedItems}
-              packedItems={packedItems}
+            <CoordinatorDashboard
+              pendingItems={pendingItems}
               pendingLoading={pendingLoading}
-              onBookClick={async (item) => {
-                setBookLoading(true);
-                try {
-                  const full = await api.get(`/transfers/${item.id}`);
-                  if (full) {
-                    setBookTarget(full);
-                  }
-                } catch {}
-                setBookLoading(false);
-              }}
-              dispatchConfirm={dispatchConfirm}
-              onDispatchClick={(id) => setDispatchConfirm(id)}
-              onDispatchConfirm={handleDispatch}
-              dispatchingId={dispatchingId}
-              onCancelDispatch={() => setDispatchConfirm(null)}
+              myBookings={myBookings}
+              onBookClick={handleBookClick}
               navigate={navigate}
             />
           </>
@@ -269,8 +246,6 @@ export function DashboardPage() {
                     <div key={p.status}
                       onClick={() => navigate(`/transfers?status=${p.status}`)}
                       style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 12px", cursor: "pointer", borderBottom: "1px solid var(--line)" }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                     >
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <span style={{ width: 8, height: 8, borderRadius: "50%", background: PIPELINE_COLOR[p.status], flexShrink: 0 }} />
@@ -344,32 +319,20 @@ export function DashboardPage() {
           </>
         )}
 
-        {/* Quick Actions (same for both) */}
-        <section className="table-card" style={{ padding: "14px 16px", marginTop: 24 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 12 }}>Quick Actions</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-            <QuickAction label="New Transfer" onClick={() => navigate("/transfers/new")} />
-            {!isCoordinator && <QuickAction label="Stock-In" onClick={() => navigate("/stock-in")} />}
-            <QuickAction label="View Transfers" onClick={() => navigate("/transfers")} />
-            <QuickAction label="Exports" onClick={() => navigate("/exports")} />
-            {!isCoordinator && <QuickAction label="Reconcile" onClick={() => navigate("/physical-count")} />}
-          </div>
-        </section>
+
       </main>
 
-      {/* Booking panel (coordinator only) */}
-      {bookTarget && (
-        <ShipmentBookingPanel
-          transfer={bookTarget}
-          onClose={() => setBookTarget(null)}
-          onBooked={() => {
-            setBookTarget(null);
-            fetchPending();
-            setBookSuccess("Courier booked successfully");
-            setTimeout(() => setBookSuccess(null), 4000);
-          }}
-        />
-      )}
+      {/* Booking panel — always mounted, visibility toggled internally to preserve compositing layers */}
+      <ShipmentBookingPanel
+        transfer={bookTarget}
+        onClose={() => setBookTarget(null)}
+        onBooked={() => {
+          setBookTarget(null);
+          fetchPending();
+          setBookSuccess("Courier booked successfully");
+          setTimeout(() => setBookSuccess(null), 4000);
+        }}
+      />
     </AppLayout>
   );
 }
@@ -389,6 +352,9 @@ type QueueTransfer = {
   bookedAt: string | null;
   destSiteName: string;
   destSiteCode: string;
+  destSiteAddress: string | null;
+  trackingLink: string | null;
+  bookedAt: string | null;
   itemCount: number;
   totalUnits: number;
   reqFullName: string;
@@ -396,250 +362,204 @@ type QueueTransfer = {
   trackingNumber: string;
 };
 
-function ShippingQueue({
-  draftItems, bookedItems, packedItems, pendingLoading,
-  onBookClick, dispatchConfirm, onDispatchClick,
-  onDispatchConfirm, dispatchingId, onCancelDispatch, navigate,
+const BOOKING_STATUS_META: Record<string, { label: string; color: string }> = {
+  booked:     { label: "Booked", color: "var(--blue)" },
+  packed:     { label: "Packed", color: "var(--warning)" },
+  in_transit: { label: "In Transit", color: "#16a34a" },
+  received:   { label: "Received", color: "var(--muted)" },
+  cancelled:  { label: "Cancelled", color: "var(--negative)" },
+};
+
+function BookingHistory({ items }: { items: any[] }) {
+  if (items.length === 0) {
+    return (
+      <div style={{ padding: "20px 14px", textAlign: "center", fontSize: 12, color: "var(--muted)" }}>
+        No bookings yet
+      </div>
+    );
+  }
+  return (
+    <div>
+      {items.map((b: any) => {
+        const meta = BOOKING_STATUS_META[b.status] ?? { label: b.status, color: "var(--muted)" };
+        return (
+          <div key={b.id} style={{ padding: "10px 14px", borderBottom: "1px solid var(--line-soft)", fontSize: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
+              <span style={{ fontFamily: "monospace", fontWeight: 700, color: "var(--link)", fontSize: 12 }}>{b.transferNo}</span>
+              <span style={{ fontSize: 10, padding: "1px 7px", borderRadius: "var(--radius-pill)", background: meta.color + "22", color: meta.color, fontWeight: 600 }}>{meta.label}</span>
+            </div>
+            <div style={{ color: "var(--muted)", fontSize: 11 }}>{b.destSiteName}</div>
+            <div style={{ display: "flex", justifyContent: "space-between", color: "var(--muted)", fontSize: 10, marginTop: 2 }}>
+              <span>{b.bookedAt ? timeAgo(b.bookedAt) : ""}</span>
+              {b.trackingLink && (
+                <a href={b.trackingLink} target="_blank" rel="noopener noreferrer"
+                  style={{ color: "var(--blue)", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 3 }}>
+                  Track <ExternalLink size={10} />
+                </a>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+const CoordinatorDashboard = memo(function CoordinatorDashboard({
+  pendingItems, pendingLoading, myBookings,
+  onBookClick, navigate,
 }: {
-  draftItems: QueueTransfer[];
-  bookedItems: QueueTransfer[];
-  packedItems: QueueTransfer[];
+  pendingItems: QueueTransfer[];
   pendingLoading: boolean;
+  myBookings: any[];
   onBookClick: (t: any) => void;
-  dispatchConfirm: string | null;
-  onDispatchClick: (id: string) => void;
-  onDispatchConfirm: (id: string) => void;
-  dispatchingId: string | null;
-  onCancelDispatch: () => void;
   navigate: (path: string) => void;
 }) {
-  const total = draftItems.length + bookedItems.length + packedItems.length;
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const draftItems = pendingItems.filter((p) => p.status === "draft");
+  const count = draftItems.length;
 
-  function TicketCard({ item, kind }: { item: QueueTransfer; kind: "book" | "booked" | "dispatch" }) {
+  if (pendingLoading) {
     return (
-      <div style={{
-        background: "var(--bg-surface)",
-        border: "1px solid var(--line)",
-        borderRadius: "var(--radius)",
-        padding: "14px 16px",
-        display: "flex",
-        flexDirection: "column",
-        gap: 10,
-        transition: "border-color 0.15s",
-      }}>
-        {/* Top row: transfer no + age badge */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <button type="button" onClick={() => navigate(`/transfers/${item.id}`)}
-            style={{ fontSize: 14, fontWeight: 700, fontFamily: "monospace", color: "var(--link)", background: "none", border: "none", cursor: "pointer", padding: 0, textAlign: "left" }}>
-            {item.transferNo}
-          </button>
-          <span style={{
-            fontSize: 11, fontWeight: 700, fontFamily: "monospace",
-            padding: "2px 8px", borderRadius: "var(--radius-pill)",
-            background: ageColor(item.createdAt), color: "#fff", flexShrink: 0,
-            opacity: 0.92,
-          }}>
-            {ageLabel(item.createdAt)}
-          </span>
-        </div>
-
-        {/* Destination */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text)" }}>
-          <MapPin size={13} color="var(--muted)" style={{ opacity: 0.7 }} />
-          <span style={{ fontWeight: 500 }}>{item.destSiteName}</span>
-          <span style={{ color: "var(--muted)", fontFamily: "monospace", fontSize: 12 }}>{item.destSiteCode}</span>
-        </div>
-
-        {/* Meta */}
-        <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 12, color: "var(--muted)" }}>
-          <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-            <Package size={12} style={{ opacity: 0.6 }} /> {item.totalUnits} unit{item.totalUnits !== 1 ? "s" : ""}
-          </span>
-          {item.reqFullName && (
-            <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-              <User size={12} style={{ opacity: 0.6 }} /> {item.reqFullName}
-            </span>
-          )}
-        </div>
-
-        {/* Action */}
-        {kind === "booked" ? (
-          <div onClick={e => e.stopPropagation()} style={{ fontSize: 12, color: "var(--muted)", display: "flex", flexDirection: "column", gap: 4 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--muted)", display: "inline-block" }} />
-              Awaiting packing
-            </div>
-            {item.bookedAt && (
-              <span style={{ fontSize: 11, color: "var(--muted)", paddingLeft: 12 }}>
-                Booked {timeAgo(item.bookedAt)}
-              </span>
-            )}
-          </div>
-        ) : kind === "book" ? (
-          <button type="button" onClick={e => { e.stopPropagation(); onBookClick(item); }}
-            style={{
-              width: "100%", padding: "7px 0", fontSize: 13, fontWeight: 600,
-              background: "var(--link)", color: "#fff", border: "none",
-              borderRadius: "var(--radius)", cursor: "pointer",
-              opacity: 1, transition: "opacity 0.15s",
-            }}>
-            Book Courier
-          </button>
-        ) : dispatchConfirm === item.id ? (
-          <div onClick={e => e.stopPropagation()} style={{ display: "flex", gap: 8 }}>
-            <button type="button" onClick={() => onDispatchConfirm(item.id)} disabled={dispatchingId === item.id}
-              style={{
-                flex: 1, padding: "7px 0", fontSize: 13, fontWeight: 600,
-                background: dispatchingId === item.id ? "var(--muted)" : "var(--negative)",
-                color: "#fff", border: "none", borderRadius: "var(--radius)", cursor: "pointer",
-                opacity: dispatchingId === item.id ? 0.6 : 1,
-              }}>
-              {dispatchingId === item.id ? "Dispatching…" : "Confirm Dispatch"}
-            </button>
-            <button type="button" onClick={onCancelDispatch}
-              style={{
-                padding: "7px 12px", fontSize: 13, fontWeight: 600,
-                background: "transparent", color: "var(--text)",
-                border: "1px solid var(--line)", borderRadius: "var(--radius)", cursor: "pointer",
-              }}>
-              Cancel
-            </button>
-          </div>
-        ) : (
-          <button type="button" onClick={e => { e.stopPropagation(); onDispatchClick(item.id); }}
-            style={{
-              width: "100%", padding: "7px 0", fontSize: 13, fontWeight: 600,
-              background: "var(--link)", color: "#fff", border: "none",
-              borderRadius: "var(--radius)", cursor: "pointer",
-              transition: "opacity 0.15s",
-            }}>
-            {item.courierName ? `Dispatch (${item.courierName})` : "Dispatch"}
-          </button>
-        )}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 60, gap: 12, color: "var(--muted)", fontSize: 14 }}>
+        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+        <span style={{ width: 20, height: 20, borderRadius: "50%", border: "2px solid var(--line)", borderTopColor: "var(--blue)", animation: "spin 0.8s linear infinite", display: "inline-block" }} />
+        Loading queue…
       </div>
     );
   }
 
-  if (pendingLoading) {
-    return <div style={{ padding: 40, textAlign: "center", color: "var(--muted)", fontSize: 14 }}>Loading queue…</div>;
-  }
-
   return (
-    <>
-      {/* Live indicator bar */}
-      <div style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        marginBottom: 20, padding: "10px 16px",
-        background: total > 0 ? "var(--bg-surface)" : "transparent",
-        border: `1px solid ${total > 0 ? "var(--link)" : "var(--line)"}`,
-        borderRadius: "var(--radius)",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{
-            width: 8, height: 8, borderRadius: "50%",
-            background: total > 0 ? "var(--link)" : "var(--muted)",
-            display: "inline-block",
-            animation: total > 0 ? "pulse 2s infinite" : "none",
-          }} />
-          <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>
-            {total > 0 ? `${total} transfer${total !== 1 ? "s" : ""} waiting` : "All clear"}
-          </span>
+    <div style={{ display: "grid", gridTemplateColumns: "3fr 1fr", gap: 20, alignItems: "start" }}>
+      {/* Main: awaiting courier table */}
+      {count === 0 ? (
+        <div style={{
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          padding: "48px 24px", gap: 12,
+          border: "1px dashed var(--line)", borderRadius: "var(--radius)",
+          background: "var(--bg-surface)",
+        }}>
+          <div style={{ fontSize: 32, opacity: 0.25, lineHeight: 1 }}>✓</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>All assigned</div>
+          <div style={{ fontSize: 12, color: "var(--muted)" }}>No transfers awaiting courier</div>
         </div>
-        {total > 0 && (
-          <span style={{
-            fontSize: 11, fontWeight: 600, padding: "3px 10px",
-            borderRadius: "var(--radius-pill)",
-            background: "var(--bg-surface-elevated)",
-            color: "var(--link)",
+      ) : (
+        <section style={{
+          background: "var(--bg-surface)", borderRadius: "var(--radius)",
+          border: "1px solid var(--line)", overflow: "hidden",
+        }}>
+          <div style={{
+            padding: "14px 18px", borderBottom: "1px solid var(--line)",
+            display: "flex", justifyContent: "space-between", alignItems: "center",
           }}>
-            {draftItems.length} need booking · {bookedItems.length} booked · {packedItems.length} ready to dispatch
-          </span>
-        )}
-      </div>
-
-      {/* Three-column queue */}
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 20, marginBottom: 24 }}>
-        {/* Needs Booking */}
-        <section>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>Needs Booking</span>
-            {draftItems.length > 0 && (
-              <span style={{
-                fontSize: 11, fontWeight: 700, padding: "1px 8px",
-                borderRadius: "var(--radius-pill)",
-                background: "var(--bg-surface-elevated)",
-                color: "var(--link)",
-              }}>
-                {draftItems.length}
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Clock size={16} color="var(--blue)" />
+              <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>
+                Awaiting Courier
               </span>
-            )}
+              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>
+                · {count} transfer{count !== 1 ? "s" : ""}
+              </span>
+            </div>
+            <button type="button" onClick={() => navigate("/transfers")}
+              style={{ fontSize: 12, color: "var(--blue)", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>
+              View all →
+            </button>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {draftItems.length === 0 ? (
-              <div style={{ padding: "24px 16px", textAlign: "center", fontSize: 13, color: "var(--muted)", background: "var(--bg-surface)", border: "1px dashed var(--line)", borderRadius: "var(--radius)" }}>
-                No transfers to book
-              </div>
-            ) : draftItems.map((item: any) => (
-              <TicketCard key={item.id} item={item} kind="book" />
-            ))}
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: "var(--bg-surface-elevated)" }}>
+                  <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}>Transfer</th>
+                  <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}>Destination</th>
+                  <th style={{ padding: "8px 14px", textAlign: "center", fontWeight: 600, color: "var(--muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}>Units</th>
+                  <th style={{ padding: "8px 14px", textAlign: "center", fontWeight: 600, color: "var(--muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}>Waiting</th>
+                  <th style={{ padding: "8px 14px", textAlign: "right", fontWeight: 600, color: "var(--muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {draftItems.map((item: QueueTransfer) => (
+                  <tr key={item.id} style={{ borderBottom: "1px solid var(--line-soft)" }}>
+                    <td style={{ padding: "10px 14px" }}>
+                      <button type="button" onClick={() => navigate(`/transfers/${item.id}`)}
+                        style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 700, color: "var(--link)", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                        {item.transferNo}
+                      </button>
+                      {item.reqFullName && (
+                        <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 1 }}>
+                          {item.reqFullName}
+                        </div>
+                      )}
+                    </td>
+                    <td style={{ padding: "10px 14px", color: "var(--text)" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ fontWeight: 500 }}>{item.destSiteName}</span>
+                        <button type="button" title="Copy address"
+                          onClick={() => {
+                            const addr = item.destSiteAddress ?? "";
+                            navigator.clipboard.writeText(addr);
+                            setCopiedId(item.id);
+                            setTimeout(() => setCopiedId(null), 1500);
+                          }}
+                          style={{ background: "none", border: "none", cursor: "pointer", padding: 2, display: "flex", color: "var(--muted)", opacity: 0.5, transition: "opacity 0.15s" }}
+                          onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+                          onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.5")}>
+                          {copiedId === item.id ? <Check size={12} /> : <Copy size={12} />}
+                        </button>
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--muted)", fontFamily: "monospace" }}>{item.destSiteCode}</div>
+                    </td>
+                    <td style={{ padding: "10px 14px", textAlign: "center", color: "var(--muted)", fontSize: 13, fontWeight: 600 }}>
+                      {item.totalUnits}
+                    </td>
+                    <td style={{ padding: "10px 14px", textAlign: "center" }}>
+                      <span style={{
+                        fontSize: 11, fontWeight: 700, fontFamily: "monospace",
+                        padding: "2px 10px", borderRadius: "var(--radius-pill)",
+                        color: "#fff",
+                        background: ageColor(item.createdAt),
+                      }}>
+                        {ageLabel(item.createdAt)}
+                      </span>
+                    </td>
+                    <td style={{ padding: "10px 14px", textAlign: "right" }}>
+                      <button type="button" onClick={() => onBookClick(item)}
+                        style={{
+                          padding: "6px 16px", fontSize: 12, fontWeight: 700,
+                          background: "var(--blue)", color: "#fff",
+                          border: "none", borderRadius: "var(--radius)",
+                          cursor: "pointer", whiteSpace: "nowrap",
+                          transition: "opacity 0.15s",
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.85")}
+                        onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}>
+                        Book Courier
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </section>
+      )}
 
-        {/* Booked */}
-        <section>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>Booked</span>
-            {bookedItems.length > 0 && (
-              <span style={{
-                fontSize: 11, fontWeight: 700, padding: "1px 8px",
-                borderRadius: "var(--radius-pill)",
-                background: "var(--bg-surface-elevated)",
-                color: "var(--muted)",
-              }}>
-                {bookedItems.length}
-              </span>
-            )}
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {bookedItems.length === 0 ? (
-              <div style={{ padding: "24px 16px", textAlign: "center", fontSize: 13, color: "var(--muted)", background: "var(--bg-surface)", border: "1px dashed var(--line)", borderRadius: "var(--radius)" }}>
-                No booked transfers
-              </div>
-            ) : bookedItems.map((item: any) => (
-              <TicketCard key={item.id} item={item} kind="booked" />
-            ))}
-          </div>
-        </section>
-
-        {/* Ready to Dispatch */}
-        <section>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>Ready to Dispatch</span>
-            {packedItems.length > 0 && (
-              <span style={{
-                fontSize: 11, fontWeight: 700, padding: "1px 8px",
-                borderRadius: "var(--radius-pill)",
-                background: "var(--bg-surface-elevated)",
-                color: "var(--warning)",
-              }}>
-                {packedItems.length}
-              </span>
-            )}
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {packedItems.length === 0 ? (
-              <div style={{ padding: "24px 16px", textAlign: "center", fontSize: 13, color: "var(--muted)", background: "var(--bg-surface)", border: "1px dashed var(--line)", borderRadius: "var(--radius)" }}>
-                No transfers to dispatch
-              </div>
-            ) : packedItems.map((item: any) => (
-              <TicketCard key={item.id} item={item} kind="dispatch" />
-            ))}
-          </div>
-        </section>
-      </div>
-    </>
+      {/* Sidebar: booking history */}
+      <section style={{
+        background: "var(--bg-surface)", borderRadius: "var(--radius)",
+        border: "1px solid var(--line)", overflow: "hidden",
+      }}>
+        <div style={{
+          padding: "12px 14px", borderBottom: "1px solid var(--line)",
+          fontSize: 12, fontWeight: 700, color: "var(--text)",
+        }}>
+          My Bookings
+        </div>
+        <BookingHistory items={myBookings} />
+      </section>
+    </div>
   );
-}
+});
 
 function getGreeting(): string {
   const h = new Date().getHours();
