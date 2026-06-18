@@ -26,7 +26,7 @@ type AuthState =
 
 type AuthContextValue = {
   state: AuthState;
-  signInWithUsername: (username: string, password: string) => Promise<string | null>;
+  signInWithUsername: (username: string, password: string, rememberMe?: boolean) => Promise<string | null>;
   signInWithGoogle: () => Promise<string | null>;
   signOut: () => Promise<void>;
 };
@@ -71,9 +71,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
   }, []);
 
-  async function signInWithUsername(username: string, password: string): Promise<string | null> {
+  async function signInWithUsername(username: string, password: string, rememberMe = false): Promise<string | null> {
     try {
-      const res = await api.auth.signIn(username, password);
+      const res = await api.auth.signIn(username, password, rememberMe);
       setState({ status: "authenticated", profile: res.user, token: res.token });
       return null;
     } catch (err: any) {

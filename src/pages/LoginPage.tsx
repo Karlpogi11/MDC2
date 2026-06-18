@@ -1,20 +1,28 @@
-import { useState, useEffect, type FormEvent } from "react";
+import { useState, useEffect, useMemo, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Lock } from "lucide-react";
+import { Lock, LogIn } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { api } from "@/lib/api";
+import { api, getSavedProfiles, removeSavedProfile, isProfileExpired } from "@/lib/api";
 import { pendingPasswordRecovery, hadRecoveryHash } from "../main";
 import { useBranding } from "@/lib/useBranding";
 
 export function LoginPage() {
-  const { state, signInWithUsername, signInWithGoogle } = useAuth();
+  const { state, signInWithUsername } = useAuth();
   const { brandName, supportEmail, loginNotice } = useBranding();
   const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
+  const [savedProfiles, setSavedProfiles] = useState(() => getSavedProfiles());
+  const [showForm, setShowForm] = useState(false);
+  const [reauthProfile, setReauthProfile] = useState<{ username: string; fullName: string | null } | null>(null);
+  const [reauthPassword, setReauthPassword] = useState("");
+  const isSavedUsername = useMemo(
+    () => savedProfiles.some((p) => username.trim().toLowerCase() === p.username.toLowerCase()),
+    [savedProfiles, username]
+  );
 
   // Recovery / invite token handling
   const [isRecovery, setIsRecovery] = useState(() => pendingPasswordRecovery);
@@ -25,18 +33,14 @@ export function LoginPage() {
   const [linkExpired, setLinkExpired] = useState(false);
 
   useEffect(() => {
-    // Login page is always light mode
     document.documentElement.classList.remove("dark-theme");
   }, []);
 
   useEffect(() => {
-    // Check hash immediately for recovery/invite token
     const hash = window.location.hash;
     if (hash.includes("type=recovery") || hash.includes("type=invite")) {
       setIsRecovery(true);
     }
-
-    // Also check if user is already in recovery state
     if (hadRecoveryHash) {
       if (api.auth.getUser()) {
         setIsRecovery(true);
@@ -57,7 +61,6 @@ export function LoginPage() {
     setError(null);
     setSettingPassword(true);
     try {
-      // Recovery flow — user was authenticated via recovery link, no current password needed
       await api.auth.updatePassword("", newPassword);
       setPasswordSet(true);
       setTimeout(() => navigate("/", { replace: true }), 1500);
@@ -70,18 +73,42 @@ export function LoginPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    if (!username.trim()) { setError("Enter your username."); return; }
+    if (!password) { setError("Enter your password."); return; }
     setLoading(true);
-    const err = await signInWithUsername(username.trim(), password);
+    const err = await signInWithUsername(username.trim(), password, rememberMe);
+    setLoading(false);
+    if (err) setError(err);
+    else setSavedProfiles(getSavedProfiles()); // refresh in case rememberMe just saved
+  }
+
+  async function handleOneClickLogin(profile: { username: string; password: string; lastUsedAt: number; fullName: string | null }) {
+    if (isProfileExpired(profile)) {
+      setReauthProfile({ username: profile.username, fullName: profile.fullName });
+      setReauthPassword("");
+      setError(null);
+      return;
+    }
+    setError(null);
+    setLoading(true);
+    const err = await signInWithUsername(profile.username, profile.password, true);
     setLoading(false);
     if (err) setError(err);
   }
 
-  async function handleGoogle() {
+  async function handleReauthSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!reauthProfile) return;
+    if (!reauthPassword) { setError("Enter your password."); return; }
     setError(null);
-    setGoogleLoading(true);
-    const err = await signInWithGoogle();
-    setGoogleLoading(false);
+    setLoading(true);
+    const err = await signInWithUsername(reauthProfile.username, reauthPassword, true);
+    setLoading(false);
     if (err) setError(err);
+    else {
+      setReauthProfile(null);
+      setSavedProfiles(getSavedProfiles());
+    }
   }
 
   const inputStyle: React.CSSProperties = {
@@ -101,16 +128,12 @@ export function LoginPage() {
         padding: "48px 40px",
         justifyContent: "space-between",
       }}>
-        {/* Brand + feature list */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-          {/* Brand */}
           <div style={{ marginBottom: 48 }}>
             <p style={{ margin: 0, fontSize: 28, fontWeight: 700, color: "#fff", letterSpacing: "-0.5px", minHeight: 36 }}>
               {brandName ?? ""}
             </p>
           </div>
-
-          {/* Feature list */}
           <div>
             <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 10, margin: "0 0 14px", textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700 }}>
               System access
@@ -123,14 +146,12 @@ export function LoginPage() {
             ))}
           </div>
         </div>
-
-        {/* Footer pinned to bottom */}
         <p style={{ color: "rgba(255,255,255,0.28)", fontSize: 11, margin: 0 }}>
           Authorized personnel only. All actions are audited.
         </p>
       </div>
 
-      {/* Right panel — always light, never dark */}
+      {/* Right panel */}
       <div className="login-right" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 40, background: "#fff" }}>
         <div style={{ width: "100%", maxWidth: 360 }}>
           <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, borderRadius: 8, background: "#e8edf5", marginBottom: 20 }}>
@@ -163,131 +184,213 @@ export function LoginPage() {
               )}
             </>
           ) : (
-          <>
-          <h1 style={{ margin: "0 0 6px", fontSize: 22, fontWeight: 700, color: "#1d1d1f", letterSpacing: "-0.4px" }}>Sign in to MDC</h1>
-          <p style={{ margin: "0 0 28px", fontSize: 14, color: "#86868b" }}>
-            Enter your credentials to access the inventory system.
-          </p>
+            <>
+              <h1 style={{ margin: "0 0 6px", fontSize: 22, fontWeight: 700, color: "#1d1d1f", letterSpacing: "-0.4px" }}>Sign in to MDC</h1>
+              <p style={{ margin: "0 0 28px", fontSize: 14, color: "#86868b" }}>
+                Enter your credentials to access the inventory system.
+              </p>
 
-          {/* Username + password form */}
-          <form onSubmit={(e) => void handleSubmit(e)} noValidate>
-            <div style={{ marginBottom: 16 }}>
-              <label htmlFor="username" style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#1d1d1f", marginBottom: 6 }}>
-                Username
-              </label>
-              <input
-                id="username"
-                type="text"
-                autoComplete="username"
-                required
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                style={inputStyle}
-                onFocus={(e) => (e.target.style.borderColor = "#0071e3")}
-                onBlur={(e) => (e.target.style.borderColor = "#9ca3af")}
-              />
-            </div>
+              {savedProfiles.length > 0 && !showForm ? (
+                <div>
+                  {error && (
+                    <div role="alert" style={{ marginBottom: 16, padding: "10px 14px", background: "#f5f5f7", border: "1px solid #ff3b30", borderRadius: "6px", color: "#ff3b30", fontSize: 13 }}>
+                      {error}
+                    </div>
+                  )}
+                  {reauthProfile ? (
+                    <form onSubmit={(e) => void handleReauthSubmit(e)}>
+                      <div style={{ marginBottom: 12, fontSize: 14, color: "#1d1d1f" }}>
+                        Sign in as <strong>{reauthProfile.username}</strong>
+                      </div>
+                      <div style={{ marginBottom: 16 }}>
+                        <label htmlFor="reauth-password" style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#1d1d1f", marginBottom: 6 }}>Password</label>
+                        <input
+                          id="reauth-password" type="password" autoComplete="current-password" required
+                          value={reauthPassword} onChange={(e) => setReauthPassword(e.target.value)}
+                          style={inputStyle}
+                          onFocus={(e) => (e.target.style.borderColor = "#0071e3")}
+                          onBlur={(e) => (e.target.style.borderColor = "#9ca3af")}
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={loading}
+                        style={{
+                          width: "100%", background: loading ? "#6b8fc4" : "#0071e3", color: "#fff",
+                          border: "none", borderRadius: "6px", padding: "7px 0", fontSize: 14,
+                          fontWeight: 600, cursor: loading ? "not-allowed" : "pointer", transition: "background 150ms", marginBottom: 12,
+                        }}
+                      >
+                        {loading ? "Signing in…" : "Sign in"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setReauthProfile(null); setError(null); setReauthPassword(""); }}
+                        style={{
+                          background: "none", border: "none", color: "#0071e3",
+                          cursor: "pointer", fontSize: 13, padding: 0, textDecoration: "underline",
+                          display: "block", margin: "0 auto",
+                        }}
+                      >
+                        Use a different account
+                      </button>
+                    </form>
+                  ) : (
+                    <>
+                      {savedProfiles.map((profile) => (
+                        <div key={profile.username} style={{ position: "relative", marginBottom: 12 }}>
+                          <button
+                            type="button"
+                            disabled={loading}
+                            onClick={() => void handleOneClickLogin(profile)}
+                            style={{
+                              width: "100%", display: "flex", alignItems: "center", gap: 12,
+                              padding: "14px 16px", fontSize: 15, fontWeight: 600,
+                              background: loading ? "#6b8fc4" : "#f5f5f7",
+                              color: loading ? "#fff" : "#1d1d1f",
+                              border: "1px solid #d1d5db", borderRadius: "10px",
+                              cursor: loading ? "not-allowed" : "pointer",
+                              transition: "background 150ms",
+                              boxSizing: "border-box",
+                            }}
+                          >
+                            <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#0071e3", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                              <LogIn size={16} color="#fff" />
+                            </div>
+                            <div style={{ textAlign: "left", flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 15, fontWeight: 600, color: loading ? "#fff" : "#1d1d1f" }}>
+                                {loading ? "Signing in…" : `Sign in as ${profile.username}`}
+                              </div>
+                              <div style={{ fontSize: 12, color: loading ? "rgba(255,255,255,0.7)" : "#86868b", marginTop: 2 }}>
+                                {profile.fullName ? `${profile.fullName} · ` : ""}Saved profile
+                              </div>
+                            </div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm(`Remove saved profile for ${profile.username}?`)) {
+                                removeSavedProfile(profile.username);
+                                setSavedProfiles(getSavedProfiles());
+                              }
+                            }}
+                            style={{
+                              position: "absolute", top: -6, right: -6,
+                              width: 22, height: 22, borderRadius: "50%",
+                              background: "#fff", border: "1px solid #d1d5db",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              cursor: "pointer", fontSize: 12, color: "#86868b",
+                              lineHeight: 1, padding: 0,
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        disabled={loading}
+                        onClick={() => { setShowForm(true); }}
+                        style={{
+                          background: "none", border: "none", color: "#0071e3",
+                          cursor: loading ? "not-allowed" : "pointer",
+                          fontSize: 13, padding: 0, textDecoration: "underline",
+                          display: "block", margin: "0 auto",
+                        }}
+                      >
+                        Not you? Sign in with a different account
+                      </button>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <form onSubmit={(e) => void handleSubmit(e)} noValidate>
+                  <div style={{ marginBottom: 16 }}>
+                    <label htmlFor="username" style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#1d1d1f", marginBottom: 6 }}>Username</label>
+                    <input
+                      id="username" type="text" autoComplete="username" required
+                      value={username} onChange={(e) => setUsername(e.target.value)}
+                      style={inputStyle}
+                      onFocus={(e) => (e.target.style.borderColor = "#0071e3")}
+                      onBlur={(e) => (e.target.style.borderColor = "#9ca3af")}
+                    />
+                  </div>
+                  <div style={{ marginBottom: 16 }}>
+                    <label htmlFor="password" style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#1d1d1f", marginBottom: 6 }}>Password</label>
+                    <input
+                      id="password" type="password" autoComplete="current-password" required
+                      value={password} onChange={(e) => setPassword(e.target.value)}
+                      style={inputStyle}
+                      onFocus={(e) => (e.target.style.borderColor = "#0071e3")}
+                      onBlur={(e) => (e.target.style.borderColor = "#9ca3af")}
+                    />
+                  </div>
+                  {!isSavedUsername && (
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20, cursor: "pointer", fontSize: 13, color: "#1d1d1f" }}>
+                      <input
+                        type="checkbox" checked={rememberMe}
+                        onChange={(e) => setRememberMe(e.target.checked)}
+                        style={{ accentColor: "#0071e3", width: 16, height: 16, cursor: "pointer" }}
+                      />
+                      Remember me
+                    </label>
+                  )}
+                  {error && (
+                    <div role="alert" style={{ marginBottom: 16, padding: "10px 14px", background: "#f5f5f7", border: "1px solid #d1d5db", borderRadius: "6px", color: "#ff3b30", fontSize: 13 }}>
+                      {error}
+                    </div>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={loading || state.status === "loading"}
+                    style={{
+                      width: "100%", background: (loading || state.status === "loading") ? "#6b8fc4" : "#0071e3", color: "#fff",
+                      border: "none", borderRadius: "6px", padding: "7px 0", fontSize: 14,
+                      fontWeight: 600, cursor: (loading || state.status === "loading") ? "not-allowed" : "pointer", transition: "background 150ms",
+                    }}
+                  >
+                    {loading || state.status === "loading" ? "Signing in…" : "Sign in"}
+                  </button>
+                </form>
+                  {savedProfiles.length > 0 && showForm && (
+                    <button type="button" onClick={() => setShowForm(false)} style={{ background: "none", border: "none", color: "#0071e3", cursor: "pointer", fontSize: 13, padding: 0, textDecoration: "underline", display: "block", margin: "16px auto 0" }}>
+                      Use saved profile
+                    </button>
+                  )}
+                </>
+              )}
 
-            <div style={{ marginBottom: 24 }}>
-              <label htmlFor="password" style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#1d1d1f", marginBottom: 6 }}>
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                style={inputStyle}
-                onFocus={(e) => (e.target.style.borderColor = "#0071e3")}
-                onBlur={(e) => (e.target.style.borderColor = "#9ca3af")}
-              />
-            </div>
-
-            {error && (
-              <div role="alert" style={{ marginBottom: 16, padding: "10px 14px", background: "#f5f5f7", border: "1px solid #d1d5db", borderRadius: "6px", color: "#ff3b30", fontSize: 13 }}>
-                {error}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading || state.status === "loading"}
-              style={{
-                width: "100%", background: (loading || state.status === "loading") ? "#6b8fc4" : "#0071e3", color: "#fff",
-                border: "none", borderRadius: "6px", padding: "7px 0", fontSize: 14,
-                fontWeight: 600, cursor: (loading || state.status === "loading") ? "not-allowed" : "pointer", transition: "background 150ms",
-              }}
-            >
-              {loading || state.status === "loading" ? "Signing in…" : "Sign in"}
-            </button>
-          </form>
-
-          {/* Divider */}
-          <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "20px 0" }}>
-            <div style={{ flex: 1, height: 1, background: "#e5e7eb" }} />
-            <span style={{ fontSize: 12, color: "#86868b", whiteSpace: "nowrap" }}>or continue with</span>
-            <div style={{ flex: 1, height: 1, background: "#e5e7eb" }} />
-          </div>
-
-          {/* Google button */}
-          <button
-            type="button"
-            onClick={() => void handleGoogle()}
-            disabled={googleLoading}
-            style={{
-              width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-              background: "#fff", border: "1px solid #d1d5db", borderRadius: 6,
-              padding: "8px 0", fontSize: 14, fontWeight: 600, color: "#1d1d1f",
-              cursor: googleLoading ? "not-allowed" : "pointer",
-              opacity: googleLoading ? 0.7 : 1,
-            }}
-          >
-            <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
-              <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-              <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-              <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-              <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-            </svg>
-            {googleLoading ? "Redirecting…" : "Continue with Google"}
-          </button>
-
-          {loginNotice && (
-            <div style={{ marginTop: 20, padding: "10px 14px", background: "#fef9c3", border: "1px solid #fde047", borderRadius: 6, fontSize: 13, color: "#713f12", textAlign: "center" }}>
-              {loginNotice}
-            </div>
-          )}
-          <p style={{ marginTop: 20, fontSize: 12, color: "#86868b", textAlign: "center" }}>
-            Access is restricted to authorized DC personnel.{" "}
-            {supportEmail
-              ? <><br />Contact <a href={`mailto:${supportEmail}`} style={{ color: "#0071e3" }}>{supportEmail}</a> if you need access.</>
-              : <><br />Contact your administrator if you need access.</>
-            }
-          </p>
+              {loginNotice && (
+                <div style={{ marginTop: 20, padding: "10px 14px", background: "#fef9c3", border: "1px solid #fde047", borderRadius: 6, fontSize: 13, color: "#713f12", textAlign: "center" }}>
+                  {loginNotice}
+                </div>
+              )}
+              <p style={{ marginTop: 20, fontSize: 12, color: "#86868b", textAlign: "center" }}>
+                Access is restricted to authorized DC personnel.{" "}
+                {supportEmail
+                  ? <><br />Contact <a href={`mailto:${supportEmail}`} style={{ color: "#0071e3" }}>{supportEmail}</a> if you need access.</>
+                  : <><br />Contact your administrator if you need access.</>
+                }
+              </p>
               {linkExpired && (
-            <p style={{ marginTop: 12, fontSize: 12, color: "#86868b", textAlign: "center" }}>
-              Invite link expired.{" "}
-              <button type="button" onClick={() => {
-                const email = window.prompt("Enter your email to receive a new link:");
-                if (!email) return;
-                api.post("/auth/reset-password", { email })
-                  .then(() => alert(`Reset link sent to ${email}. Check your inbox.`))
-                  .catch(() => alert("Failed to send reset link. Please contact support."));
-              }} style={{ background: "none", border: "none", color: "#0057d9", cursor: "pointer", fontSize: 12, padding: 0, textDecoration: "underline" }}>
-                Request new link
-              </button>
-            </p>
-          )}
-          </>
+                <p style={{ marginTop: 12, fontSize: 12, color: "#86868b", textAlign: "center" }}>
+                  Invite link expired.{" "}
+                  <button type="button" onClick={() => {
+                    const email = window.prompt("Enter your email to receive a new link:");
+                    if (!email) return;
+                    api.post("/auth/reset-password", { email })
+                      .then(() => alert(`Reset link sent to ${email}. Check your inbox.`))
+                      .catch(() => alert("Failed to send reset link. Please contact support."));
+                  }} style={{ background: "none", border: "none", color: "#0057d9", cursor: "pointer", fontSize: 12, padding: 0, textDecoration: "underline" }}>
+                    Request new link
+                  </button>
+                </p>
+              )}
+            </>
           )}
         </div>
       </div>
     </div>
   );
 }
-
-
-
-
-

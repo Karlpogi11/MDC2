@@ -120,7 +120,7 @@ export function DashboardPage() {
   const { state: authState } = useAuth();
   const profileName =
     authState.status === "authenticated"
-      ? (authState.profile.full_name ?? authState.profile.username ?? "there")
+      ? (authState.profile.full_name || authState.profile.username || "there")
       : "there";
 
   const { data, error } = useQuery({
@@ -189,10 +189,12 @@ export function DashboardPage() {
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, gap: 16 }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text)" }}>
+            <h1 style={{ margin: 0, fontSize: 23, fontWeight: 700, color: "var(--text)" }}>
               Good {getGreeting()}, {profileName}.
             </h1>
-            <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--muted)" }}>
+            <p style={{ margin: "2px 0 0", fontSize: 13, color: "var(--muted)" }}>
+              {authState.status === "authenticated" ? authState.profile.role.replace(/_/g, " ") : ""}
+              &nbsp;&middot;&nbsp;
               {isCoordinator ? "Transfers waiting for your action." : "Here's what needs your attention today."}
             </p>
           </div>

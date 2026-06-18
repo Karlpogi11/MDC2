@@ -19,6 +19,7 @@ import {
   FileBarChart2,
   Moon,
   Sun,
+  User,
 } from "lucide-react";
 import { useAuth, type UserRole } from "@/lib/auth";
 import { useBranding } from "@/lib/useBranding";
@@ -148,7 +149,7 @@ export function AppLayout({ children, activeModule }: Props) {
   }, [authState.status, location.pathname]);
   const profileName =
     authState.status === "authenticated"
-      ? (authState.profile.full_name ?? authState.profile.username ?? authState.profile.email ?? "User")
+      ? (authState.profile.full_name || authState.profile.username || authState.profile.email || "User")
       : "User";
   const userRole = authState.status === "authenticated" ? authState.profile.role : "";
 
@@ -226,9 +227,10 @@ export function AppLayout({ children, activeModule }: Props) {
           <div className="nav-divider" />
 
           <div className="account-block">
+            <User className="account-icon" size={18} aria-hidden="true" />
             <div className="account-meta">
               <div className="account-name">{profileName}</div>
-              <div className="account-role">{userRole?.replace("_", " ")}</div>
+              <div className="account-role">{userRole?.replace(/_/g, " ")}</div>
             </div>
             <button type="button" className="icon-btn" aria-label="Sign out" onClick={() => void signOut()}>
               <LogOut aria-hidden="true" />

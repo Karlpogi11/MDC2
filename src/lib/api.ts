@@ -19,6 +19,100 @@ function clearToken() {
   localStorage.removeItem("mdc-auth");
 }
 
+// ── Saved profiles (remember me) ──────────────────────────────────────────────
+// Stores multiple saved profiles as an array for one-click login.
+// This is intentionally simple obfuscation (not true encryption) — appropriate
+// for an internal trusted-device app, matching the Facebook/Netflix pattern.
+const SAVED_PROFILES_KEY = "mdc-saved-profiles";
+const SAVED_PROFILE_LEGACY_KEY = "mdc-saved-profile";
+
+function obfuscate(value: string): string {
+  const key = 0x5a;
+  const bytes = Array.from(value).map((c) => c.charCodeAt(0) ^ key);
+  return btoa(String.fromCharCode(...bytes));
+}
+
+function deobfuscate(value: string): string {
+  const key = 0x5a;
+  try {
+    const bytes = Array.from(atob(value)).map((c) => c.charCodeAt(0) ^ key);
+    return String.fromCharCode(...bytes);
+  } catch {
+    return "";
+  }
+}
+
+export type SavedProfile = {
+  username: string;
+  fullName: string | null;
+  role: string | null;
+  _p: string; // obfuscated password
+  lastUsedAt: number; // timestamp
+};
+
+export const PROFILE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+export function isProfileExpired(profile: { lastUsedAt: number }): boolean {
+  return Date.now() - profile.lastUsedAt > PROFILE_EXPIRY_MS;
+}
+
+function migrateLegacyProfile() {
+  try {
+    const raw = localStorage.getItem(SAVED_PROFILE_LEGACY_KEY);
+    if (!raw) return;
+    const stored = { ...JSON.parse(raw), lastUsedAt: Date.now() };
+    if (stored.username && stored._p) {
+      localStorage.setItem(SAVED_PROFILES_KEY, JSON.stringify([stored]));
+    }
+    localStorage.removeItem(SAVED_PROFILE_LEGACY_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+export function getSavedProfiles(): (SavedProfile & { password: string })[] {
+  migrateLegacyProfile();
+  try {
+    const raw = localStorage.getItem(SAVED_PROFILES_KEY);
+    if (!raw) return [];
+    const stored: SavedProfile[] = JSON.parse(raw);
+    if (!Array.isArray(stored)) return [];
+    return stored
+      .filter((p) => p.username && p._p)
+      .map((p) => ({ ...p, lastUsedAt: p.lastUsedAt ?? Date.now(), password: deobfuscate(p._p) }));
+  } catch {
+    return [];
+  }
+}
+
+export function getSavedProfile(): (SavedProfile & { password: string }) | null {
+  return getSavedProfiles()[0] ?? null;
+}
+
+export function saveProfile(username: string, password: string, fullName: string | null, role: string | null) {
+  const profiles = getSavedProfiles();
+  const idx = profiles.findIndex((p) => p.username.toLowerCase() === username.toLowerCase());
+  const entry = { username, fullName, role, _p: obfuscate(password), password, lastUsedAt: Date.now() };
+  if (idx >= 0) {
+    profiles[idx] = entry;
+  } else {
+    profiles.push(entry);
+  }
+  const toStore: SavedProfile[] = profiles.map(({ password: _pw, ...rest }) => rest);
+  localStorage.setItem(SAVED_PROFILES_KEY, JSON.stringify(toStore));
+}
+
+export function removeSavedProfile(username: string) {
+  const profiles = getSavedProfiles();
+  const filtered = profiles.filter((p) => p.username.toLowerCase() !== username.toLowerCase());
+  const toStore: SavedProfile[] = filtered.map(({ password: _pw, ...rest }) => rest);
+  localStorage.setItem(SAVED_PROFILES_KEY, JSON.stringify(toStore));
+}
+
+export function clearSavedProfile() {
+  localStorage.removeItem(SAVED_PROFILES_KEY);
+}
+
 function camelizeKey(key: string): string {
   return key.replace(/_([a-z0-9])/g, (_, ch: string) => ch.toUpperCase());
 }
@@ -128,9 +222,12 @@ export const api = {
   delete: <T = any>(path: string) => request<T>("DELETE", path),
 
   auth: {
-    signIn: async (username: string, password: string) => {
+    signIn: async (username: string, password: string, rememberMe = false) => {
       const res = await request<{ token: string; user: any }>("POST", "/auth/signin", { username, password });
       storeToken(res.token, res.user);
+      if (rememberMe) {
+        saveProfile(username, password, res.user?.fullName ?? res.user?.full_name ?? null, res.user?.role ?? null);
+      }
       return res;
     },
     register: (email: string, username: string, fullName: string, password: string, role?: string) =>
