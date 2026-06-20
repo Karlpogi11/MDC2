@@ -356,7 +356,6 @@ type QueueTransfer = {
   destSiteCode: string;
   destSiteAddress: string | null;
   trackingLink: string | null;
-  bookedAt: string | null;
   itemCount: number;
   totalUnits: number;
   reqFullName: string;
@@ -620,5 +619,3 @@ function QuickAction({ label, onClick, primary }: { label: string; onClick: () =
     </button>
   );
 }
-
-
