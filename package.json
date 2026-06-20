@@ -2,7 +2,6 @@
   "name": "mdc-ui-shell",
   "private": true,
   "version": "0.1.0",
-  "type": "module",
   "scripts": {
     "dev": "vite",
     "dev:all": "concurrently -n be,fe -c yellow,cyan \"cd backend && npm run dev\" \"vite\"",
