@@ -8,7 +8,6 @@
   ],
   "functions": {
     "api/index.ts": {
-      "runtime": "@vercel/node@3",
       "maxDuration": 30
     }
   }
