@@ -26,74 +26,82 @@ import { receiveRouter } from "./routes/receive";
 import { shipmentsRouter } from "./routes/shipments";
 import { runMigrations } from "./migrations/runner";
 
-const app = express();
-const PORT = parseInt(process.env.PORT ?? "3001", 10);
-const allowedOriginPattern = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
+export function createApp() {
+  const app = express();
+  const allowedOriginPattern = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
 
-app.use(cors({
-  origin(origin, callback) {
-    if (!origin) {
-      callback(null, true);
-      return;
+  app.use(cors({
+    origin(origin, callback) {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      const explicitOrigin = process.env.CORS_ORIGIN;
+      if (explicitOrigin && origin === explicitOrigin) {
+        callback(null, true);
+        return;
+      }
+
+      if (allowedOriginPattern.test(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error("CORS blocked"));
+    },
+    credentials: true,
+  }));
+  app.use(express.json({ limit: "50mb" }));
+
+  // Health check
+  app.get("/api/health", async (_req, res) => {
+    try {
+      await getDb();
+      res.json({ status: "ok" });
+    } catch (err) {
+      res.status(503).json({ status: "error", message: String(err) });
     }
+  });
 
-    const explicitOrigin = process.env.CORS_ORIGIN;
-    if (explicitOrigin && origin === explicitOrigin) {
-      callback(null, true);
-      return;
-    }
+  // Routes
+  app.use("/api/auth", authRouter);
+  app.use("/api/sites", sitesRouter);
+  app.use("/api/parts", partsRouter);
+  app.use("/api/serials", serialsRouter);
+  app.use("/api/transfers", transfersRouter);
+  app.use("/api/inventory", inventoryRouter);
+  app.use("/api/stock-in", stockInRouter);
+  app.use("/api/analytics", analyticsRouter);
+  app.use("/api/audit-logs", auditLogsRouter);
+  app.use("/api/config", configRouter);
+  app.use("/api/users", usersRouter);
+  app.use("/api/dashboard", dashboardRouter);
+  app.use("/api/reports", reportsRouter);
+  app.use("/api/exports", exportsRouter);
+  app.use("/api/webhooks", webhooksRouter);
+  app.use("/api/report-jobs", reportJobsRouter);
+  app.use("/api/transfer-templates", transferTemplatesRouter);
+  app.use("/api/physical-counts", physicalCountsRouter);
+  app.use("/api/corrections", correctionsRouter);
+  app.use("/api/notifications", notificationsRouter);
+  app.use("/api/receive", receiveRouter);
+  app.use("/api/shipments", shipmentsRouter);
 
-    if (allowedOriginPattern.test(origin)) {
-      callback(null, true);
-      return;
-    }
+  app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    console.error("Unhandled error:", err?.sql ?? err?.message ?? err);
+    res.status(500).json({ error: "Internal server error", detail: String(err?.sql ?? err?.message ?? err) });
+  });
 
-    callback(new Error("CORS blocked"));
-  },
-  credentials: true,
-}));
-app.use(express.json({ limit: "50mb" }));
+  return app;
+}
 
-// Health check
-app.get("/api/health", async (_req, res) => {
-  try {
-    await getDb();
-    res.json({ status: "ok" });
-  } catch (err) {
-    res.status(503).json({ status: "error", message: String(err) });
-  }
-});
-
-// Routes
-app.use("/api/auth", authRouter);
-app.use("/api/sites", sitesRouter);
-app.use("/api/parts", partsRouter);
-app.use("/api/serials", serialsRouter);
-app.use("/api/transfers", transfersRouter);
-app.use("/api/inventory", inventoryRouter);
-app.use("/api/stock-in", stockInRouter);
-app.use("/api/analytics", analyticsRouter);
-app.use("/api/audit-logs", auditLogsRouter);
-app.use("/api/config", configRouter);
-app.use("/api/users", usersRouter);
-app.use("/api/dashboard", dashboardRouter);
-app.use("/api/reports", reportsRouter);
-app.use("/api/exports", exportsRouter);
-app.use("/api/webhooks", webhooksRouter);
-app.use("/api/report-jobs", reportJobsRouter);
-app.use("/api/transfer-templates", transferTemplatesRouter);
-app.use("/api/physical-counts", physicalCountsRouter);
-app.use("/api/corrections", correctionsRouter);
-app.use("/api/notifications", notificationsRouter);
-app.use("/api/receive", receiveRouter);
-app.use("/api/shipments", shipmentsRouter);
-
-app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error("Unhandled error:", err?.sql ?? err?.message ?? err);
-  res.status(500).json({ error: "Internal server error", detail: String(err?.sql ?? err?.message ?? err) });
-});
-
-app.listen(PORT, async () => {
-  try { await runMigrations(); } catch (e) { console.error("Migration runner failed:", e); }
-  console.log(`MDC backend running on http://localhost:${PORT}`);
-});
+// Only listen when NOT in Vercel serverless
+if (!process.env.VERCEL) {
+  const PORT = parseInt(process.env.PORT ?? "3001", 10);
+  const app = createApp();
+  app.listen(PORT, async () => {
+    try { await runMigrations(); } catch (e) { console.error("Migration runner failed:", e); }
+    console.log(`MDC backend running on http://localhost:${PORT}`);
+  });
+}
