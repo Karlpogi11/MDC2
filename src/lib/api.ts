@@ -1,4 +1,7 @@
-const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:3001/api";
+// In production builds, default to a same-origin relative path ("/api") so the
+// deployed frontend never tries to call the developer's localhost backend.
+// VITE_API_URL can still override this for local dev or a different API host.
+const API_BASE = import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? "/api" : "http://localhost:3001/api");
 
 function getToken(): string | null {
   const stored = localStorage.getItem("mdc-auth");
