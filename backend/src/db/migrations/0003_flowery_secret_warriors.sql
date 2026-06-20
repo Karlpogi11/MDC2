@@ -1,0 +1,1 @@
+ALTER TABLE `transfers` ADD `tracking_link` varchar(500);
