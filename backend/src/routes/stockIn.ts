@@ -348,13 +348,21 @@ stockInRouter.get("/batches", authMiddleware, async (req, res) => {
 stockInRouter.get("/batches/:id/serials", authMiddleware, async (req, res) => {
   const db = await getDb();
   const result = await db.execute(sql`
-    SELECT sn.serial_number AS serialNumber, p.part_number AS partNumber
+    SELECT sn.serial_number, sn.status, p.part_number, p.part_name
     FROM serial_numbers sn
     LEFT JOIN parts p ON p.id = sn.part_id
     WHERE sn.stock_in_batch_id = ${req.params.id}
     LIMIT 500
   `);
   const rawRows = (result as any[])[0] ?? [];
-  const rows = rawRows.map((s: any) => ({ serialNumber: s.serialNumber, partNumber: s.partNumber }));
+  const rows = rawRows.map((s: any) => ({
+    id: s.serial_number, // use serial_number as ID for react keys
+    serial_number: s.serial_number,
+    status: s.status,
+    part: {
+      part_number: s.part_number,
+      part_name: s.part_name
+    }
+  }));
   res.json(rows);
 });

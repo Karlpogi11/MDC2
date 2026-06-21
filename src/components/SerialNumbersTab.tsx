@@ -4,11 +4,11 @@ import { api } from "@/lib/api";
 
 type SerialRow = {
   id: string;
-  serial_number: string;
+  serialNumber: string;
   status: string;
-  stock_in_at: string | null;
-  parts: { partNumber: string; partName: string } | null;
-  sites: { siteName: string } | null;
+  stockInAt: string | null;
+  part: { partNumber: string; partName: string } | null;
+  site: { siteName: string } | null;
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -113,11 +113,11 @@ export function SerialNumbersTab() {
                 <tr key={i} className="skeleton-row"><td /><td colSpan={5}><div className="skeleton-line" /></td></tr>
               ))}
               {serials.map(r => {
-                const part = Array.isArray(r.parts) ? r.parts[0] : r.parts;
-                const site = Array.isArray(r.sites) ? r.sites[0] : r.sites;
+                const part = Array.isArray(r.part) ? r.part[0] : r.part;
+                const site = Array.isArray(r.site) ? r.site[0] : r.site;
                 return (
                   <tr key={r.id}>
-                    <td style={{ fontFamily: "monospace", fontSize: 13 }}>{r.serial_number}</td>
+                    <td style={{ fontFamily: "monospace", fontSize: 13 }}>{r.serialNumber}</td>
                     <td>{part?.partNumber ?? "—"}</td>
                     <td>{part?.partName ?? "—"}</td>
                     <td>
@@ -130,7 +130,7 @@ export function SerialNumbersTab() {
                       </span>
                     </td>
                     <td>{site?.siteName ?? "—"}</td>
-                    <td>{r.stock_in_at ? new Date(r.stock_in_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "2-digit" }) : "—"}</td>
+                    <td>{r.stockInAt ? new Date(r.stockInAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "2-digit" }) : "—"}</td>
                   </tr>
                 );
               })}

@@ -113,6 +113,10 @@ export function AppLayout({ children, activeModule }: Props) {
   const [showHelp, setShowHelp] = useState(false);
   const headerBrandName = brandName?.trim() ? brandName.trim() : "MobilCare DC";
 
+  useEffect(() => {
+    document.title = headerBrandName;
+  }, [headerBrandName]);
+
   const [theme, setTheme] = useState<Theme>(() => {
     const initial = getTheme();
     if (typeof document !== "undefined") {

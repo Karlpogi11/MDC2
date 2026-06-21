@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
 import { api } from "./api";
 
 const BRANDING_CACHE_KEY = "mdc-branding-cache";
@@ -18,6 +19,12 @@ function setCached(data: Record<string, string>) {
 }
 
 export function useBranding() {
+  const [_, setTick] = useState(0);
+  
+  useEffect(() => {
+    return onBrandingUpdated(() => setTick((t) => t + 1));
+  }, []);
+
   const cached = getCached();
   const query = useQuery({
     queryKey: ["branding"],

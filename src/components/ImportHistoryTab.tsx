@@ -40,8 +40,8 @@ function BatchItems({ batchId }: { batchId: string }) {
                   return (
                     <tr key={item.id} style={{ borderTop: "1px solid #f1f5f9" }}>
                       <td style={{ padding: "5px 16px 5px 32px", fontFamily: "monospace", color: "var(--blue)", fontWeight: 600 }}>{item.serial_number}</td>
-                      <td style={{ padding: "5px 12px", fontFamily: "monospace", color: "var(--text)" }}>{part?.partNumber ?? "—"}</td>
-                      <td style={{ padding: "5px 12px", color: "var(--text)" }}>{part?.partName ?? "—"}</td>
+                      <td style={{ padding: "5px 12px", fontFamily: "monospace", color: "var(--text)" }}>{part?.part_number ?? "—"}</td>
+                      <td style={{ padding: "5px 12px", color: "var(--text)" }}>{part?.part_name ?? "—"}</td>
                       <td style={{ padding: "5px 16px", textAlign: "right" }}>1</td>
                       <td style={{ padding: "5px 16px" }}>
                         <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: "var(--radius-pill)", background: "var(--bg-surface-elevated)", color: item.status === "in_stock" ? "var(--link)" : "var(--muted)" }}>

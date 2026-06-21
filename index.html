@@ -14,10 +14,10 @@
             d.classList.add('dark-theme');
             d.setAttribute('data-theme', 'dark');
           }
-          // Login page uses #fff, other pages use #f5f5f7 (light) or #1a1a1a (dark)
+          // Login page uses #fff, other pages use #f0f0f4 (light) or #1a1a1a (dark)
           var p = window.location.pathname;
           var isLogin = p === '/login' || p === '/change-password';
-          var bg = dark ? '#1a1a1a' : (isLogin ? '#fff' : '#f5f5f7');
+          var bg = dark ? '#1a1a1a' : (isLogin ? '#fff' : '#f0f0f4');
           d.style.setProperty('background', bg, 'important');
           d.style.setProperty('color-scheme', dark ? 'dark' : 'light');
           var s = document.createElement('style');
