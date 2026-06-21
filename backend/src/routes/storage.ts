@@ -7,8 +7,18 @@ import { authMiddleware } from "../middleware/auth";
 
 export const storageRouter = Router();
 
-const UPLOAD_DIR = path.resolve(process.cwd(), "uploads/branding");
-fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+// Vercel's deployed filesystem is read-only except /tmp. Local dev keeps
+// using a real uploads/ folder; on Vercel we fall back to /tmp so the
+// module doesn't crash on import (which used to take down every route).
+const UPLOAD_DIR = process.env.VERCEL
+  ? path.join("/tmp", "uploads", "branding")
+  : path.resolve(process.cwd(), "uploads/branding");
+
+try {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+} catch (err) {
+  console.error("Failed to create upload dir:", err);
+}
 
 const upload = multer({ storage: multer.diskStorage({
   destination: UPLOAD_DIR,

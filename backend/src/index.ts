@@ -56,8 +56,11 @@ export function createApp() {
   }));
   app.use(express.json({ limit: "50mb" }));
 
-  // Serve uploaded files
-  app.use("/uploads", express.static(path.resolve(process.cwd(), "uploads")));
+  // Serve uploaded files (read-only fallback to /tmp on Vercel)
+  const uploadsRoot = process.env.VERCEL
+    ? path.join("/tmp", "uploads")
+    : path.resolve(process.cwd(), "uploads");
+  app.use("/uploads", express.static(uploadsRoot));
 
   // Health check
   app.get("/api/health", async (_req, res) => {
@@ -110,4 +113,4 @@ if (!process.env.VERCEL) {
     try { await runMigrations(); } catch (e) { console.error("Migration runner failed:", e); }
     console.log(`MDC backend running on http://localhost:${PORT}`);
   });
-}
+} 
