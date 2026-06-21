@@ -193,12 +193,15 @@ async function request<T = any>(
   if (!res.ok) {
     const errText = await res.text().catch(() => "");
     if (errText) {
-      try {
-        const errBody = normalizeResponse(JSON.parse(errText));
-        throw new Error((errBody as any)?.error ?? errText);
-      } catch {
-        throw new Error(errText);
-      }
+      const message = (() => {
+        try {
+          const errBody = normalizeResponse(JSON.parse(errText));
+          return (errBody as any)?.error ?? errText;
+        } catch {
+          return errText;
+        }
+      })();
+      throw new Error(message);
     }
     throw new Error(`Request failed: ${res.status}`);
   }

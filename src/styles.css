@@ -243,6 +243,8 @@ html:not(.dark-theme) .global-nav {
 }
 
 .brand-word {
+  display: inline-flex;
+  align-items: center;
   font-size: 15px;
   font-family: "Nunito", "Inter", "SF Pro Rounded", "Varela Round", sans-serif;
   font-weight: 800;

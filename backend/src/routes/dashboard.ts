@@ -12,9 +12,10 @@ dashboardRouter.get("/search", authMiddleware, async (req, res) => {
   if (!term) { res.json([]); return; }
 
   const rawResults = await Promise.all([
-    db.execute(sql`SELECT sn.serial_number, p.part_name FROM serial_numbers sn LEFT JOIN parts p ON p.id = sn.part_id WHERE sn.serial_number LIKE ${`%${term}%`} LIMIT 4`),
+    db.execute(sql`SELECT sn.serial_number, p.part_name FROM serial_numbers sn LEFT JOIN parts p ON p.id = sn.part_id WHERE sn.serial_number = ${term} LIMIT 4`),
     db.execute(sql`SELECT id, part_number, part_name FROM parts WHERE part_number LIKE ${`%${term}%`} OR part_name LIKE ${`%${term}%`} LIMIT 4`),
     db.execute(sql`SELECT id, transfer_no, status FROM transfers WHERE transfer_no LIKE ${`%${term}%`} LIMIT 3`),
+    db.execute(sql`SELECT id, transfer_no, invoice_ref AS invoiceRef FROM transfers WHERE invoice_ref LIKE ${`%${term}%`} LIMIT 3`),
   ]);
 
   const results: Array<{ type: string; label: string; sub: string; path: string }> = [];
@@ -29,6 +30,10 @@ dashboardRouter.get("/search", authMiddleware, async (req, res) => {
   const tRows = (rawResults[2] as any[])[0] ?? [];
   for (const t of tRows) {
     results.push({ type: "transfer", label: t.transfer_no, sub: t.status, path: `/transfers/${t.id}` });
+  }
+  const iRows = (rawResults[3] as any[])[0] ?? [];
+  for (const inv of iRows) {
+    results.push({ type: "invoice", label: inv.invoiceRef, sub: inv.transfer_no, path: `/transfers/${inv.id}` });
   }
 
   res.json(results);

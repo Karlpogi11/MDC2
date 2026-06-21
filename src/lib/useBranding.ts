@@ -1,17 +1,40 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./api";
 
+const BRANDING_CACHE_KEY = "mdc-branding-cache";
+
+function getCached(): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem(BRANDING_CACHE_KEY) ?? "{}");
+  } catch {
+    return {};
+  }
+}
+
+function setCached(data: Record<string, string>) {
+  try {
+    localStorage.setItem(BRANDING_CACHE_KEY, JSON.stringify(data));
+  } catch { /* ignore */ }
+}
+
 export function useBranding() {
+  const cached = getCached();
   const query = useQuery({
     queryKey: ["branding"],
-    queryFn: () => api.get<Record<string, string>>("/config"),
-    staleTime: 10 * 60 * 1000,
+    queryFn: async () => {
+      const data = await api.get<Record<string, string>>(`/config?_=${Date.now()}`);
+      if (data) setCached(data);
+      return data;
+    },
+    initialData: cached,
+    staleTime: 60 * 1000, // 1 min — refetch in background on mount if stale
   });
 
-  const data = query.data ?? {};
+  const data = query.data ?? cached;
   return {
     ...query,
     brandName: data.brand_name ?? "MDC Inventory",
+    brandLogoUrl: data.brand_logo_url ?? null,
     supportEmail: data.support_email ?? null,
     loginNotice: data.login_notice ?? null,
   };

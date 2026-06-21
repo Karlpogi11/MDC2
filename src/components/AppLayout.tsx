@@ -109,7 +109,7 @@ export function AppLayout({ children, activeModule }: Props) {
   const location = useLocation();
   const queryClient = useQueryClient();
   const { state: authState, signOut } = useAuth();
-  const { brandName } = useBranding();
+  const { brandName, brandLogoUrl } = useBranding();
   const [showHelp, setShowHelp] = useState(false);
   const headerBrandName = brandName?.trim() ? brandName.trim() : "MobilCare DC";
 
@@ -169,6 +169,7 @@ export function AppLayout({ children, activeModule }: Props) {
             onPointerEnter={() => warmRoute("/dashboard")}
             onClick={() => goToRoute("/dashboard")}
           >
+            {brandLogoUrl && <img src={brandLogoUrl} alt="" style={{ height: 20, width: "auto", objectFit: "contain", marginRight: 6 }} />}
             {headerBrandName}
           </button>
           <nav className="main-modules" aria-label="Main modules">
@@ -304,6 +305,8 @@ export function AppLayout({ children, activeModule }: Props) {
           </div>
         </div>
       )}
+
+      <span style={{ position: "fixed", bottom: 6, right: 8, fontSize: 10, color: "var(--muted)", opacity: 0.5, pointerEvents: "none", userSelect: "none", zIndex: 999 }}>Test Environment</span>
     </div>
   );
 }

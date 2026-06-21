@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, type FormEvent, type ChangeEvent } from "react";
-import { Upload, Save, Check, Moon, Sun, ToggleLeft, ToggleRight } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { Upload, Save, Check, Moon, Sun, ToggleLeft, ToggleRight, Lock } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { notifyBrandingUpdated } from "@/lib/useBranding";
@@ -18,6 +20,22 @@ async function loadConfig(): Promise<ConfigMap> {
 async function saveConfig(key: string, value: string | null, actorId: string): Promise<string | null> {
   try {
     await api.put(`/config/${key}`, { value, updated_by: actorId });
+    // Immediately update localStorage cache so reload shows the latest
+    try {
+      const cached = JSON.parse(localStorage.getItem("mdc-branding-cache") ?? "{}");
+      cached[key] = value;
+      localStorage.setItem("mdc-branding-cache", JSON.stringify(cached));
+    } catch { /* ignore */ }
+    // Clear service worker cache so refresh shows new branding
+    if ("caches" in window) {
+      const cache = await caches.open("mdc-api");
+      const requests = await cache.keys();
+      for (const req of requests) {
+        if (req.url.includes("/config")) {
+          await cache.delete(req);
+        }
+      }
+    }
     return null;
   } catch (e: any) {
     return e?.message ?? "Save failed.";
@@ -36,9 +54,21 @@ async function uploadLogo(file: File): Promise<{ url: string | null; error: stri
 }
 
 export function ConfigPage() {
+  const queryClient = useQueryClient();
   const { state: authState } = useAuth();
   const actorId = authState.status === "authenticated" ? authState.profile.id : "";
-  const [tab, setTab] = useState<"branding" | "parts" | "sites" | "system" | "digest" | "webhooks" | "danger">("branding");
+  const [searchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const [tab, setTab] = useState<"branding" | "parts" | "sites" | "system" | "account" | "digest" | "webhooks" | "danger">(() => {
+    if (tabParam === "sites") return "sites";
+    if (tabParam === "parts") return "parts";
+    if (tabParam === "system") return "system";
+    if (tabParam === "account") return "account";
+    if (tabParam === "digest") return "digest";
+    if (tabParam === "webhooks") return "webhooks";
+    if (tabParam === "danger") return "danger";
+    return "branding";
+  });
   const [config, setConfig] = useState<ConfigMap>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
@@ -65,6 +95,8 @@ export function ConfigPage() {
       const root = document.documentElement;
       if (key === "brand_primary_color" && config[key]) root.style.setProperty("--blue", config[key]!);
       if (key === "brand_accent_color" && config[key]) root.style.setProperty("--nav-active", config[key]!);
+      queryClient.setQueryData(["branding"], (old: any) => ({ ...old, [key]: config[key] }));
+      queryClient.invalidateQueries({ queryKey: ["branding"] });
       notifyBrandingUpdated();
     }
   }
@@ -84,7 +116,7 @@ export function ConfigPage() {
     const err = await saveConfig(configKey, url, actorId);
     setUploadingLogo(false);
     if (err) setError(err);
-    else { setSaved(configKey); setTimeout(() => setSaved(null), 2000); notifyBrandingUpdated(); }
+    else { setSaved(configKey); setTimeout(() => setSaved(null), 2000); queryClient.setQueryData(["branding"], (old: any) => ({ ...old, [configKey]: url })); queryClient.invalidateQueries({ queryKey: ["branding"] }); notifyBrandingUpdated(); }
   }
 
   const role = authState.status === "authenticated" ? authState.profile.role : null;
@@ -94,6 +126,7 @@ export function ConfigPage() {
     { key: "parts",    label: "Parts" },
     { key: "sites",    label: "Sites" },
     { key: "system",   label: "System" },
+    { key: "account",  label: "Account" },
     { key: "digest",   label: "Email Digest" },
     { key: "webhooks", label: "Webhooks" },
     ...(role === "system_admin" ? [{ key: "danger" as const, label: "⚠ Danger Zone" }] : []),
@@ -125,7 +158,7 @@ export function ConfigPage() {
         </div>
 
         {error && (
-          <div role="alert" style={{ marginBottom: 20, padding: "10px 14px", background: "var(--bg-surface-elevated)", border: "1px solid var(--line)", borderRadius: "var(--radius)", color: "var(--negative)", fontSize: 13 }}>
+          <div role="alert" style={{ marginBottom: 20, padding: "8px 12px", color: "var(--negative)", fontSize: 13 }}>
             {error}
           </div>
         )}
@@ -153,6 +186,16 @@ export function ConfigPage() {
                     <Upload size={14} />{uploadingLogo ? "Uploading…" : "Upload logo"}
                     <input ref={logoInputRef} type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" style={{ display: "none" }} onChange={(e) => void handleLogoUpload(e, "brand_logo_url")} disabled={uploadingLogo} />
                   </label>
+                  {val("brand_logo_url") && (
+                    <button type="button" onClick={async () => {
+                      setConfig((c) => ({ ...c, brand_logo_url: null }));
+                      const err = await saveConfig("brand_logo_url", null, actorId);
+                      if (err) setError(err);
+                      queryClient.setQueryData(["branding"], (old: any) => ({ ...old, brand_logo_url: null }));
+                      queryClient.invalidateQueries({ queryKey: ["branding"] });
+                      notifyBrandingUpdated();
+                    }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "var(--muted)", padding: "4px 6px", lineHeight: 1 }} title="Remove logo">✕</button>
+                  )}
                   {saved === "brand_logo_url" && <Check size={16} color="#16a34a" />}
                 </div>
               </Field>
@@ -191,6 +234,19 @@ export function ConfigPage() {
                 </span>
                 <span style={{ color: config.send_email_on_dispatch !== "false" ? "var(--text)" : "var(--muted)" }}>{config.send_email_on_dispatch !== "false" ? "On" : "Off"}</span>
               </button>
+            </Field>
+          </Section>
+        )}
+
+        {/* Account tab */}
+        {tab === "account" && (
+          <Section title="Account" description="Manage your account security.">
+            <Field label="Password" hint="Change your current password.">
+              <a href="/change-password"
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--blue)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer", textDecoration: "none" }}>
+                <Lock size={14} />
+                Change password
+              </a>
             </Field>
           </Section>
         )}

@@ -108,7 +108,7 @@ serialsRouter.get("/:serialNumber", authMiddleware, async (req, res) => {
     serialNumber: rawRows[0].serialNumber,
     partId: rawRows[0].partId,
     currentSiteId: rawRows[0].currentSiteId,
-    status: rawRows[0].status,
+    status: rawRows[0].activeTransferStatus === "in_transit" ? "transferred" : rawRows[0].status,
     stockInBatchId: rawRows[0].stockInBatchId,
     stockInAt: rawRows[0].stockInAt,
     createdAt: rawRows[0].createdAt,

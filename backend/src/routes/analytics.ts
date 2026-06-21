@@ -19,22 +19,22 @@ function normalizeSiteCode(raw: string): string {
 analyticsRouter.get("/dc-activity", authMiddleware, async (req, res) => {
   const db = await getDb();
 
-  const [inStockRes] = await db.execute(sql`
+  const [[inStockRes]] = await db.execute(sql`
     SELECT COUNT(*) as count FROM serial_numbers WHERE status = 'in_stock'
-  `);
-  const [transferredRes] = await db.execute(sql`
+  `) as any;
+  const [[transferredRes]] = await db.execute(sql`
     SELECT COUNT(*) as count FROM serial_numbers WHERE status = 'transferred'
-  `);
-  const [transferCountRes] = await db.execute(sql`
+  `) as any;
+  const [[transferCountRes]] = await db.execute(sql`
     SELECT COUNT(*) as count FROM transfers WHERE status != 'cancelled'
-  `);
-  const [receivedRes] = await db.execute(sql`
+  `) as any;
+  const [[receivedRes]] = await db.execute(sql`
     SELECT COUNT(*) as received FROM transfers WHERE status = 'received'
-  `);
-  const [shippedRes] = await db.execute(sql`
+  `) as any;
+  const [[shippedRes]] = await db.execute(sql`
     SELECT COUNT(*) as shipped FROM transfers WHERE status = 'in_transit'
-  `);
-  const topPartsRes = await db.execute(sql`
+  `) as any;
+  const [topPartsRes] = await db.execute(sql`
     SELECT p.part_number, p.part_name, COUNT(*) as qty
     FROM transfer_items ti
     JOIN transfers t ON t.id = ti.transfer_id
@@ -42,28 +42,28 @@ analyticsRouter.get("/dc-activity", authMiddleware, async (req, res) => {
     WHERE t.status != 'cancelled'
     GROUP BY ti.part_id
     ORDER BY qty DESC LIMIT 10
-  `);
-  const bySiteRes = await db.execute(sql`
+  `) as any;
+  const [bySiteRes] = await db.execute(sql`
     SELECT s.site_name as \`site\`, COUNT(*) as qty
     FROM transfers t
     JOIN sites s ON s.id = t.destination_site_id
     WHERE t.status != 'cancelled'
     GROUP BY t.destination_site_id
     ORDER BY qty DESC LIMIT 20
-  `);
-  const statusRes = await db.execute(sql`
+  `) as any;
+  const [statusRes] = await db.execute(sql`
     SELECT status, COUNT(*) as value
     FROM transfers
     WHERE status != 'cancelled'
     GROUP BY status
-  `);
-  const monthlyRes = await db.execute(sql`
+  `) as any;
+  const [monthlyRes] = await db.execute(sql`
     SELECT DATE_FORMAT(sn.stock_in_at, '%Y-%m') as month, COUNT(*) as stockIn, 0 as stockOut
     FROM serial_numbers sn
     WHERE sn.stock_in_at IS NOT NULL
     GROUP BY DATE_FORMAT(sn.stock_in_at, '%Y-%m')
     ORDER BY month
-  `);
+  `) as any;
 
   const inStock = Number((inStockRes as any)?.count ?? 0);
   const inTransit = Number((transferredRes as any)?.count ?? 0);
@@ -130,9 +130,9 @@ analyticsRouter.post("/uploads", authMiddleware, async (req, res) => {
   const descLookup = new Map<string, string>();
 
   // Build description-to-part-number lookup from parts table
-  const allPartsRes = await db.execute(sql`
+  const [allPartsRes] = await db.execute(sql`
     SELECT part_number, part_name FROM parts WHERE is_active = 1
-  `);
+  `) as any;
   const allPartsArr = Array.isArray(allPartsRes) ? allPartsRes as any[] : [];
   for (const p of allPartsArr) {
     if (p.part_name) descLookup.set(p.part_name.trim().toLowerCase(), p.part_number);
@@ -230,42 +230,42 @@ analyticsRouter.get("/demand", authMiddleware, async (req, res) => {
 
   const whereClause = sql.join(conditions, sql` AND `);
 
-  const kpiRes: any = await db.execute(sql`
+  const [kpiRes] = await db.execute(sql`
     SELECT
       COALESCE(SUM(ar.qty), 0) as totalRepairs,
       COUNT(DISTINCT ar.part_number) as uniqueParts
     FROM analytics_rows ar WHERE ${whereClause}
-  `);
+  `) as any;
 
-  const monthlyRes: any = await db.execute(sql`
+  const [monthlyRes] = await db.execute(sql`
     SELECT DATE_FORMAT(ar.used_at, '%Y-%m') as month, SUM(ar.qty) as qty
     FROM analytics_rows ar WHERE ${whereClause}
     GROUP BY DATE_FORMAT(ar.used_at, '%Y-%m')
     ORDER BY month
-  `);
+  `) as any;
 
-  const topPartsRes: any = await db.execute(sql`
+  const [topPartsRes] = await db.execute(sql`
     SELECT ar.part_number, p.part_name, SUM(ar.qty) as value
     FROM analytics_rows ar
     LEFT JOIN parts p ON p.part_number = ar.part_number
     WHERE ${whereClause}
     GROUP BY ar.part_number
     ORDER BY value DESC LIMIT 10
-  `);
+  `) as any;
 
-  const bySiteRes: any = await db.execute(sql`
+  const [bySiteRes] = await db.execute(sql`
     SELECT COALESCE(ar.site_code, 'Unknown') as \`name\`, SUM(ar.qty) as \`value\`
     FROM analytics_rows ar WHERE ${whereClause}
     GROUP BY ar.site_code
     ORDER BY value DESC LIMIT 20
-  `);
+  `) as any;
 
-  const topSiteRes: any = await db.execute(sql`
+  const [topSiteRes] = await db.execute(sql`
     SELECT ar.site_code as site
     FROM analytics_rows ar WHERE ${whereClause} AND ar.site_code IS NOT NULL
     GROUP BY ar.site_code
     ORDER BY SUM(ar.qty) DESC LIMIT 1
-  `);
+  `) as any;
 
   const kpiRows = Array.isArray(kpiRes) ? kpiRes as any[] : [];
   const monthlyRows = Array.isArray(monthlyRes) ? monthlyRes as any[] : [];
@@ -301,12 +301,12 @@ analyticsRouter.get("/demand", authMiddleware, async (req, res) => {
 
 analyticsRouter.get("/series-list", authMiddleware, async (req, res) => {
   const db = await getDb();
-  const result: any = await db.execute(sql`
+  const [result] = await db.execute(sql`
     SELECT DISTINCT SUBSTRING_INDEX(ar.part_number, '-', 1) as series
     FROM analytics_rows ar
     WHERE ar.part_number LIKE '%-%'
     ORDER BY series
-  `);
+  `) as any;
   const rows = Array.isArray(result) ? result as any[] : [];
   res.json(rows.map((r: any) => r.series).filter(Boolean));
 });
@@ -326,7 +326,7 @@ analyticsRouter.get("/abc", authMiddleware, async (req, res) => {
     }
   }
 
-  const abcRes: any = await db.execute(sql`
+  const [abcRes] = await db.execute(sql`
     SELECT ar.part_number, p.part_name, SUM(ar.qty) as total_qty
     FROM analytics_rows ar
     LEFT JOIN parts p ON p.part_number = ar.part_number
@@ -334,7 +334,7 @@ analyticsRouter.get("/abc", authMiddleware, async (req, res) => {
     GROUP BY ar.part_number
     HAVING total_qty > 0
     ORDER BY total_qty DESC
-  `);
+  `) as any;
 
   const partsList = Array.isArray(abcRes) ? abcRes as any[] : [];
   const totalQty = partsList.reduce((s: number, r: any) => s + Number(r.total_qty ?? 0), 0);
@@ -381,7 +381,7 @@ analyticsRouter.get("/velocity", authMiddleware, async (req, res) => {
     }
   }
 
-  const velRes: any = await db.execute(sql`
+  const [velRes] = await db.execute(sql`
     SELECT
       ar.part_number,
       p.part_name,
@@ -393,7 +393,7 @@ analyticsRouter.get("/velocity", authMiddleware, async (req, res) => {
     GROUP BY ar.part_number
     HAVING total_qty > 0
     ORDER BY days_since_last ASC
-  `);
+  `) as any;
 
   const partsList = Array.isArray(velRes) ? velRes as any[] : [];
 

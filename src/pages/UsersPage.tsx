@@ -192,6 +192,7 @@ export function UsersPage() {
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   // Username availability check
   const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "taken" | "available">("idle");
@@ -222,6 +223,12 @@ export function UsersPage() {
     setInviting(true);
 
     if (usernameStatus === "taken") { setInviteError("Username already taken."); setInviting(false); return; }
+    if (/\.\./.test(email) || !/^[^\s@]+@[^\s@]+(\.[a-zA-Z]{2,})+$/.test(email.trim())) {
+      setEmailError("Enter a valid email address.");
+      setInviting(false);
+      return;
+    }
+    setEmailError(null);
 
     try {
       const data = await api.post("/users/invite", { email, username, fullName, role });
@@ -234,7 +241,7 @@ export function UsersPage() {
       setInviting(false);
       return;
     }
-    setEmail(""); setUsername(""); setFullName(""); setRole("dc_operator"); setUsernameStatus("idle");
+    setEmail(""); setUsername(""); setFullName(""); setRole("dc_operator"); setUsernameStatus("idle"); setEmailError(null);
     setPage(0);
     setSearch("");
     setSearchInput("");
@@ -310,14 +317,15 @@ export function UsersPage() {
                 <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 5 }}>
                   Email <span style={{ color: "var(--negative)" }}>*</span>
                 </label>
-                <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} placeholder="user@company.com" />
+                <input type="email" required value={email} onChange={(e) => { setEmail(e.target.value); setEmailError(null); }} style={{ ...inputStyle, borderColor: emailError ? "var(--negative)" : undefined }} placeholder="user@company.com" />
+                {emailError && <p style={{ margin: "3px 0 0", fontSize: 11, color: "var(--negative)" }}>{emailError}</p>}
               </div>
               <div>
                 <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 5 }}>
                   Username <span style={{ color: "var(--negative)" }}>*</span>
                 </label>
                 <div style={{ position: "relative" }}>
-                  <input type="text" required value={username} onChange={(e) => setUsername(e.target.value)}
+                  <input type="text" required value={username} onChange={(e) => setUsername(e.target.value.replace(/\s/g, ""))}
                     style={{ ...inputStyle, borderColor: usernameStatus === "taken" ? "var(--negative)" : usernameStatus === "available" ? "#16a34a" : undefined, paddingRight: 28 }}
                     placeholder="e.g. jdoe" />
                   {usernameStatus === "checking" && (

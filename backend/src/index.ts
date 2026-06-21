@@ -1,6 +1,7 @@
 import "express-async-errors";
 import express from "express";
 import cors from "cors";
+import path from "node:path";
 import { getDb } from "./db/connection";
 import { authRouter } from "./routes/auth";
 import { sitesRouter } from "./routes/sites";
@@ -24,6 +25,7 @@ import { correctionsRouter } from "./routes/corrections";
 import { notificationsRouter } from "./routes/notifications";
 import { receiveRouter } from "./routes/receive";
 import { shipmentsRouter } from "./routes/shipments";
+import { storageRouter } from "./routes/storage";
 import { runMigrations } from "./migrations/runner";
 
 export function createApp() {
@@ -53,6 +55,9 @@ export function createApp() {
     credentials: true,
   }));
   app.use(express.json({ limit: "50mb" }));
+
+  // Serve uploaded files
+  app.use("/uploads", express.static(path.resolve(process.cwd(), "uploads")));
 
   // Health check
   app.get("/api/health", async (_req, res) => {
@@ -87,6 +92,7 @@ export function createApp() {
   app.use("/api/notifications", notificationsRouter);
   app.use("/api/receive", receiveRouter);
   app.use("/api/shipments", shipmentsRouter);
+  app.use("/api/storage", storageRouter);
 
   app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     console.error("Unhandled error:", err?.sql ?? err?.message ?? err);

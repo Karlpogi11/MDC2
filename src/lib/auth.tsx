@@ -91,9 +91,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signOut() {
     api.auth.signOut();
-    document.documentElement.classList.remove("dark-theme");
-    document.documentElement.removeAttribute("data-theme");
-    localStorage.removeItem("mdc-theme");
     setState({ status: "unauthenticated" });
   }
 

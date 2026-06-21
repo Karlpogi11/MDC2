@@ -572,7 +572,7 @@ html:not(.dark-theme) .global-nav {
 
 .blue-rule {
   margin-top: 8px;
-  border-bottom: 8px solid var(--blue);
+  border-bottom: 4px solid var(--blue);
 }
 
 .action-row {
@@ -1318,15 +1318,14 @@ th .col-resize-handle:active::after {
 .search-input,
 input.search-input {
   border-radius: 20px !important;
-  background: var(--bg-surface-elevated) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E") no-repeat 12px center !important;
+  background: var(--bg-surface-elevated) !important;
   border: 1px solid var(--line) !important;
-  padding: 5px 14px 5px 32px !important;
+  padding: 5px 14px;
 }
 
 html.dark-theme .search-input,
 html.dark-theme input.search-input,
 html.dark-theme input[class*="search-input"] {
-  background: #111111 !important;
   border-radius: 20px !important;
 }
 

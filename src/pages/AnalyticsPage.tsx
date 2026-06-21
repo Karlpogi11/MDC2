@@ -235,8 +235,8 @@ function MappingModal({ state, onConfirm, onCancel, importing }: { state: Mappin
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
             <button type="button" onClick={onCancel} disabled={importing}
               style={{ border: `1px solid ${BORDER}`, background: "var(--bg-surface)", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer", color: MUTED }}>Cancel</button>
-            <button type="button" onClick={() => onConfirm(mapping)} disabled={!canConfirm || importing}
-              style={{ border: "none", background: canConfirm ? BLUE : "#e2e8f0", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: canConfirm ? "pointer" : "not-allowed", color: canConfirm ? "#fff" : "#94a3b8" }}>
+              <button type="button" onClick={() => onConfirm(mapping)} disabled={!canConfirm || importing}
+              style={{ border: "none", background: canConfirm ? BLUE : "var(--bg-surface-elevated)", borderRadius: "var(--radius)", padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: canConfirm ? "pointer" : "not-allowed", color: canConfirm ? "#fff" : "var(--muted)" }}>
               {importing ? "Importing…" : `Import ${state.totalRows.toLocaleString()} rows`}
             </button>
           </div>
@@ -314,7 +314,7 @@ function SeriesChips({ list, selected, onChange }: {
   return (
     <div style={{ position: "relative" }}>
       <button type="button" onClick={() => setOpen((o) => !o)}
-        style={{ display: "inline-flex", alignItems: "center", gap: 6, border: `1px solid ${hasFilter ? BLUE : BORDER}`, borderRadius: "var(--radius)", padding: "0 12px", fontSize: 13, fontWeight: 500, cursor: "pointer", background: hasFilter ? BLUE : "#fff", color: hasFilter ? "#fff" : INK, height: 34, minWidth: 140, justifyContent: "space-between" }}>
+        style={{ display: "inline-flex", alignItems: "center", gap: 6, border: `1px solid ${hasFilter ? BLUE : BORDER}`, borderRadius: "var(--radius)", padding: "0 12px", fontSize: 13, fontWeight: 500, cursor: "pointer", background: hasFilter ? BLUE : "var(--bg-surface)", color: hasFilter ? "#fff" : INK, height: 34, minWidth: 140, justifyContent: "space-between" }}>
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 180 }}>{label}</span>
         <span style={{ fontSize: 10, color: hasFilter ? "rgba(255,255,255,.7)" : SLATE, flexShrink: 0 }}>▾</span>
       </button>
@@ -339,7 +339,7 @@ function SeriesChips({ list, selected, onChange }: {
               return (
                 <button key={s} type="button" onClick={() => toggle(s)}
                   style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", padding: "4px 10px", fontSize: 13, background: active ? BLUE_LIGHT : "transparent", border: "none", cursor: "pointer", color: active ? BLUE : INK, fontWeight: active ? 600 : 400 }}>
-                  <span style={{ width: 14, height: 14, border: `1.5px solid ${active ? BLUE : BORDER}`, borderRadius: "var(--radius-sm)", background: active ? BLUE : "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <span style={{ width: 14, height: 14, border: `1.5px solid ${active ? BLUE : BORDER}`, borderRadius: "var(--radius-sm)", background: active ? BLUE : "var(--bg-surface)", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     {active && <span style={{ color: "#fff", fontSize: 9, lineHeight: 1 }}>✓</span>}
                   </span>
                   {s}
@@ -997,7 +997,7 @@ export function AnalyticsPage() {
               <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
                 {(["fixably", "gsx"] as const).map((t) => (
                   <button key={t} type="button" onClick={() => setSourceType(t)}
-                    style={{ flex: 1, border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", padding: "8px 0", fontSize: 13, fontWeight: 600, cursor: "pointer", background: sourceType === t ? BLUE : "#fff", color: sourceType === t ? "#fff" : INK }}>
+                    style={{ flex: 1, border: `1px solid ${BORDER}`, borderRadius: "var(--radius)", padding: "8px 0", fontSize: 13, fontWeight: 600, cursor: "pointer", background: sourceType === t ? BLUE : "var(--bg-surface)", color: sourceType === t ? "#fff" : INK }}>
                     {t === "fixably" ? "Fixably" : "GSX"}
                   </button>
                 ))}
@@ -1056,7 +1056,7 @@ export function AnalyticsPage() {
               <FilterField label="Device Series">
                 <SeriesChips list={seriesList} selected={demandSeries} onChange={setDemandSeries} />
               </FilterField>
-              <button type="button" onClick={() => void loadDemand()} disabled={demandLoading} style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, background: demandLoading ? "#f1f5f9" : BLUE, color: demandLoading ? MUTED : "#fff", border: "none", borderRadius: "var(--radius)", padding: "0 20px", fontSize: 13, fontWeight: 600, cursor: demandLoading ? "not-allowed" : "pointer", height: 34, whiteSpace: "nowrap", alignSelf: "flex-end" }}>
+              <button type="button" onClick={() => void loadDemand()} disabled={demandLoading} style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, background: demandLoading ? "var(--bg-surface-elevated)" : BLUE, color: demandLoading ? "var(--muted)" : "#fff", border: "none", borderRadius: "var(--radius)", padding: "0 20px", fontSize: 13, fontWeight: 600, cursor: demandLoading ? "not-allowed" : "pointer", height: 34, whiteSpace: "nowrap", alignSelf: "flex-end" }}>
                 <TrendingUp size={13} /> {demandLoading ? "Loading…" : "Run Analysis"}
               </button>
             </div>

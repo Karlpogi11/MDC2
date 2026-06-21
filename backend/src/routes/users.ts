@@ -58,6 +58,10 @@ usersRouter.post("/invite", authMiddleware, requireRole("system_admin"), async (
     res.status(400).json({ error: "Email and username required" });
     return;
   }
+  if (/\s/.test(username)) {
+    res.status(400).json({ error: "Username must not contain spaces" });
+    return;
+  }
 
   const existing = await db.query.profiles.findFirst({
     where: or(eq(profiles.username, username), eq(profiles.email, email)),
@@ -110,6 +114,10 @@ usersRouter.post("/", authMiddleware, requireRole("system_admin"), async (req, r
   const { email, username, fullName, password, role } = req.body;
   if (!username || !password) {
     res.status(400).json({ error: "Username and password required" });
+    return;
+  }
+  if (/\s/.test(username)) {
+    res.status(400).json({ error: "Username must not contain spaces" });
     return;
   }
 

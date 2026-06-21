@@ -13,6 +13,7 @@ import {
   NAVIGATION_CACHE_STALE_TIME,
 } from "@/services/navigationCache";
 import { friendlyError } from "@/lib/friendlyError";
+import { SerialLookupDrawer } from "@/components/SerialLookupDrawer";
 
 const STATUS_LABEL: Record<string, string> = {
   draft: "Draft",
@@ -33,9 +34,37 @@ function timeAgo(iso: string): string {
 
 // ─── Global Search ────────────────────────────────────────────────────────────
 
-type SearchResult = { type: "serial" | "part" | "transfer"; label: string; sub: string; path: string };
+type SearchResult = { type: "serial" | "part" | "transfer" | "nav" | "site" | "invoice"; label: string; sub: string; path: string };
 
-function GlobalSearch() {
+function editDistance(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+
+const NAV_ITEMS: { label: string; sub: string; path: string }[] = [
+  { label: "Dashboard", sub: "Home page", path: "/" },
+  { label: "Inventory", sub: "Parts, serials, stock", path: "/inventory" },
+  { label: "Transfers", sub: "Inbound & outbound transfers", path: "/transfers" },
+  { label: "Stock In", sub: "Receive inventory", path: "/stock-in" },
+  { label: "Corrections", sub: "Fix serial discrepancies", path: "/corrections" },
+  { label: "Analytics", sub: "Usage & performance", path: "/analytics" },
+  { label: "Reports", sub: "Export reports", path: "/reports" },
+  { label: "Exports", sub: "Data exports", path: "/exports" },
+  { label: "Physical Count", sub: "Cycle counting", path: "/physical-count" },
+  { label: "Settings", sub: "App configuration", path: "/config" },
+  { label: "Users", sub: "Manage accounts", path: "/users" },
+  { label: "Audit Log", sub: "Activity history", path: "/audit-log" },
+];
+
+function GlobalSearch({ onSerialClick }: { onSerialClick: (serial: string) => void }) {
   const navigate = useNavigate();
   const [q, setQ] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -57,25 +86,56 @@ function GlobalSearch() {
     if (debounce.current) clearTimeout(debounce.current);
     debounce.current = setTimeout(async () => {
       setLoading(true);
-      const term = q.trim();
-      const data = await api.get("/dashboard/search?q=" + encodeURIComponent(term));
+      const term = q.trim().toLowerCase();
+      const [apiData, sites] = await Promise.all([
+        api.get("/dashboard/search?q=" + encodeURIComponent(term)),
+        api.get<any[]>("/sites"),
+      ]);
       const out: SearchResult[] = [];
-      for (const r of (data.serials ?? []) as any[]) {
-        out.push({ type: "serial", label: r.serial_number, sub: r.part_name ?? "Serial", path: `/inventory?q=${encodeURIComponent(r.serial_number)}` });
+      const seenPaths = new Set<string>();
+      if (Array.isArray(apiData)) {
+        for (const r of apiData) {
+          out.push({ type: r.type, label: r.label, sub: r.sub, path: r.path });
+          seenPaths.add(r.path);
+        }
       }
-      for (const r of (data.parts ?? []) as any[]) {
-        out.push({ type: "part", label: r.part_number, sub: r.part_name, path: `/inventory?q=${encodeURIComponent(r.part_number)}` });
+      if (Array.isArray(sites)) {
+        for (const s of sites) {
+          const name = (s.siteName ?? "").toLowerCase();
+          const code = (s.siteCode ?? "").toLowerCase();
+          if (name.includes(term) || code.includes(term)) {
+            const path = `/config?tab=sites`;
+            if (!seenPaths.has(path)) {
+              out.push({ type: "site", label: s.siteName, sub: s.siteCode ? `Code: ${s.siteCode}` : "Site", path });
+              seenPaths.add(path);
+            }
+          }
+        }
       }
-      for (const r of (data.transfers ?? []) as any[]) {
-        out.push({ type: "transfer", label: r.transfer_no, sub: r.status?.replace("_", " "), path: `/transfers` });
+      let fuzzySuggestion: SearchResult | null = null;
+      for (const nav of NAV_ITEMS) {
+        const lower = nav.label.toLowerCase();
+        if (lower.includes(term) && !seenPaths.has(nav.path)) {
+          out.push({ type: "nav", label: nav.label, sub: nav.sub, path: nav.path });
+          seenPaths.add(nav.path);
+        } else if (!fuzzySuggestion && !lower.includes(term)) {
+          const dist = editDistance(lower, term);
+          if (dist <= 2 && dist > 0) {
+            fuzzySuggestion = { type: "nav", label: nav.label, sub: `Did you mean “${nav.label}”?`, path: nav.path };
+          }
+        }
+      }
+      if (fuzzySuggestion && !seenPaths.has(fuzzySuggestion.path)) {
+        out.push(fuzzySuggestion);
+        seenPaths.add(fuzzySuggestion.path);
       }
       setResults(out);
-      setOpen(out.length > 0);
+      setOpen(true);
       setLoading(false);
     }, 250);
   }, [q]);
 
-  const TYPE_LABEL: Record<string, string> = { serial: "Serial", part: "Part", transfer: "Transfer" };
+  const TYPE_LABEL: Record<string, string> = { serial: "Serial", part: "Part", transfer: "Transfer", nav: "Page", site: "Site", invoice: "Invoice" };
 
   return (
     <div ref={ref} style={{ position: "relative", flexShrink: 0 }}>
@@ -84,11 +144,12 @@ function GlobalSearch() {
         <div
           contentEditable
           suppressContentEditableWarning
+          spellCheck={false}
           onInput={(e) => setQ(e.currentTarget.textContent ?? "")}
           onFocus={() => results.length > 0 && setOpen(true)}
           onKeyDown={(e) => { if (e.key === "Escape") { setOpen(false); e.currentTarget.blur(); } }}
           data-placeholder="Search serials, parts, transfers…"
-          style={{ fontSize: 13, color: "var(--text)", flex: 1, outline: "none", minHeight: "1.4em", cursor: "text", whiteSpace: "nowrap", overflow: "hidden" }}
+          style={{ fontSize: 13, color: "var(--text)", flex: 1, outline: "none", border: "none", minHeight: "1.4em", cursor: "text", whiteSpace: "nowrap", overflow: "hidden" }}
         ></div>
       </div>
       {open && (
@@ -99,10 +160,11 @@ function GlobalSearch() {
           zIndex: 999, overflow: "hidden",
         }}>
           {loading && <div style={{ padding: "10px 14px", fontSize: 12, color: "var(--muted)" }}>Searching…</div>}
+          {!loading && results.length === 0 && <div style={{ padding: "10px 14px", fontSize: 12, color: "var(--muted)" }}>No results found.</div>}
           {!loading && results.map((r, i) => (
-            <div key={i} onMouseDown={() => { navigate(r.path); setQ(""); setOpen(false); }}
+            <div key={i} onMouseDown={() => { if (r.type === "serial") onSerialClick(r.label); else navigate(r.path); setQ(""); setOpen(false); }}
               style={{ padding: "8px 14px", cursor: "pointer", borderBottom: "1px solid var(--line-soft)", display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ fontSize: 10, fontWeight: 600, color: "var(--blue)", width: 48, flexShrink: 0, textTransform: "uppercase" }}>{TYPE_LABEL[r.type]}</span>
+              <span style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)", width: 48, flexShrink: 0, textTransform: "uppercase" }}>{TYPE_LABEL[r.type]}</span>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", fontFamily: r.type !== "part" ? "monospace" : "inherit", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.label}</div>
                 <div style={{ fontSize: 11, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.sub}</div>
@@ -154,6 +216,7 @@ export function DashboardPage() {
   const [bookTarget, setBookTarget] = useState<any | null>(null);
   const [bookSuccess, setBookSuccess] = useState<string | null>(null);
   const [myBookings, setMyBookings] = useState<any[]>([]);
+  const [serialLookup, setSerialLookup] = useState<string | null>(null);
 
   const fetchPending = useCallback(async () => {
     try {
@@ -198,7 +261,7 @@ export function DashboardPage() {
               {isCoordinator ? "Transfers waiting for your action." : "Here's what needs your attention today."}
             </p>
           </div>
-          <GlobalSearch />
+          <GlobalSearch onSerialClick={(s) => setSerialLookup(s)} />
         </div>
 
         {loadError && (
@@ -335,6 +398,9 @@ export function DashboardPage() {
           setTimeout(() => setBookSuccess(null), 4000);
         }}
       />
+      {serialLookup && (
+        <SerialLookupDrawer serialNumber={serialLookup} onClose={() => setSerialLookup(null)} />
+      )}
     </AppLayout>
   );
 }
