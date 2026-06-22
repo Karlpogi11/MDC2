@@ -326,7 +326,7 @@ html:not(.dark-theme) .global-nav {
 }
 
 .module.active {
-  color: #ffffff;
+  color: #5eaaff;
   font-weight: 600;
   background: transparent !important;
 }
