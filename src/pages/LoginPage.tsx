@@ -161,6 +161,7 @@ export function LoginPage() {
         display: "flex", flexDirection: "column",
         padding: "48px 40px",
         justifyContent: "space-between",
+        position: "relative",
       }}>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
           <div style={{ marginBottom: 48 }}>
@@ -186,7 +187,19 @@ export function LoginPage() {
       </div>
 
       {/* Right panel */}
-      <div className="login-right" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 40, background: "#fff" }}>
+      <div className="login-right" style={{
+        flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
+        padding: 40, background: "#fff", position: "relative",
+      }}>
+        {/* Brand watermark on right panel */}
+        <div className="login-watermark" style={{
+          position: "absolute", bottom: 12, right: 16,
+          fontSize: 10, color: "rgba(19,41,75,0.12)",
+          fontWeight: 800, letterSpacing: "0.15em", textTransform: "uppercase",
+          userSelect: "none", pointerEvents: "none",
+        }}>
+          {brandName ?? "MDC"}
+        </div>
         <div style={{ width: "100%", maxWidth: 360 }}>
           <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, borderRadius: 8, background: "#e8edf5", marginBottom: 20 }}>
             <Lock size={18} color="#13294b" />

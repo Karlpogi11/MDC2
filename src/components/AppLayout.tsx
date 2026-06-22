@@ -20,6 +20,7 @@ import {
   Moon,
   Sun,
   User,
+  Menu,
 } from "lucide-react";
 import { useAuth, type UserRole } from "@/lib/auth";
 import { useBranding } from "@/lib/useBranding";
@@ -111,6 +112,7 @@ export function AppLayout({ children, activeModule }: Props) {
   const { state: authState, signOut } = useAuth();
   const { brandName, brandLogoUrl } = useBranding();
   const [showHelp, setShowHelp] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const headerBrandName = brandName?.trim() ? brandName.trim() : "MobilCare DC";
 
   useEffect(() => {
@@ -175,6 +177,14 @@ export function AppLayout({ children, activeModule }: Props) {
           >
             {brandLogoUrl && <img src={brandLogoUrl} alt="" style={{ height: 20, width: "auto", objectFit: "contain", marginRight: 6 }} />}
             {headerBrandName}
+          </button>
+          <button
+            type="button"
+            className="hamburger-btn"
+            aria-label="Menu"
+            onClick={() => setMobileMenuOpen(true)}
+          >
+            <Menu size={18} />
           </button>
           <nav className="main-modules" aria-label="Main modules">
             {MODULES.filter(item => (!item.roles || item.roles.includes(userRole as UserRole)) && (!item.excludeRoles || !item.excludeRoles.includes(userRole as UserRole))).map((item) => {
@@ -257,6 +267,62 @@ export function AppLayout({ children, activeModule }: Props) {
           <span className="circle connection-dot connection-dot-restored" />
           Connection restored.
         </div>
+      )}
+
+      {mobileMenuOpen && (
+        <>
+          <div className="mobile-menu-backdrop" onClick={() => setMobileMenuOpen(false)} />
+          <div className="mobile-menu-panel">
+            <div className="mobile-menu-header">
+              <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{headerBrandName}</span>
+              <button type="button" className="icon-btn" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <nav className="mobile-menu-nav">
+              {MODULES.filter(item => (!item.roles || item.roles.includes(userRole as UserRole)) && (!item.excludeRoles || !item.excludeRoles.includes(userRole as UserRole))).map((item) => {
+                const Icon = item.icon;
+                const isActive = activePath === item.path || (item.path !== "/" && activePath.startsWith(item.path));
+                return (
+                  <button
+                    key={item.label}
+                    className={isActive ? "mobile-menu-item active" : "mobile-menu-item"}
+                    type="button"
+                    onClick={() => { goToRoute(item.path); setMobileMenuOpen(false); }}
+                  >
+                    <Icon size={18} aria-hidden="true" />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+            <div className="mobile-menu-footer">
+              <div className="mobile-menu-user">
+                <User size={16} />
+                <span>{profileName}</span>
+              </div>
+              <div className="mobile-menu-role">{userRole?.replace(/_/g, " ")}</div>
+              {isAdmin && (
+                <button type="button" className="mobile-menu-item" onClick={() => { navigate("/audit-log"); setMobileMenuOpen(false); }}>
+                  <ShieldAlert size={18} /> Audit Log
+                </button>
+              )}
+              {isSystemAdmin && (
+                <>
+                  <button type="button" className="mobile-menu-item" onClick={() => { navigate("/users"); setMobileMenuOpen(false); }}>
+                    <Users size={18} /> Users
+                  </button>
+                  <button type="button" className="mobile-menu-item" onClick={() => { navigate("/config"); setMobileMenuOpen(false); }}>
+                    <Settings size={18} /> Settings
+                  </button>
+                </>
+              )}
+              <button type="button" className="mobile-menu-item sign-out" onClick={() => void signOut()}>
+                <LogOut size={18} /> Sign out
+              </button>
+            </div>
+          </div>
+        </>
       )}
 
       {children}
