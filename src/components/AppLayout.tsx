@@ -376,7 +376,7 @@ export function AppLayout({ children, activeModule }: Props) {
         </div>
       )}
 
-      <span style={{ position: "fixed", bottom: 6, right: 8, fontSize: 10, color: "var(--muted)", opacity: 0.5, pointerEvents: "none", userSelect: "none", zIndex: 999 }}>Test Environment</span>
+      <span className="test-env-badge">TEST ENVIRONMENT</span>
     </div>
   );
 }
